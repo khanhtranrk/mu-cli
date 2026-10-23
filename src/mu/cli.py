@@ -4,14 +4,38 @@ import shlex
 import typer
 
 from mu.spec import SpecError, repair_spec, validate_spec
-from mu.pipelines import PipelineBuildError, build_pipelines, run_input_before
+from mu.pipelines import PipelineBuildError, build_pipelines, list_model_files, run_input_before
 from mu.tasks import Scheduler, TaskGraphError, pipelines_to_tasks
 from mu.executor import execute_tasks
 from mu.hardware import detect_devices, linux_integrated_gpu_names
+from mu.validators import ValidationError, validate_action_checks
 
 app = typer.Typer(no_args_is_help=True)
 spec_app = typer.Typer(no_args_is_help=True)
 app.add_typer(spec_app, name="spec")
+
+
+def _validate_completed_steps(tasks: list[dict], *, force_validate: bool) -> None:
+    """Mark tasks whose declared outputs already validate as completed."""
+    if force_validate:
+        return
+    for task in tasks:
+        step = task.get("step_config", {})
+        checks = step.get("validate", []) if isinstance(step, dict) else []
+        if not checks:
+            continue
+        if not isinstance(checks, list):
+            raise ValidationError(f"step {task['name']!r}.validate must be a list")
+        results = validate_action_checks(
+            checks,
+            base_dir=Path.cwd(),
+            context=task.get("validation_context", {}),
+        )
+        if results and all(result.passed for result in results):
+            task["status"] = "succeeded"
+            task["device"] = "validated"
+            task["error"] = None
+            typer.echo(f"[SKIP] {task['id']} {task['name']} outputs already validate")
 
 
 def _print_run_report(pipeline: str, tasks: list[dict], input_results: list[dict]) -> None:
@@ -78,7 +102,7 @@ def _print_plan_report(
     for result in validations:
         label = typer.style("PASS" if result.passed else "FAIL", fg="green" if result.passed else "red", bold=True)
         typer.echo(f"  {label}  {result.message}")
-    typer.echo("  Run will execute repair actions before processing tasks.")
+    typer.echo("  Run repairs unmet checks before processing tasks.")
 
     typer.echo("Hardware")
     if devices:
@@ -118,6 +142,12 @@ def _print_plan_report(
             if isinstance(device_args, list):
                 command.extend(str(arg) for arg in device_args)
             typer.echo(f"       command: {shlex.join(command)}")
+        step_config = task.get("step_config", {})
+        before_actions = step_config.get("before", []) if isinstance(step_config, dict) else []
+        for action in (before_actions if isinstance(before_actions, list) else []):
+            if isinstance(action, dict):
+                details = action.get("path", action.get("target", ""))
+                typer.echo(f"       before: {action.get('action', 'unknown')} {details}".rstrip())
 
     failures = sum(not result.passed for result in validations)
     typer.echo(
@@ -169,6 +199,19 @@ def spec_repair(
     typer.echo(f"Repair completed ({len(results)} check(s)).")
 
 
+@app.command("models")
+def models(
+    cache_dir: Path = typer.Option(Path.home() / ".cache", "--cache_dir", help="Cache directory containing models."),
+) -> None:
+    """List GGUF and safetensors model files found in the cache."""
+    files = list_model_files(cache_dir.expanduser())
+    if not files:
+        typer.echo(f"No models found in {cache_dir.expanduser() / 'models'}.")
+        return
+    for path in files:
+        typer.echo(path.relative_to((cache_dir.expanduser() / "models").resolve()))
+
+
 @app.command()
 def plan(
     pipeline: str = typer.Argument(..., help="Pipeline name from the spec."),
@@ -197,19 +240,44 @@ def run(
     output_dir: Path = typer.Option(Path.cwd() / "output", "--output_dir", help="Output directory."),
     spec: Path = typer.Option(Path.cwd() / "spec.yaml", "--spec", exists=True, dir_okay=False, readable=True),
     max_units: float | None = typer.Option(None, "--max-units", min=0.01, help="Optional aggregate processor unit capacity."),
+    force_validate: bool = typer.Option(False, "--force-validate", help="Run processors even when their output validations pass."),
 ) -> None:
-    """Repair prerequisites, prepare the input, and execute processor tasks."""
+    """Validate prerequisites, prepare the input, and execute processor tasks."""
     try:
-        pipelines = build_pipelines(
-            spec, input_path, [pipeline], cache_dir=cache_dir, output_dir=output_dir,
-        )
-        tasks = pipelines_to_tasks(pipelines)
-    except (PipelineBuildError, TaskGraphError) as exc:
-        typer.echo(f"Pipeline build failed: {exc}", err=True)
+        spec_results = validate_spec(spec, context=_validation_context(cache_dir))
+    except SpecError as exc:
+        typer.echo(f"Spec validation failed: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
+    failed_spec_checks = [result for result in spec_results if not result.passed]
+    if spec_results:
+        typer.echo(f"[INFO] Spec validation: {len(spec_results) - len(failed_spec_checks)}/{len(spec_results)} checks passed")
+    else:
+        typer.echo("[INFO] Spec declares no repair validation checks")
+
+    try:
+        if failed_spec_checks or not spec_results:
+            typer.echo("[INFO] Running spec repair actions")
+            repair_spec(spec, cache_dir=cache_dir)
+            spec_results = validate_spec(spec, context=_validation_context(cache_dir))
+            failed_spec_checks = [result for result in spec_results if not result.passed]
+        if failed_spec_checks:
+            details = "\n".join(f"  - {result.message}" for result in failed_spec_checks)
+            raise SpecError(f"spec validations still fail after repair:\n{details}")
+
+        prepared_input = run_input_before(input_path, cache_dir=cache_dir, output_dir=output_dir)
+        pipelines = build_pipelines(
+            spec, input_path, [pipeline], cache_dir=cache_dir,
+            output_dir=output_dir, input_data=prepared_input,
+        )
+        tasks = pipelines_to_tasks(pipelines)
+        _validate_completed_steps(tasks, force_validate=force_validate)
+    except (SpecError, PipelineBuildError, TaskGraphError, ValidationError) as exc:
+        typer.echo(f"Preparation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
     if max_units is not None:
-        over_limit = [task for task in tasks if float(task["units"]) > max_units]
+        over_limit = [task for task in tasks if task["status"] == "pending" and float(task["units"]) > max_units]
         if over_limit:
             labels = ", ".join(f"{task['id']} needs {task['units']}" for task in over_limit)
             typer.echo(f"Scheduler capacity is too small: {labels} units (limit {max_units}).", err=True)
@@ -217,10 +285,10 @@ def run(
 
     devices = detect_devices()
     for device in devices:
-        typer.echo(f"GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB VRAM ({device.capacity_units:.2f} units)")
+        typer.echo(f"[INFO] GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB VRAM ({device.capacity_units:.2f} units)")
 
     force_cpu: set[str] = set()
-    gpu_tasks = [task for task in tasks if float(task["units"]) > 0]
+    gpu_tasks = [task for task in tasks if task["status"] == "pending" and float(task["units"]) > 0]
     if gpu_tasks and not devices:
         displays = linux_integrated_gpu_names()
         detail = f" Display adapters found: {', '.join(displays)}." if displays else ""
@@ -239,19 +307,6 @@ def run(
             if not typer.confirm("Continue by running those tasks on CPU?", default=False):
                 raise typer.Exit(code=1)
             force_cpu = {task["id"] for task in insufficient}
-
-    try:
-        repair_results = repair_spec(spec, cache_dir=cache_dir)
-        typer.echo(f"Repair completed: {len(repair_results)} validation check(s) passed.")
-        prepared_input = run_input_before(input_path, cache_dir=cache_dir, output_dir=output_dir)
-        pipelines = build_pipelines(
-            spec, input_path, [pipeline], cache_dir=cache_dir,
-            output_dir=output_dir, input_data=prepared_input,
-        )
-        tasks = pipelines_to_tasks(pipelines)
-    except (SpecError, PipelineBuildError, TaskGraphError) as exc:
-        typer.echo(f"Preparation failed: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
 
     try:
         tasks = execute_tasks(

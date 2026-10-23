@@ -55,6 +55,7 @@ def pipelines_to_tasks(pipelines: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "processor": step["processor"],
                 "processor_config": deepcopy(processor_config),
                 "step_config": deepcopy(step),
+                "validation_context": deepcopy(step.get("validation_context", {})),
                 "units": units,
                 "waiting_for": [id_by_name[item] for item in waiting_for],
                 "status": "pending",

@@ -6,7 +6,7 @@ Mu is a Python 3.13+ CLI for validating setup prerequisites, expanding YAML inpu
 
 ## Architecture
 
-- `src/mu/cli.py`: Typer CLI (`spec validate`, `spec repair`, `plan`, `run`) and human-readable reports.
+- `src/mu/cli.py`: Typer CLI (`spec validate`, `spec repair`, `models`, `plan`, `run`) and human-readable reports.
 - `src/mu/spec.py`: spec loading, repair orchestration, and spec errors.
 - `src/mu/validators.py`: validation condition registry and validation handlers.
 - `src/mu/actions.py`: action registry and action handlers. Action types have their own schemas and behavior; do not assume every action shares the same arguments.
@@ -22,7 +22,11 @@ Keep new validation and action types behind their registries so adding a type do
 - `mu spec validate` evaluates declared checks without running repair actions.
 - `mu spec repair` runs repair actions; `--force-validates` requests a validation pass afterward.
 - `mu plan` is a preview. It may inspect validations and hardware, but must not run repair actions, input `before` actions, or processors.
-- `mu run` runs repair, prepares input `before` actions, then executes pipeline tasks.
+- `mu run` validates the spec first, runs repair actions when checks need repair, prepares input `before` actions, validates step outputs, then executes remaining pipeline tasks.
+- A step's `before` actions run immediately before its processor command. Keep action dispatch in the shared registry and provide each handler its declared context.
+- A step with declared output validations whose checks all pass is already complete and must be skipped unless `--force-validate` was requested. Mark it successful in the task graph so dependent steps can proceed.
+- Keep successful child process stdout/stderr out of normal CLI output. Emit task progress and show captured process details only on failure.
+- `mu models` lists supported model files under the selected cache directory's `models` folder.
 - Each request creates its own pipeline context. Preserve request-specific values while expanding templates.
 - A `waiting-for` dependency blocks a task until its prerequisites succeed; a failed prerequisite must prevent dependent tasks from running.
 - `units` estimate per-task VRAM demand at 4 GiB per unit. `units: 0` means CPU-only. Device command syntax belongs to each processor's `device_args` template; the scheduler provides `device_index` rather than imposing one CLI convention.

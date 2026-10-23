@@ -2,12 +2,15 @@
 
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import os
+from pathlib import Path
 import re
 import subprocess
 from typing import Any
 
+from mu.actions import ActionError, run_action
 from mu.hardware import ComputeDevice
 from mu.tasks import Scheduler, TaskGraphError
+from mu.validators import ValidationError, validate_action_checks
 
 
 def execute_tasks(
@@ -21,7 +24,10 @@ def execute_tasks(
     """Execute ready tasks concurrently, launching dependents after success."""
     force_cpu = force_cpu or set()
     if max_units is not None:
-        too_large = [task for task in tasks if float(task["units"]) > max_units]
+        too_large = [
+            task for task in tasks
+            if task.get("status", "pending") == "pending" and float(task["units"]) > max_units
+        ]
         if too_large:
             names = ", ".join(task["id"] for task in too_large)
             raise TaskGraphError(f"max_units is below the requirement of task(s): {names}")
@@ -44,6 +50,7 @@ def execute_tasks(
                     continue
                 scheduler.start(task_id)
                 task["device"] = device.index if device is not None else "cpu"
+                print(f"[RUN] {task_id} {task['name']} → {task['processor']} on {task['device']}", flush=True)
                 running_units += units
                 if device is not None:
                     free_units[device.index] -= units
@@ -74,8 +81,10 @@ def execute_tasks(
                     error = f"unexpected task runner error: {exc}"
                 if error is None:
                     scheduler.succeed(task_id)
+                    print(f"[OK]  {task_id} {scheduler.tasks[task_id]['name']} completed", flush=True)
                 else:
                     scheduler.fail(task_id, error)
+                    print(f"[FAIL] {task_id} {scheduler.tasks[task_id]['name']}: {error}", flush=True)
 
     return scheduler.snapshot()
 
@@ -91,6 +100,19 @@ def _choose_device(
 
 
 def _run_one(task: dict[str, Any], device: ComputeDevice | None, working_dir: str | None) -> str | None:
+    step = task.get("step_config", {})
+    before_actions = step.get("before", []) if isinstance(step, dict) else []
+    if not isinstance(before_actions, list):
+        return f"step {task.get('name')!r}.before must be a list of actions"
+    action_context = task.get("validation_context", {})
+    for index, action in enumerate(before_actions):
+        if not isinstance(action, dict):
+            return f"step {task.get('name')!r}.before[{index}] must be a mapping"
+        try:
+            run_action(action, action_context)
+        except (ActionError, OSError) as exc:
+            return f"step {task.get('name')!r}.before[{index}] failed: {exc}"
+
     config = task.get("processor_config", {})
     target = config.get("target")
     params = config.get("params", [])
@@ -124,9 +146,27 @@ def _run_one(task: dict[str, Any], device: ComputeDevice | None, working_dir: st
         environment["ROCR_VISIBLE_DEVICES"] = ""
 
     try:
-        result = subprocess.run(command, cwd=working_dir, env=environment, check=False)
+        result = subprocess.run(
+            command, cwd=working_dir, env=environment, check=False,
+            capture_output=True, text=True,
+        )
     except OSError as exc:
         return f"could not start {target}: {exc}"
     if result.returncode:
-        return f"{target} exited with status {result.returncode}"
+        detail = result.stderr.strip() or result.stdout.strip()
+        suffix = f": {detail}" if detail else ""
+        return f"{target} exited with status {result.returncode}{suffix}"
+    checks = step.get("validate", []) if isinstance(step, dict) else []
+    if checks:
+        try:
+            results = validate_action_checks(
+                checks,
+                base_dir=Path(working_dir or os.getcwd()),
+                context=task.get("validation_context", {}),
+            )
+        except ValidationError as exc:
+            return f"step output validation failed: {exc}"
+        failures = [check.message for check in results if not check.passed]
+        if failures:
+            return "step output validation failed: " + "; ".join(failures)
     return None

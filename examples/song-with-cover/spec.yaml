@@ -50,6 +50,8 @@ repair:
     validate:
       - condition: file-existed
         target: "{cache_dir}/bin/yue-synth"
+      - condition: exit-one
+        target: ["{cache_dir}/bin/yue-synth", --help]
       - condition: file-existed
         target: "{cache_dir}/bin/sd-cli"
       - condition: exit-zero
@@ -138,22 +140,50 @@ pipelines:
     steps:
       - name: generate-song
         processor: yue2
+        before:
+          - action: create-dir
+            path: "{output_dir}/{request[name]}"
         output: "{output_dir}/{request[name]}/{request[name]}.mp3"
         score: "{output_dir}/{request[name]}/{request[name]}.abc"
         request: "{cache_dir}/requests/{request[name]}/{request[name]}.json"
+        validate:
+          - condition: file-existed
+            target: "{output_dir}/{request[name]}/{request[name]}.mp3"
+          - condition: file-existed
+            target: "{output_dir}/{request[name]}/{request[name]}.abc"
+          - condition: exit-one
+            target: ["{cache_dir}/bin/yue-synth", --help]
 
       - name: generate-cover
         processor: sd-cli
+        before:
+          - action: create-dir
+            path: "{output_dir}/{request[name]}"
         output: "{output_dir}/{request[name]}/cover.png"
+        validate:
+          - condition: file-existed
+            target: "{output_dir}/{request[name]}/cover.png"
 
       - name: separate-vocals
         processor: demucs
+        before:
+          - action: create-dir
+            path: "{output_dir}/{request[name]}/separated"
         input: "{output_dir}/{request[name]}/{request[name]}.mp3"
         output: "{output_dir}/{request[name]}/separated"
         waiting-for: [generate-song]
+        validate:
+          - condition: file-existed
+            target: "{output_dir}/{request[name]}/separated/htdemucs/{request[name]}/vocals.wav"
 
       - name: transcribe-vocals
         processor: whisperx
+        before:
+          - action: create-dir
+            path: "{output_dir}/{request[name]}/transcript"
         input: "{output_dir}/{request[name]}/separated/htdemucs/{request[name]}/vocals.wav"
         output: "{output_dir}/{request[name]}/transcript"
         waiting-for: [separate-vocals]
+        validate:
+          - condition: file-existed
+            target: "{output_dir}/{request[name]}/transcript/vocals.json"

@@ -1,4 +1,4 @@
-"""Pluggable action handlers used by repair and input preparation."""
+"""Pluggable action handlers used by repair, input prep, and processor steps."""
 
 from pathlib import Path
 import json
@@ -39,7 +39,28 @@ def command_action(action: dict[str, Any], context: dict[str, Any]) -> None:
             raise ActionError(f"command.steps[{index}] must be a non-empty list of strings")
         rendered = [_render(arg, context) for arg in command]
         working_dir = context.get("action_dir", context.get("working_dir"))
-        subprocess.run(rendered, check=True, cwd=working_dir)
+        completed = subprocess.run(rendered, check=False, cwd=working_dir, capture_output=True, text=True)
+        if completed.returncode:
+            detail = completed.stderr.strip() or completed.stdout.strip()
+            suffix = f": {detail}" if detail else ""
+            raise ActionError(
+                f"command.steps[{index}] exited with status {completed.returncode}{suffix}"
+            )
+
+
+@register_action("create-dir")
+def create_dir_action(action: dict[str, Any], context: dict[str, Any]) -> None:
+    """Create a directory path, including any missing parent directories."""
+    raw_path = action.get("path")
+    if not isinstance(raw_path, str) or not raw_path:
+        raise ActionError("create-dir.path must be a non-empty path string")
+    path = Path(_render(raw_path, context)).expanduser()
+    if not path.is_absolute():
+        path = Path(context.get("working_dir", Path.cwd())) / path
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ActionError(f"create-dir could not create {path}: {exc}") from exc
 
 
 @register_action("write-jsons-from-context")

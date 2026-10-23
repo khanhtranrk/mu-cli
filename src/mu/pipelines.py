@@ -18,16 +18,21 @@ class PipelineBuildError(ValueError):
 MODEL_SUFFIXES = {".gguf", ".safetensor", ".safetensors"}
 
 
-def _discover_models(cache_dir: Path) -> dict[str, str]:
-    """Index supported model files by filename and, when unique, by stem."""
+def list_model_files(cache_dir: Path) -> list[Path]:
+    """List supported model files under the cache models directory."""
     models_dir = cache_dir / "models"
     if not models_dir.is_dir():
-        return {}
-    files = sorted(
+        return []
+    return sorted(
         (path.resolve() for path in models_dir.rglob("*")
          if path.is_file() and path.suffix.lower() in MODEL_SUFFIXES),
         key=str,
     )
+
+
+def _discover_models(cache_dir: Path) -> dict[str, str]:
+    """Index supported model files by filename and, when unique, by stem."""
+    files = list_model_files(cache_dir)
     models = {path.name: str(path) for path in files}
     by_stem: dict[str, list[Path]] = {}
     for path in files:
@@ -175,6 +180,7 @@ def build_pipelines(
                     **step_values,
                     "processor": processor_name,
                     "processor_config": processor_values,
+                    "validation_context": {**common, "request": resolved_request},
                 })
             result.append({
                 "pipeline": pipeline_name,

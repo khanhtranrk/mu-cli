@@ -53,6 +53,20 @@ def exit_zero(target: Any, base_dir: Path) -> ValidationResult:
     return ValidationResult(completed.returncode == 0, f"exit-zero: {' '.join(target)} {status}{suffix}")
 
 
+@register_check("exit-one")
+def exit_one(target: Any, base_dir: Path) -> ValidationResult:
+    if not isinstance(target, list) or not target or not all(isinstance(arg, str) for arg in target):
+        raise ValidationError("exit-one target must be a non-empty list of command arguments")
+    try:
+        completed = subprocess.run(target, cwd=base_dir, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        return ValidationResult(False, f"exit-one: could not run {target[0]}: {exc}")
+    status = f"returned {completed.returncode}"
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    suffix = f" ({detail})" if detail else ""
+    return ValidationResult(completed.returncode == 1, f"exit-one: {' '.join(target)} {status}{suffix}")
+
+
 def validate_action_checks(
     checks: list[Any], *, base_dir: Path, context: dict[str, Any] | None = None
 ) -> list[ValidationResult]:
