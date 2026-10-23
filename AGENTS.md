@@ -29,7 +29,7 @@ Keep new validation and action types behind their registries so adding a type do
 - `mu models` lists supported model files under the selected cache directory's `models` folder.
 - Each request creates its own pipeline context. Preserve request-specific values while expanding templates.
 - A `waiting-for` dependency blocks a task until its prerequisites succeed; a failed prerequisite must prevent dependent tasks from running.
-- `units` estimate per-task VRAM demand at 4 GiB per unit. `units: 0` means CPU-only. Device command syntax belongs to each processor's `device_args` template; the scheduler provides `device_index` rather than imposing one CLI convention.
+- Each processor's `units` field estimates VRAM demand in GiB; the scheduler rounds positive amounts up to 4 GiB blocks (1–4→1 unit, 5–8→2, etc.). GPU capacity rounds down to complete 4 GiB blocks. `units: 0` means CPU-only. Device command syntax belongs to each processor's `device_args` template; the scheduler provides `device_index` rather than imposing one CLI convention.
 - Keep reports understandable at both request and task level, including failures and blocked work.
 
 ## Safe development workflow

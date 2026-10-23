@@ -18,8 +18,9 @@ class ComputeDevice:
     backend: str
 
     @property
-    def capacity_units(self) -> float:
-        return self.vram_gib / VRAM_PER_UNIT_GIB
+    def capacity_units(self) -> int:
+        """Whole 4 GiB scheduling blocks that fit on this device."""
+        return int(self.vram_gib // VRAM_PER_UNIT_GIB)
 
 
 def detect_devices() -> list[ComputeDevice]:

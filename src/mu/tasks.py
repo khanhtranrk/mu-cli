@@ -1,8 +1,10 @@
 """Convert expanded pipelines into dependency-aware processor tasks."""
 
 from copy import deepcopy
+import math
 from typing import Any
 
+from mu.hardware import VRAM_PER_UNIT_GIB
 
 class TaskGraphError(ValueError):
     """A pipeline's task dependencies are invalid."""
@@ -43,9 +45,11 @@ def pipelines_to_tasks(pipelines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             processor_config = step.get("processor_config", {})
             if not isinstance(processor_config, dict):
                 raise TaskGraphError(f"step {name!r} processor configuration must be a mapping")
-            units = processor_config.get("units", step.get("units", 1))
-            if not isinstance(units, (int, float)) or isinstance(units, bool) or units < 0:
-                raise TaskGraphError(f"step {name!r} units must be a non-negative number")
+            vram_gib = processor_config.get("units", step.get("units", 1))
+            if not isinstance(vram_gib, (int, float)) or isinstance(vram_gib, bool) or vram_gib < 0:
+                raise TaskGraphError(f"step {name!r} units must be a non-negative VRAM amount in GiB")
+            # Treat the declared number as estimated GiB and reserve whole 4 GiB blocks.
+            units = math.ceil(vram_gib / VRAM_PER_UNIT_GIB) if vram_gib else 0
             pipeline_tasks.append({
                 "id": id_by_name[name],
                 "pipeline": pipeline.get("pipeline"),
@@ -56,6 +60,7 @@ def pipelines_to_tasks(pipelines: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "processor_config": deepcopy(processor_config),
                 "step_config": deepcopy(step),
                 "validation_context": deepcopy(step.get("validation_context", {})),
+                "vram_gib": vram_gib,
                 "units": units,
                 "waiting_for": [id_by_name[item] for item in waiting_for],
                 "status": "pending",

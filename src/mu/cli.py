@@ -64,7 +64,10 @@ def _print_run_report(pipeline: str, tasks: list[dict], input_results: list[dict
         }.get(state, (state.upper(), "white"))
         label = typer.style(f"[{marker}]", fg=color, bold=True)
         device = task.get("device", "not assigned")
-        details = f"{task['id']}  {task['name']} → {task['processor']}  on {device}  ({task['units']} units)"
+        details = (
+            f"{task['id']}  {task['name']} → {task['processor']}  on {device}  "
+            f"({task['vram_gib']:g} GiB; {task['units']} units)"
+        )
         if task["waiting_for"]:
             details += f"  after {', '.join(task['waiting_for'])}"
         typer.echo(f"  {label} {details}")
@@ -107,7 +110,7 @@ def _print_plan_report(
     typer.echo("Hardware")
     if devices:
         for device in devices:
-            typer.echo(f"  GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB ({device.capacity_units:.2f} units)")
+            typer.echo(f"  GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB ({device.capacity_units} units)")
     else:
         typer.echo("  No supported GPU detected; GPU tasks will require CPU fallback confirmation in run.")
 
@@ -131,7 +134,7 @@ def _print_plan_report(
         dependencies = f"; after {', '.join(task['waiting_for'])}" if task["waiting_for"] else ""
         typer.echo(
             f"  {label} {task['id']}  {request_name} / {task['name']} → {task['processor']} "
-            f"[{task['units']} units; {placement}{dependencies}]"
+            f"[{task['vram_gib']:g} GiB → {task['units']} units; {placement}{dependencies}]"
         )
         config = task.get("processor_config", {})
         target = config.get("target")
@@ -279,13 +282,16 @@ def run(
     if max_units is not None:
         over_limit = [task for task in tasks if task["status"] == "pending" and float(task["units"]) > max_units]
         if over_limit:
-            labels = ", ".join(f"{task['id']} needs {task['units']}" for task in over_limit)
+            labels = ", ".join(
+                f"{task['id']} needs {task['vram_gib']:g} GiB ({task['units']} units)"
+                for task in over_limit
+            )
             typer.echo(f"Scheduler capacity is too small: {labels} units (limit {max_units}).", err=True)
             raise typer.Exit(code=2)
 
     devices = detect_devices()
     for device in devices:
-        typer.echo(f"[INFO] GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB VRAM ({device.capacity_units:.2f} units)")
+        typer.echo(f"[INFO] GPU {device.index}: {device.name}, {device.vram_gib:.1f} GiB VRAM ({device.capacity_units} units)")
 
     force_cpu: set[str] = set()
     gpu_tasks = [task for task in tasks if task["status"] == "pending" and float(task["units"]) > 0]
@@ -302,7 +308,10 @@ def run(
             if not any(device.capacity_units >= float(task["units"]) for device in devices)
         ]
         if insufficient:
-            labels = ", ".join(f"{task['id']} ({task['processor']}, {task['units']} units)" for task in insufficient)
+            labels = ", ".join(
+                f"{task['id']} ({task['processor']}, {task['vram_gib']:g} GiB/{task['units']} units)"
+                for task in insufficient
+            )
             typer.echo(f"Warning: no single GPU has enough VRAM for: {labels}.", err=True)
             if not typer.confirm("Continue by running those tasks on CPU?", default=False):
                 raise typer.Exit(code=1)
