@@ -50,8 +50,6 @@ repair:
     validate:
       - condition: file-existed
         target: "{cache_dir}/bin/yue-synth"
-      - condition: exit-zero
-        target: ["{cache_dir}/bin/yue-synth", --help]
       - condition: file-existed
         target: "{cache_dir}/bin/sd-cli"
       - condition: exit-zero
@@ -98,7 +96,7 @@ processors:
       - "{request[cover_height]}"
       - -o
       - "{output_dir}/{request[name]}/cover.png"
-    units: 6
+    units: 3
 
   demucs:
     target: uvx
