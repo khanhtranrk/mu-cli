@@ -10,7 +10,7 @@ repair:
       - [hf, download, Serveurperso/YuE2-GGUF, SheetSage2-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
       - [hf, download, Serveurperso/YuE2-GGUF, yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
       - [hf, download, unsloth/Qwen-Image-2.1-GGUF, qwen-image-2.1-Q4_K_M.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Comfy-Org/Qwen-Image-2.1, vae/qwen_image_2.1_vae_bf16.safetensors, --local-dir, "{cache_dir}/models/qwen-image-2.1-comfy-org"]
+      - [hf, download, unsloth/Qwen-Image-2.1-FP8, vae/qwen_image_2.1_vae_bf16.safetensors, --local-dir, "{cache_dir}/models"]
       - [hf, download, unsloth/Qwen3-VL-8B-Instruct-GGUF, Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf, --local-dir, "{cache_dir}/models"]
     validate:
       - condition: file-existed
@@ -26,7 +26,7 @@ repair:
       - condition: file-existed
         target: "{cache_dir}/models/qwen-image-2.1-Q4_K_M.gguf"
       - condition: file-existed
-        target: "{cache_dir}/models/qwen-image-2.1-comfy-org/vae/qwen_image_2.1_vae_bf16.safetensors"
+        target: "{cache_dir}/models/vae/qwen_image_2.1_vae_bf16.safetensors"
       - condition: file-existed
         target: "{cache_dir}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf"
 
@@ -79,7 +79,7 @@ processors:
       - --diffusion-model
       - "{models[qwen-image-2.1-Q4_K_M]}"
       - --vae
-      - "{models[qwen-image-2.1-comfy-org/vae/qwen_image_2.1_vae_bf16]}"
+      - "{models[vae/qwen_image_2.1_vae_bf16]}"
       - --llm
       - "{models[Qwen3-VL-8B-Instruct-UD-Q4_K_XL]}"
       - --flash-attn

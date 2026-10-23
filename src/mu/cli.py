@@ -64,9 +64,10 @@ def _print_run_report(pipeline: str, tasks: list[dict], input_results: list[dict
         }.get(state, (state.upper(), "white"))
         label = typer.style(f"[{marker}]", fg=color, bold=True)
         device = task.get("device", "not assigned")
+        estimated_gib = float(task["units"]) * 4
         details = (
             f"{task['id']}  {task['name']} → {task['processor']}  on {device}  "
-            f"({task['vram_gib']:g} GiB; {task['units']} units)"
+            f"({task['units']} units; ~{estimated_gib:g} GiB)"
         )
         if task["waiting_for"]:
             details += f"  after {', '.join(task['waiting_for'])}"
@@ -134,7 +135,7 @@ def _print_plan_report(
         dependencies = f"; after {', '.join(task['waiting_for'])}" if task["waiting_for"] else ""
         typer.echo(
             f"  {label} {task['id']}  {request_name} / {task['name']} → {task['processor']} "
-            f"[{task['vram_gib']:g} GiB → {task['units']} units; {placement}{dependencies}]"
+            f"[{task['units']} units; ~{float(task['units']) * 4:g} GiB; {placement}{dependencies}]"
         )
         config = task.get("processor_config", {})
         target = config.get("target")
@@ -285,7 +286,7 @@ def run(
         over_limit = [task for task in tasks if task["status"] == "pending" and float(task["units"]) > max_units]
         if over_limit:
             labels = ", ".join(
-                f"{task['id']} needs {task['vram_gib']:g} GiB ({task['units']} units)"
+                f"{task['id']} needs {task['units']} units (~{float(task['units']) * 4:g} GiB)"
                 for task in over_limit
             )
             typer.echo(f"Scheduler capacity is too small: {labels} units (limit {max_units}).", err=True)
@@ -311,7 +312,7 @@ def run(
         ]
         if insufficient:
             labels = ", ".join(
-                f"{task['id']} ({task['processor']}, {task['vram_gib']:g} GiB/{task['units']} units)"
+                f"{task['id']} ({task['processor']}, {task['units']} units)"
                 for task in insufficient
             )
             typer.echo(f"Warning: no single GPU has enough VRAM for: {labels}.", err=True)

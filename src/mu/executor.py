@@ -52,7 +52,7 @@ def execute_tasks(
                 task["device"] = device.index if device is not None else "cpu"
                 print(
                     f"[RUN] {task_id} {task['name']} → {task['processor']} on {task['device']} "
-                    f"({task['vram_gib']:g} GiB; {task['units']} units)",
+                    f"({task['units']} units; ~{float(task['units']) * 4:g} GiB)",
                     flush=True,
                 )
                 running_units += units

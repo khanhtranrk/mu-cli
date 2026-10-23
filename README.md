@@ -69,7 +69,7 @@ before:
 
 ## Scheduling
 
-Each processor's `units` value is its estimated VRAM use in GiB. Mu rounds that amount up to whole 4 GiB scheduling units: 1–4 GiB needs 1 unit, 5–8 needs 2, 9–12 needs 3, and 13–16 needs 4. A value of `0` is CPU-only. GPU capacity rounds down to the number of complete 4 GiB units available, so a task is placed only when its rounded requirement fits. When a processor needs a GPU, Mu detects available NVIDIA or AMD compute devices and passes the selected device index through that processor's `device_args` template. Plan and run reports show both the GiB estimate and the normalized unit count. For example:
+Each processor's `units` value is the number of scheduler units it requests. One unit represents about 4 GiB, so `units: 2` requests 2 units (about 8 GiB) and `units: 3` requests 3 units (about 12 GiB); `units: 0` is CPU-only. GPU VRAM is rounded up into 4 GiB bands to determine its unit capacity: 1–4 GiB → 1 unit, 5–8 → 2, 9–12 → 3, and over 12 through 16 → 4. Thus a 15 GiB GPU is treated as 4 units. A task is assigned to one GPU when its requested units fit that GPU's capacity. When a processor needs a GPU, Mu detects available NVIDIA or AMD compute devices and passes the selected device index through that processor's `device_args` template. Plan and run reports show unit demand and an approximate GiB value. For example:
 
 ```yaml
 device_args: ["--device", "cuda:{device_index}"]

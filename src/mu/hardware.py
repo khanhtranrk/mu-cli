@@ -1,6 +1,7 @@
 """Small, dependency-free probes for compute GPUs and their VRAM."""
 
 from dataclasses import dataclass
+import math
 import re
 import shutil
 import subprocess
@@ -19,8 +20,8 @@ class ComputeDevice:
 
     @property
     def capacity_units(self) -> int:
-        """Whole 4 GiB scheduling blocks that fit on this device."""
-        return int(self.vram_gib // VRAM_PER_UNIT_GIB)
+        """Map the device's VRAM amount to 4 GiB scheduling bands."""
+        return math.ceil(self.vram_gib / VRAM_PER_UNIT_GIB)
 
 
 def detect_devices() -> list[ComputeDevice]:
