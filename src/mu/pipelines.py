@@ -31,12 +31,22 @@ def list_model_files(cache_dir: Path) -> list[Path]:
 
 
 def _discover_models(cache_dir: Path) -> dict[str, str]:
-    """Index supported model files by filename and, when unique, by stem."""
+    """Index supported models by relative path and unambiguous filename aliases."""
     files = list_model_files(cache_dir)
-    models = {path.name: str(path) for path in files}
+    models_dir = (cache_dir / "models").expanduser().resolve()
+    models: dict[str, str] = {}
+    by_name: dict[str, list[Path]] = {}
     by_stem: dict[str, list[Path]] = {}
     for path in files:
+        relative = path.relative_to(models_dir)
+        relative_key = relative.as_posix()
+        models[relative_key] = str(path)
+        models[relative.with_suffix("").as_posix()] = str(path)
+        by_name.setdefault(path.name, []).append(path)
         by_stem.setdefault(path.stem, []).append(path)
+    for name, matches in by_name.items():
+        if len(matches) == 1:
+            models[name] = str(matches[0])
     for stem, matches in by_stem.items():
         if len(matches) == 1:
             models[stem] = str(matches[0])

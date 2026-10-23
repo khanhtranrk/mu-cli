@@ -211,8 +211,10 @@ def models(
     if not files:
         typer.echo(f"No models found in {cache_dir.expanduser() / 'models'}.")
         return
+    models_dir = (cache_dir.expanduser() / "models").resolve()
     for path in files:
-        typer.echo(path.relative_to((cache_dir.expanduser() / "models").resolve()))
+        key = path.relative_to(models_dir).with_suffix("").as_posix()
+        typer.echo(f"{key} -> {path}")
 
 
 @app.command()

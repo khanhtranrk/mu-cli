@@ -55,7 +55,7 @@ A spec declares:
 
 An input declares optional `before` actions and a `requests` list. Each request is expanded into its own pipeline context. Templates can reference `request`, `cache_dir`, `output_dir`, `working_dir`, and discovered `models`. Model keys are paths relative to `{cache_dir}/models`; supported model files include `.gguf` and `.safetensors`.
 
-`mu models --cache_dir PATH` lists cached model file paths relative to the `models` directory.
+`mu models --cache_dir PATH` prints each extensionless relative model key and its resolved filesystem path, for example `vae/encoder -> /cache/models/vae/encoder.safetensors`. Those keys can be used directly in `{models[key]}` templates.
 
 Repair actions and validations are extensible registries. Current action types include `command`, `create-dir`, and `write-jsons-from-context`; current validation conditions include `file-existed`, `exit-zero`, and `exit-one`. The exit checks accept a command argument list and pass only when the process returns the named status. See the corresponding modules under `src/mu/` for their schemas.
 
