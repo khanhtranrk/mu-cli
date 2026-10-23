@@ -53,9 +53,9 @@ repair:
       - condition: exit-zero
         target: ["{cache_dir}/bin/yue-synth", --help]
       - condition: file-existed
-        target: "{working_dir}/stable-diffusion.cpp/build/bin/sd-cli"
+        target: "{cache_dir}/bin/sd-cli"
       - condition: exit-zero
-        target: ["{working_dir}/stable-diffusion.cpp/build/bin/sd-cli", --help]
+        target: ["{cache_dir}/bin/sd-cli", --help]
 
 processors:
   yue2:
@@ -74,7 +74,7 @@ processors:
     units: 2
 
   sd-cli:
-    target: "{working_dir}/stable-diffusion.cpp/build/bin/sd-cli"
+    target: "{cache_dir}/bin/sd-cli"
     params:
       - --diffusion-model
       - "{models[qwen-image-2.1-Q4_K_M]}"
