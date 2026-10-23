@@ -1,0 +1,419 @@
+version: 1.0
+
+before:
+  - action: write-jsons-from-context
+    target: requests
+    output: "{cache_dir}/requests/{request[name]}"
+    content:
+      name: "{request[name]}"
+      style: "{request[style]}"
+      lyrics: "{request[lyrics]}"
+
+requests:
+  - name: A Small Light
+    style: "indie folk, warm acoustic guitar, gentle piano, hopeful vocal"
+    lyrics: |
+      [Verse 1]
+      The rain kept time against the kitchen glass,
+      While evening folded up the fields of gold.
+      I thought the harder days would always last,
+      Then saw one lamp still burning down the road.
+
+      [Chorus]
+      Keep a small light where the shadows gather,
+      Let it shine when the sky turns gray.
+      We can find our way to one another,
+      One quiet step, one more day.
+
+      [Verse 2]
+      A neighbor left some bread beside the door,
+      My brother called to ask if I was well.
+      The world was not the same as it was before,
+      But kindness had a thousand ways to tell.
+
+      [Bridge]
+      Dawn does not arrive all at once;
+      It learns the hills by name.
+
+      [Final Chorus]
+      Keep a small light where the shadows gather,
+      Let it shine till the morning breaks.
+      We can find our way to one another,
+      And mend the dark with every choice we make.
+    cover_prompt: "Intimate indie-folk album artwork: one warm lantern glowing in a farmhouse window during gentle rain, a quiet country road leading toward dawn, muted amber and slate-blue palette, cinematic and human, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Sky of Tomorrow
+    style: "cinematic pop, uplifting piano, shimmering synths, soaring strings"
+    lyrics: |
+      [Verse 1]
+      We drew a new horizon on the page,
+      With coffee rings and plans we barely knew.
+      The old year left its dust upon the stage,
+      The morning opened wide and bright and blue.
+
+      [Chorus]
+      There's a sky of tomorrow over us,
+      There are roads we have not tried.
+      Take my hand; we can learn to trust
+      The open miles and the changing tide.
+
+      [Verse 2]
+      We packed the names of places in a case,
+      And left a little room for being wrong.
+      The future never promised us a place,
+      But every turn could teach us a new song.
+
+      [Bridge]
+      If the clouds come down, we'll keep moving;
+      If the map runs out, we'll make one.
+
+      [Final Chorus]
+      There's a sky of tomorrow over us,
+      And a thousand shades of light.
+      Take my hand; we can learn to trust
+      The road that carries us into the bright.
+    cover_prompt: "Expansive cinematic pop cover: two travelers on a high ridge at sunrise looking toward a vast blue-and-gold horizon, delicate clouds, subtle sense of motion and possibility, polished atmospheric lighting, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Paper Harbor
+    style: "dream pop, soft electric guitar, brushed drums, wistful intimate vocal"
+    lyrics: |
+      [Verse 1]
+      I folded all our letters into boats,
+      And set them in the gutter after rain.
+      Their little paper sails held what we wrote,
+      Then turned the corner, out of sight again.
+
+      [Chorus]
+      Let the water take the words we couldn't keep,
+      Let the harbor hold the fading blue.
+      I can miss you without losing sleep;
+      I can wish the best of things for you.
+
+      [Verse 2]
+      The room is still, but not the way it was;
+      A window lets the evening colors through.
+      I found a little space beneath the dust,
+      And made a place for something new.
+
+      [Bridge]
+      Some goodbyes are not a slammed door;
+      They're a tide that turns and leaves the shore.
+
+      [Final Chorus]
+      Let the water take the words we couldn't keep,
+      Let the harbor hold the fading blue.
+      I can miss you, let the old ache sleep,
+      And make a little room for something new.
+    cover_prompt: "Dream-pop album art at blue hour: tiny folded paper boats drifting through a rain-wet city gutter toward a calm harbor, reflections of lavender and teal lights, tender and reflective, no lettering"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Blue Hour Train
+    style: "indie rock, steady drums, ringing guitars, reflective road-song energy"
+    lyrics: |
+      [Verse 1]
+      The station clock was five minutes slow,
+      Your ticket warmed inside your coat.
+      We watched the platform lamps begin to glow,
+      And saved the things we couldn't say by rote.
+
+      [Chorus]
+      At the blue hour, the train rolls on,
+      Through sleeping towns and fields of frost.
+      I'll keep your laugh when the lights are gone;
+      Distance is a road, not all we've lost.
+
+      [Verse 2]
+      The window held your face beside the moon,
+      Then carried it through forests, mile by mile.
+      I learned a different kind of afternoon:
+      To miss you and still welcome every mile.
+
+      [Bridge]
+      Send me a postcard from the place you land;
+      I'll send the spring when it reaches this town.
+
+      [Final Chorus]
+      At the blue hour, the train rolls on,
+      While dawn writes silver on the glass.
+      I'll keep your laugh and carry on;
+      The miles are real, but so is what we have.
+    cover_prompt: "Reflective indie-rock artwork from inside a night train: a traveler by the window, blue-hour sky over quiet winter fields, station lights receding into the distance, cinematic grain and deep cobalt tones, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Garden in December
+    style: "acoustic soul, fingerpicked guitar, mellow organ, patient uplifting groove"
+    lyrics: |
+      [Verse 1]
+      The ground was hard beneath the apple tree,
+      The beds were bare, the branches thin and brown.
+      You pressed a seed into my palm for me,
+      And said the roots were working underground.
+
+      [Chorus]
+      There's a garden in December,
+      Though no green is showing through.
+      Keep the promise you remember;
+      Spring is growing out of view.
+
+      [Verse 2]
+      We saved the jars and mended what we could,
+      We took our time and let the silence mend.
+      The smallest acts of tending make a quiet,
+      patient kind of courage in the end.
+
+      [Bridge]
+      You cannot hurry what is learning how;
+      The future has its season, not its clock.
+
+      [Final Chorus]
+      There's a garden in December,
+      And a life beneath the snow.
+      Keep the hope we both remember;
+      Give it time enough to grow.
+    cover_prompt: "Warm acoustic-soul album cover: a quiet winter garden beneath fresh snow, a gloved hand placing one seed beside an old apple tree, a faint golden greenhouse light in the distance, intimate hopeful realism, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: The Map We Made
+    style: "folk rock, handclaps, bright acoustic guitars, joyful group harmonies"
+    lyrics: |
+      [Verse 1]
+      We marked the diner with a crooked star,
+      The swimming hole with a blue line through.
+      We drew the places that had carried us far,
+      Then left some blank for places we had yet to know.
+
+      [Chorus]
+      This is the map we made together,
+      A patchwork road from then to now.
+      Wherever life may turn the weather,
+      We'll find each other somehow.
+
+      [Verse 2]
+      The years put miles between our chairs,
+      New names and jobs and cities came and went.
+      Still every voice around the table shares
+      The old familiar kind of nourishment.
+
+      [Bridge]
+      No compass points to every door;
+      A friend can be the north we know.
+
+      [Final Chorus]
+      This is the map we made together,
+      Folded soft from being passed around.
+      Wherever life may turn the weather,
+      We'll make a way back to this ground.
+    cover_prompt: "Joyful folk-rock cover: a hand-drawn map spread across a picnic table, marked with a diner, swimming hole, and winding hometown roads, friends' hands pointing and laughing in golden late-afternoon light, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: City of Windows
+    style: "synth pop, pulsing bass, crisp drums, neon-night atmosphere with a hopeful chorus"
+    lyrics: |
+      [Verse 1]
+      The elevator climbs through floors of light,
+      A thousand rooms are glowing in the rain.
+      A cook turns out the kitchen lights,
+      A student starts a letter on a train.
+
+      [Chorus]
+      In this city of windows, we're not alone;
+      Every little square holds a life of its own.
+      Through the midnight glass, let the colors show;
+      We are more connected than we know.
+
+      [Verse 2]
+      A saxophone spills softly from a bar,
+      A nurse walks home beneath the traffic's glow.
+      We lift our eyes and find the same one star,
+      Above the roofs where all the night winds go.
+
+      [Bridge]
+      If you see my light across the street,
+      Raise your hand; our lonely nights can meet.
+
+      [Final Chorus]
+      In this city of windows, we're not alone;
+      Every distant light says, "Carry on."
+      Through the midnight glass, let the colors show;
+      We are more connected than we know.
+    cover_prompt: "Luminous synth-pop album art: a rain-soaked city skyline at night filled with hundreds of warm apartment windows, subtle silhouettes living separate lives, one bright star above the rooftops, neon reflections, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Keep the Porch Light
+    style: "country soul, acoustic guitar, warm piano, heartfelt restrained vocal"
+    lyrics: |
+      [Verse 1]
+      The old screen door still catches when it swings,
+      The porch boards know the rhythm of my shoes.
+      I drove all night with winter in my sleeves,
+      And wondered if there'd be a place to choose.
+
+      [Chorus]
+      Keep the porch light burning, just in case
+      I lose the road or take the long way home.
+      There's a chair, a cup, and a familiar place;
+      I don't have to face the dark alone.
+
+      [Verse 2]
+      You didn't ask me why I stayed away;
+      You set the kettle on and let it sing.
+      Some welcomes don't need much to say;
+      A warm room can repair a broken wing.
+
+      [Bridge]
+      Home is not a place that holds you still;
+      It's someone glad to see you when you will.
+
+      [Final Chorus]
+      Keep the porch light burning, now I'm here;
+      I'll leave it on for anyone who roams.
+      There's a chair, a cup, a hand held near;
+      We can make a little shelter out of home.
+    cover_prompt: "Tender country-soul cover: a modest farmhouse porch at night with one welcoming golden light, a travel-worn car on the gravel drive, winter trees and a kettle-lit window, intimate cinematic realism, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Rivers Know the Way
+    style: "roots rock, rolling percussion, acoustic guitar and fiddle, resilient anthemic vocal"
+    lyrics: |
+      [Verse 1]
+      The bridge went out when the spring rain came,
+      And every plan we had was washed downstream.
+      We found a boat and called it by its name,
+      Then pushed against the current and the gleam.
+
+      [Chorus]
+      Rivers know the way around a stone;
+      They bend, they turn, they still arrive.
+      When the straight road isn't ours to own,
+      We can change our course and stay alive.
+
+      [Verse 2]
+      We laid a crossing, timber, bolt, and nail,
+      With neighbors bringing tools from either side.
+      The water kept on writing through the vale,
+      But now we had a way to meet the tide.
+
+      [Bridge]
+      Strong is not the same as never changing;
+      Sometimes strength is choosing where to flow.
+
+      [Final Chorus]
+      Rivers know the way around a stone;
+      They bend, they turn, they still arrive.
+      We may take a road we've never known,
+      And find a deeper reason to survive.
+    cover_prompt: "Resilient roots-rock artwork: a broad river curling around a dark stone beneath a newly rebuilt wooden footbridge, neighbors working together at sunrise, green valley after spring rain, dynamic natural light, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: A Room for Rain
+    style: "piano ballad, soft strings, spacious production, compassionate reflective vocal"
+    lyrics: |
+      [Verse 1]
+      I left the curtains open to the storm,
+      And let the rain speak gently to the pane.
+      Your coat still hangs beside the doorway warm,
+      Though seasons have been turning through the frame.
+
+      [Chorus]
+      There's a room for rain inside the heart;
+      Let the quiet gather, let it fall.
+      Grief can be a weather, not the whole sky;
+      Love remains beneath it all.
+
+      [Verse 2]
+      I found your note inside a winter book,
+      A list of little things we meant to do.
+      I smiled before I knew the shape it took,
+      And set one extra cup beside the two.
+
+      [Bridge]
+      I won't force the clouds to disappear;
+      I'll open up the window, keep you near.
+
+      [Final Chorus]
+      There's a room for rain inside the heart;
+      Let the quiet gather, let it fall.
+      Grief can be a season passing through;
+      Love remains beneath it all.
+    cover_prompt: "Gentle piano-ballad cover: a quiet sunlit room with an open rain-streaked window, an empty chair and a well-loved coat by the door, soft gray-blue weather giving way to a small patch of gold, respectful and tender, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Borrowed Stardust
+    style: "dreamy orchestral pop, delicate piano, airy vocals, gradual luminous build"
+    lyrics: |
+      [Verse 1]
+      We watched the meteor shower from the roof,
+      With blankets pulled around our shoulders tight.
+      You said the universe was proof enough
+      That wonder doesn't need to stay in sight.
+
+      [Chorus]
+      We are borrowing stardust for a while,
+      Passing it from hand to hand below.
+      Let it make the ordinary feel alive;
+      Let it teach our small hearts how to glow.
+
+      [Verse 2]
+      The morning found us sleeping by the stairs,
+      Our paper cups and constellations gone.
+      But something bright was traveling everywhere,
+      In every face that greeted us at dawn.
+
+      [Bridge]
+      We don't have to hold the heavens fast;
+      A little light can last beyond the night.
+
+      [Final Chorus]
+      We are borrowing stardust for a while,
+      And giving back a kindness as we go.
+      Let it make the ordinary feel alive;
+      Let the life we share become its glow.
+    cover_prompt: "Dreamy orchestral-pop art: two friends on a city rooftop beneath a meteor shower, blankets and paper cups nearby, delicate star trails reflected in their eyes, deep indigo sky with silver and rose light, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Morning After Fire
+    style: "alternative rock, piano-led verses, broad guitars, determined hopeful chorus"
+    lyrics: |
+      [Verse 1]
+      The workshop walls were black against the dawn,
+      The tools we knew lay quiet in the ash.
+      We stood together, counted what was gone,
+      Then found a hammer underneath the glass.
+
+      [Chorus]
+      On the morning after fire, we begin;
+      We raise the frame and let the daylight through.
+      What we lost is real, but so are we;
+      There's work to do beneath an open sky.
+
+      [Verse 2]
+      The neighbors brought us lumber, soup, and time,
+      A child drew flowers on the plywood wall.
+      We set a table from a salvaged beam,
+      And watched the first neighbors fill the chairs.
+
+      [Bridge]
+      The smoke will fade; the names remain.
+      We carry both, and build again.
+
+      [Final Chorus]
+      On the morning after fire, we begin;
+      We raise the frame beneath a clearer blue.
+      What we lost is real, but so are we;
+      A stronger home can grow from what we do.
+    cover_prompt: "Hopeful alternative-rock album artwork: a small workshop being rebuilt after a fire, neighbors raising a new timber frame at sunrise, blackened ground giving way to green shoots, dignified and resilient, no flames, no text"
+    cover_with: 1280
+    cover_height: 768
