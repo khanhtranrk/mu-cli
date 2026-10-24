@@ -5,7 +5,7 @@ repair:
   - action: command
     steps:
       - [hf, download, Serveurperso/YuE2-GGUF, YuE2-Vae-F32.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Serveurperso/YuE2-GGUF, YuE2-3B-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
+      - [hf, download, Serveurperso/YuE2-GGUF, YuE2-3B-BF16.gguf, --local-dir, "{cache_dir}/models"]
       - [hf, download, Serveurperso/YuE2-GGUF, MERT-v2-FullSong-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
       - [hf, download, Serveurperso/YuE2-GGUF, SheetSage2-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
       - [hf, download, Serveurperso/YuE2-GGUF, yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
@@ -16,7 +16,7 @@ repair:
       - condition: file-existed
         target: "{cache_dir}/models/YuE2-Vae-F32.gguf"
       - condition: file-existed
-        target: "{cache_dir}/models/YuE2-3B-Q8_0.gguf"
+        target: "{cache_dir}/models/YuE2-3B-BF16.gguf"
       - condition: file-existed
         target: "{cache_dir}/models/MERT-v2-FullSong-Q8_0.gguf"
       - condition: file-existed
@@ -62,7 +62,7 @@ processors:
     target: "{cache_dir}/bin/yue-synth"
     params:
       - --model
-      - "{models[YuE2-3B-Q8_0]}"
+      - "{models[YuE2-3B-BF16]}"
       - --vae
       - "{models[YuE2-Vae-F32]}"
       - --request
@@ -71,7 +71,7 @@ processors:
       - "{step[output]}"
       - --score
       - "{step[score]}"
-    units: 2
+    units: 3
 
   sd-cli:
     target: "{cache_dir}/bin/sd-cli"

@@ -632,3 +632,263 @@ songs:
     cover_prompt: "Mandarin folk-ballad cover, a traveler returning to a modest family courtyard at night, mother tending jasmine and mint beside a warmly lit window, full moon above an old stone bridge and quiet river, reunion expressed through small gestures, gentle blue and amber palette, no text"
     cover_with: 1280
     cover_height: 768
+
+  - name: Night Garden Radio
+    style: "English indie pop, soft analog synths, electric piano, brushed drums, intimate lead vocal opening into a communal late-night chorus"
+    lyrics: |
+      [Verse 1]
+      We strung a line of little bulbs above the roof,
+      And carried folding chairs up four flights of stairs.
+      The city kept its restless engine running,
+      While basil leaves breathed softly in the air.
+      My neighbor tuned an old and stubborn radio,
+      Its wooden case worn smooth by many hands.
+      A voice from somewhere far beyond the river
+      Sang like a friend who somehow understands.
+
+      [Pre-Chorus]
+      One window opened, then another;
+      The night grew warmer as we gathered.
+
+      [Chorus]
+      This is the night garden radio,
+      Sending small bright signals through the dark.
+      If you're awake and feeling far from home,
+      Turn the dial and listen for a heart.
+      We have no perfect answers here,
+      Just a song, a chair, a little time.
+      This is the night garden radio;
+      Your quiet voice can travel next to mine.
+
+      [Verse 2]
+      A nurse came up still wearing her blue jacket,
+      A student brought a book she couldn't read.
+      The baker told us how he missed the ocean,
+      Then passed around the bread he'd saved to feed.
+      We spoke of rent and parents growing older,
+      Of plans that changed and chances left behind.
+      No one tried to make the sorrow smaller;
+      We let it sit beneath the string lights' shine.
+
+      [Verse 3]
+      By midnight, someone played a three-chord melody,
+      And every rooftop seemed to lean in close.
+      A child fell asleep beneath a sweater,
+      While traffic blurred below like distant boats.
+      At dawn we watered every box of seedlings,
+      Then carried all the chairs back down the stair.
+      The city woke, but something stayed between us:
+      A little patch of sky we learned to share.
+
+      [Bridge]
+      You do not have to know the whole way home;
+      Sometimes a voice can make the first mile less alone.
+      Wherever your small light is tonight,
+      Leave it on; we'll answer from our side.
+
+      [Final Chorus]
+      This is the night garden radio,
+      Sending little constellations through the dark.
+      If you're awake and feeling far from home,
+      Turn the dial and listen for a heart.
+      We have no perfect answers here,
+      But there's a place for every voice and time.
+      This is the night garden radio;
+      Your quiet song can travel next to mine.
+    cover_prompt: "English indie-pop artwork, neighbors gathered in a small rooftop garden at night beneath warm string lights, an old wooden radio beside herb planters, apartment windows glowing across the city, intimate community atmosphere under a deep indigo sky, cinematic and hopeful, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Zhi Shang Chun Tian
+    style: "Mandarin Chinese folk-pop, warm piano, plucked pipa and acoustic guitar, gentle percussion, reflective verses and a bright hopeful chorus"
+    lyrics: |
+      [Verse 1]
+      搬家的那天，街口的梧桐落了叶，
+      纸箱里装着旧照片和没寄出的信。
+      新房间的墙壁还留着淡淡的白，
+      窗外只有陌生的车声经过不停。
+      我把一颗种子放进旧茶杯里，
+      是外婆留下的牵牛花，已经睡了许多年。
+      每天清晨我给它一点水和阳光，
+      像给忙乱的日子留下一句明天见。
+
+      [Pre-Chorus]
+      土地不问我们来自哪里，
+      只要肯照料，就会慢慢回应。
+
+      [Chorus]
+      在纸上种一片春天，寄给远方的人，
+      让一封信越过山，也越过沉默的门。
+      若新的生活还没有熟悉的声音，
+      就把善意一粒一粒，种进陌生的街邻。
+      等第一片叶子，轻轻推开窗，
+      我们便知道，春天也认得新地方。
+
+      [Verse 2]
+      楼下的阿姨借我一把小剪刀，
+      对门的孩子教我认出附近的路。
+      我们在楼梯间交换几盆绿植，
+      也交换各自家乡的菜谱和祝福。
+      有人刚刚退休，有人夜班才归来，
+      有人把孩子送去很远的学校读书。
+      我们把闲置的桌子搬到院子中间，
+      让一顿晚饭有了更多可以坐下的人。
+
+      [Verse 3]
+      几个月后，牵牛花爬上了窗台，
+      蓝色的小花迎着晨光一朵朵开。
+      我拍下照片寄回外婆的老家，
+      她回信说新土也能养出旧日的爱。
+      那天我终于记住了每条街的名字，
+      也有人在门口叫我一声回来。
+      原来归属并不是一开始就拥有，
+      而是一次次伸出手，慢慢留下来。
+
+      [Bridge]
+      若你刚到一座陌生的城，
+      不必急着把所有路都走明。
+      一杯热茶，一盆小小的绿，
+      也能让一扇窗开始有家的光。
+
+      [Final Chorus]
+      在纸上种一片春天，寄给远方的人，
+      让一封信越过山，也越过沉默的门。
+      若新的生活还没有熟悉的声音，
+      就把善意一粒一粒，种进每条街邻。
+      等满窗的花朵，轻轻迎着阳光，
+      我们会知道，春天就在新地方。
+    cover_prompt: "Mandarin folk-pop album art, a sunlit new apartment window with a blue morning-glory vine growing from a chipped old teacup, handwritten letters and family photographs nearby, neighbors sharing potted plants in the courtyard below, tender feeling of building a home, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Umibe No Yuubinkyoku
+    style: "Japanese cinematic folk, acoustic guitar, piano, subtle strings and harmonica, a calm but emotionally rising vocal about distance and reunion"
+    lyrics: |
+      [Verse 1]
+      海辺の小さな郵便局には
+      古い時計と青いポストがある
+      雨の日も風の日も局員さんは
+      坂道を上って島の家を訪ねる
+      船が来ない週が続いた冬
+      港の灯りは霧に隠れていた
+      それでも手紙を待つ人たちは
+      窓辺に椅子を置いて海を見ていた
+
+      [Pre-Chorus]
+      届くまでに時間がかかっても
+      誰かを想う気持ちは遅れない
+
+      [Chorus]
+      青いポストに願いを預けて
+      波の向こうのあなたへ書こう
+      返事がすぐには来なくても
+      この声は潮風に乗っていく
+      離れた島と町を結ぶように
+      一通の手紙が橋になる
+      今日も海辺の郵便局から
+      小さな希望が旅立っていく
+
+      [Verse 2]
+      祖母は毎週同じ便箋を選び
+      庭の椿のことを少しずつ書いた
+      孫は遠い町の寮の窓から
+      初めての雪と試験の話を返した
+      文字は時々かすれていたけれど
+      間違えた漢字もそのまま残した
+      何度も読み返すそのたびに
+      二人の暮らしが同じ机に並んだ
+
+      [Verse 3]
+      春の初めに船が港へ戻り
+      町から来た人が桟橋に立つ
+      祖母は小さな花束を手に
+      何も急がずゆっくり歩いた
+      局員さんは配達鞄を閉じて
+      海を見ながら深く息をした
+      届ける仕事の向こう側には
+      会いたい人の笑顔が待っていた
+
+      [Bridge]
+      海は二つの岸を分けるけれど
+      同じ月明かりを両方へ届ける
+      言葉を一つ、封筒に入れて
+      会えない時間を越えていこう
+
+      [Final Chorus]
+      青いポストに願いを預けて
+      波の向こうのあなたへ書こう
+      長い冬を越えたその先で
+      この声はきっと手のひらに届く
+      離れた島と町を結ぶように
+      一通の手紙が橋になる
+      今日も海辺の郵便局から
+      ただいまの言葉が旅立っていく
+    cover_prompt: "Japanese folk-ballad artwork, a tiny seaside post office on a misty island, an elderly woman holding a letter beside a vivid blue mailbox, a ferry returning to the harbor beneath the first clear light of spring, quiet emotional reunion, cinematic coastal palette, no text"
+    cover_with: 1280
+    cover_height: 768
+
+  - name: Den Qua Pho Cu
+    style: "Vietnamese acoustic soul, đàn bầu and piano, mellow bass, brushed drums, heartfelt storytelling vocal with a communal final chorus"
+    lyrics: |
+      [Verse 1]
+      Đèn qua phố cũ vàng lên sau cơn mưa,
+      Mái hiên nhỏ còn thơm mùi bánh mới.
+      Bà ngồi trước cửa têm trầu chậm rãi,
+      Nhìn dòng xe qua như nước chảy bên đường.
+      Tiệm sửa xe của chú Ba vừa kéo cửa,
+      Cây me già rụng lá xuống vai người.
+      Con hẻm hẹp từng in dấu chân tuổi nhỏ,
+      Nay bảng hiệu sáng hơn, tiếng phố cũng đông rồi.
+
+      [Pre-Chorus]
+      Phố đổi thay qua từng mùa gió,
+      Nhưng một tiếng gọi tên vẫn làm lòng quay về.
+
+      [Chorus]
+      Đèn qua phố cũ, xin đừng tắt vội,
+      Cho người đi xa nhận ra lối về.
+      Dẫu con đường mới thêm bao nhà cao rộng,
+      Vẫn còn hiên xưa chừa một chỗ ngồi.
+      Ta mang theo tiếng rao trong buổi sớm,
+      Mang mùi cà phê qua những tháng năm.
+      Đèn qua phố cũ, soi giùm ký ức,
+      Để mai trở về, còn thấy người thân.
+
+      [Verse 2]
+      Mẹ kể ngày xưa con hay ngồi trước cửa,
+      Đợi xe kem leng keng cuối buổi trưa.
+      Bạn hàng xóm chia nhau từng quyển truyện,
+      Đến khi đèn lên mới chịu chạy vào nhà.
+      Giờ đứa làm xa, đứa theo nghề khác,
+      Có người bận con nhỏ, có người đổi quê.
+      Nhưng mỗi dịp giỗ, sân nhà đông đủ,
+      Tiếng cười lấp đầy khoảng trống ngoài hè.
+
+      [Verse 3]
+      Con đi ngang hàng cây vừa bị đốn,
+      Thấy bác thợ trồng cây mới cạnh bồn hoa.
+      Một bé gái cầm tay ông qua phố,
+      Dừng lại nghe người bán hàng mời trái na.
+      Con chợt hiểu quê nhà không đứng yên,
+      Nó lớn lên cùng những người còn ở lại.
+      Chỉ cần ta còn biết nhường nhau một lối,
+      Con phố này vẫn có chỗ cho ngày mai.
+
+      [Bridge]
+      Nếu đời cuốn ta đi qua nhiều ngả,
+      Hãy giữ một câu hỏi thăm trong lòng.
+      Một ngọn đèn không xua tan hết tối,
+      Nhưng đủ soi cho ai đó qua đường.
+
+      [Final Chorus]
+      Đèn qua phố cũ, xin đừng tắt vội,
+      Cho người đi xa nhận ra lối về.
+      Dẫu con đường mới thêm bao nhà cao rộng,
+      Vẫn còn hiên xưa chừa một chỗ ngồi.
+      Ta mang theo tiếng rao trong buổi sớm,
+      Mang tình xóm giềng qua những tháng năm.
+      Đèn qua phố cũ, soi giùm ký ức,
+      Để mai trở về, vẫn thấy quê hương.
+    cover_prompt: "Vietnamese acoustic-soul cover on an old city lane after rain, a warm streetlamp above a small family doorway, an elderly woman on the porch, a newly planted young tree beside a familiar tamarind, motorbike lights reflected on wet pavement, nostalgic yet welcoming, cinematic amber light, no text"
+    cover_with: 1280
+    cover_height: 768
