@@ -137,20 +137,16 @@ def build_pipelines(
     output_dir: Path,
     input_data: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Expand each selected pipeline once for every request in the input."""
+    """Expand pipelines over the collection selected by each pipeline definition."""
     spec = _read_yaml(spec_path, "spec")
     if input_data is None:
         input_data = _read_yaml(input_path, "input")
     processors = spec.get("processors", {})
     definitions = spec.get("pipelines", {})
-    requests = input_data.get("requests", [])
     if not isinstance(processors, dict):
         raise PipelineBuildError("spec 'processors' must be a mapping")
     if not isinstance(definitions, dict):
         raise PipelineBuildError("spec 'pipelines' must be a mapping")
-    if not isinstance(requests, list):
-        raise PipelineBuildError("input 'requests' must be a list")
-
     result: list[dict[str, Any]] = []
     resolved_cache_dir = cache_dir.expanduser().resolve()
     common = {
@@ -160,6 +156,7 @@ def build_pipelines(
         "temp_dir": str(resolved_cache_dir),
         "models": _discover_models(resolved_cache_dir),
     }
+    root_context = {**input_data, **common, "global": common, "input": input_data}
     for pipeline_name in pipeline_names:
         definition = definitions.get(pipeline_name)
         if not isinstance(definition, dict):
@@ -167,12 +164,34 @@ def build_pipelines(
         steps = definition.get("steps", [])
         if not isinstance(steps, list):
             raise PipelineBuildError(f"pipeline {pipeline_name!r}.steps must be a list")
-        for request_index, request in enumerate(requests):
-            if not isinstance(request, dict):
-                raise PipelineBuildError(f"input requests[{request_index}] must be a mapping")
-            context = {**common, "request": request}
-            resolved_request = _render(deepcopy(request), context)
-            context["request"] = resolved_request
+        collection = definition.get("for-each")
+        if collection is None:
+            collection = "requests" if "requests" in input_data else None
+        if collection is not None and not isinstance(collection, str):
+            raise PipelineBuildError(f"pipeline {pipeline_name!r}.for-each must be a context key string")
+        if collection is None:
+            entries = [(None, {})]
+        else:
+            values = input_data.get(collection)
+            if not isinstance(values, list):
+                raise PipelineBuildError(
+                    f"input context {collection!r} selected by pipeline {pipeline_name!r} must be a list"
+                )
+            entries = list(enumerate(values))
+        alias = definition.get("as", "request" if collection == "requests" else "item")
+        if not isinstance(alias, str) or not alias:
+            raise PipelineBuildError(f"pipeline {pipeline_name!r}.as must be a non-empty context name")
+        for item_index, item in entries:
+            if not isinstance(item, dict):
+                location = f"{collection}[{item_index}]" if collection is not None else "input context"
+                raise PipelineBuildError(f"input {location} must be a mapping")
+            context = {**root_context, "item": item, alias: item}
+            if alias == "request" or collection == "requests":
+                context["request"] = item
+            resolved_item = _render(deepcopy(item), context)
+            context.update({"item": resolved_item, alias: resolved_item})
+            if "request" in context:
+                context["request"] = resolved_item
             expanded_steps: list[dict[str, Any]] = []
             for step_index, raw_step in enumerate(steps):
                 if not isinstance(raw_step, dict):
@@ -183,18 +202,22 @@ def build_pipelines(
                 processor = processors.get(processor_name)
                 if not isinstance(processor, dict):
                     raise PipelineBuildError(f"processor {processor_name!r} is not defined")
-                processor_values = _render(deepcopy(processor), context)
                 step_values = _render(deepcopy(raw_step), context)
+                step_context = {**context, "step": step_values}
+                processor_values = _render(deepcopy(processor), step_context)
                 expanded_steps.append({
                     **processor_values,
                     **step_values,
                     "processor": processor_name,
                     "processor_config": processor_values,
-                    "validation_context": {**common, "request": resolved_request},
+                    "validation_context": step_context,
                 })
             result.append({
                 "pipeline": pipeline_name,
-                "request": resolved_request,
+                "request": resolved_item,
+                "item": resolved_item,
+                "collection": collection,
+                "item_alias": alias,
                 "steps": expanded_steps,
             })
     return result

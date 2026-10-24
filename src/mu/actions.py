@@ -86,6 +86,26 @@ def write_jsons_from_context(action: dict[str, Any], context: dict[str, Any]) ->
         )
 
 
+@register_action("write-json-from-context")
+def write_json_from_context(action: dict[str, Any], context: dict[str, Any]) -> None:
+    """Write one JSON document from the current (usually request) context."""
+    output = action.get("output")
+    content = action.get("content")
+    if not isinstance(output, str) or not output:
+        raise ActionError("write-json-from-context.output must be a non-empty path string")
+    if not isinstance(content, dict):
+        raise ActionError("write-json-from-context.content must be a mapping")
+    path = Path(_render(output, context)).expanduser()
+    if not path.is_absolute():
+        path = Path(context.get("working_dir", Path.cwd())) / path
+    rendered = _render(content, context)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(rendered, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise ActionError(f"write-json-from-context could not write {path}: {exc}") from exc
+
+
 def _render(value: Any, context: dict[str, Any]) -> Any:
     """Resolve the simple {name} and {request[field]} placeholders in strings."""
     if isinstance(value, dict):
@@ -127,3 +147,5 @@ def _render(value: Any, context: dict[str, Any]) -> Any:
 
 # Accept the older descriptive alias used in prose/config examples as well.
 ACTION_HANDLERS["write-jsons-from-text"] = write_jsons_from_context
+# Accept the common typo used in early configuration examples.
+ACTION_HANDLERS["write-json-form-context"] = write_json_from_context

@@ -1,6 +1,6 @@
 # Mu
 
-Mu is a command-line tool for validating setup requirements and planning or running configurable media-processing pipelines. A spec describes repair actions, processors, and pipeline steps; an input file provides the requests that become individual pipeline runs.
+Mu is a command-line tool for validating setup requirements and planning or running configurable media-processing pipelines. A spec describes repair actions, processors, and pipeline steps; an input file provides the context and collections used to expand pipeline runs.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ uv run mu spec repair examples/song-with-cover/spec.yaml --cache_dir /tmp
 # List cached GGUF and safetensors models.
 uv run mu models --cache_dir /tmp
 
-# Expand requests into processor tasks and preview repair checks and scheduling.
+# Expand input context into processor tasks and preview repair checks and scheduling.
 uv run mu plan song-with-cover examples/song-with-cover/input.yaml \
   --spec examples/song-with-cover/spec.yaml --cache_dir /tmp
 
@@ -53,11 +53,13 @@ A spec declares:
 - Per-step `validate`: output checks such as `file-existed`; a passing step is not run again unless `--force-validate` is set.
 - Per-step `before`: actions run immediately before that processor, such as `create-dir` to prepare output folders.
 
-An input declares optional `before` actions and a `requests` list. Each request is expanded into its own pipeline context. Templates can reference `request`, `cache_dir`, `output_dir`, `working_dir`, and discovered `models`. Model keys are paths relative to `{cache_dir}/models`; supported model files include `.gguf` and `.safetensors`.
+An input is a context space: it can define any values or collections, such as `songs`, `packages`, or `requests`. A pipeline can select a collection with `for-each` and name the current item with `as`; for example, `for-each: songs` and `as: song` makes each song its own pipeline run. If `as` is omitted, the selected item is available as `{item[...]}`; selecting the conventional `requests` collection also keeps the legacy `{request[...]}` alias. Without `for-each`, Mu expands `input.requests` for older specs, or runs once against the input context if there is no `requests` collection. Templates can reference input values directly or through `{input[key]}`, built-in values such as `{cache_dir}` or `{models[key]}`, and built-ins through `{global[key]}`.
+
+Template contexts have three useful scopes: global values (`cache_dir`, `output_dir`, `working_dir`, and `models`), the selected item (`{item[...]}` or its alias such as `{song[...]}`), and the current pipeline step (`{step[...]}`). Processor arguments can use `{step[...]}` to read step-specific values such as `input`, `output`, or `request`, while the step itself can use the selected item. This keeps reusable processor definitions separate from per-pipeline paths and options.
 
 `mu models --cache_dir PATH` prints each extensionless relative model key and its resolved filesystem path, for example `vae/encoder -> /cache/models/vae/encoder.safetensors`. Those keys can be used directly in `{models[key]}` templates.
 
-Repair actions and validations are extensible registries. Current action types include `command`, `create-dir`, and `write-jsons-from-context`; current validation conditions include `file-existed`, `exit-zero`, and `exit-one`. The exit checks accept a command argument list and pass only when the process returns the named status. See the corresponding modules under `src/mu/` for their schemas.
+Repair actions and validations are extensible registries. Current action types include `command`, `create-dir`, `write-jsons-from-context`, and `write-json-from-context`; current validation conditions include `file-existed`, `exit-zero`, and `exit-one`. The exit checks accept a command argument list and pass only when the process returns the named status. `write-json-from-context` writes one JSON file from the current item context and is useful as a pipeline step's `before` action when a processor needs an input file. See the corresponding modules under `src/mu/` for their schemas.
 
 For example, a processor step can create its destination folder before execution:
 

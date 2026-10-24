@@ -66,11 +66,11 @@ processors:
       - --vae
       - "{models[YuE2-Vae-F32]}"
       - --request
-      - "{cache_dir}/requests/{request[name]}/{request[name]}.json"
+      - "{step[request]}"
       - --out
-      - "{output_dir}/{request[name]}/{request[name]}.mp3"
+      - "{step[output]}"
       - --score
-      - "{output_dir}/{request[name]}/{request[name]}.abc"
+      - "{step[score]}"
     units: 2
 
   sd-cli:
@@ -85,7 +85,7 @@ processors:
       - --flash-attn
       - off,diffusion=on
       - --prompt
-      - "{request[cover_prompt]}"
+      - "{step[prompt]}"
       - --steps
       - "24"
       - --cfg-scale
@@ -93,11 +93,11 @@ processors:
       - --sampling-method
       - euler
       - -W
-      - "{request[cover_with]}"
+      - "{step[cover_with]}"
       - -H
-      - "{request[cover_height]}"
+      - "{step[cover_height]}"
       - -o
-      - "{output_dir}/{request[name]}/cover.png"
+      - "{step[output]}"
     units: 3
 
   demucs:
@@ -112,8 +112,8 @@ processors:
       - -j
       - "2"
       - -o
-      - "{output_dir}/{request[name]}/separated"
-      - "{output_dir}/{request[name]}/{request[name]}.mp3"
+      - "{step[output]}"
+      - "{step[input]}"
     device_args: ["-d", "cuda:{device_index}"]
     units: 1
 
@@ -121,7 +121,7 @@ processors:
     target: uvx
     params:
       - whisperx
-      - "{output_dir}/{request[name]}/separated/htdemucs/{request[name]}/vocals.wav"
+      - "{step[input]}"
       - --model
       - large-v3
       - --device
@@ -129,7 +129,7 @@ processors:
       - --batch_size
       - "4"
       - --output_dir
-      - "{output_dir}/{request[name]}/transcript"
+      - "{step[output]}"
       - --output_format
       - all
     device_args: [--device_index, "{device_index}"]
@@ -137,53 +137,64 @@ processors:
 
 pipelines:
   song-with-cover:
+    for-each: songs
+    as: song
     steps:
       - name: generate-song
         processor: yue2
         before:
           - action: create-dir
-            path: "{output_dir}/{request[name]}"
-        output: "{output_dir}/{request[name]}/{request[name]}.mp3"
-        score: "{output_dir}/{request[name]}/{request[name]}.abc"
-        request: "{cache_dir}/requests/{request[name]}/{request[name]}.json"
+            path: "{output_dir}/{song[name]}"
+          - action: write-json-from-context
+            output: "{cache_dir}/requests/{song[name]}/{song[name]}.json"
+            content:
+              name: "{song[name]}"
+              style: "{song[style]}"
+              lyrics: "{song[lyrics]}"
+        output: "{output_dir}/{song[name]}/{song[name]}.mp3"
+        score: "{output_dir}/{song[name]}/{song[name]}.abc"
+        request: "{cache_dir}/requests/{song[name]}/{song[name]}.json"
         validate:
           - condition: file-existed
-            target: "{output_dir}/{request[name]}/{request[name]}.mp3"
+            target: "{output_dir}/{song[name]}/{song[name]}.mp3"
           - condition: file-existed
-            target: "{output_dir}/{request[name]}/{request[name]}.abc"
+            target: "{output_dir}/{song[name]}/{song[name]}.abc"
           - condition: exit-one
             target: ["{cache_dir}/bin/yue-synth", --help]
 
       - name: generate-cover
         processor: sd-cli
+        prompt: "{song[cover_prompt]}"
+        cover_with: "{song[cover_with]}"
+        cover_height: "{song[cover_height]}"
         before:
           - action: create-dir
-            path: "{output_dir}/{request[name]}"
-        output: "{output_dir}/{request[name]}/cover.png"
+            path: "{output_dir}/{song[name]}"
+        output: "{output_dir}/{song[name]}/cover.png"
         validate:
           - condition: file-existed
-            target: "{output_dir}/{request[name]}/cover.png"
+            target: "{output_dir}/{song[name]}/cover.png"
 
       - name: separate-vocals
         processor: demucs
+        input: "{output_dir}/{song[name]}/{song[name]}.mp3"
+        output: "{output_dir}/{song[name]}/separated"
         before:
           - action: create-dir
-            path: "{output_dir}/{request[name]}/separated"
-        input: "{output_dir}/{request[name]}/{request[name]}.mp3"
-        output: "{output_dir}/{request[name]}/separated"
+            path: "{output_dir}/{song[name]}/separated"
         waiting-for: [generate-song]
         validate:
           - condition: file-existed
-            target: "{output_dir}/{request[name]}/separated/htdemucs/{request[name]}/vocals.wav"
+            target: "{output_dir}/{song[name]}/separated/htdemucs/{song[name]}/vocals.wav"
 
       - name: transcribe-vocals
         processor: whisperx
+        input: "{output_dir}/{song[name]}/separated/htdemucs/{song[name]}/vocals.wav"
+        output: "{output_dir}/{song[name]}/transcript"
         before:
           - action: create-dir
-            path: "{output_dir}/{request[name]}/transcript"
-        input: "{output_dir}/{request[name]}/separated/htdemucs/{request[name]}/vocals.wav"
-        output: "{output_dir}/{request[name]}/transcript"
+            path: "{output_dir}/{song[name]}/transcript"
         waiting-for: [separate-vocals]
         validate:
           - condition: file-existed
-            target: "{output_dir}/{request[name]}/transcript/vocals.json"
+            target: "{output_dir}/{song[name]}/transcript/vocals.json"

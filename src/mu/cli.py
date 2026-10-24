@@ -42,13 +42,13 @@ def _print_run_report(pipeline: str, tasks: list[dict], input_results: list[dict
     typer.echo(f"\nRun report: {pipeline}")
     typer.echo("Inputs")
     if not input_results:
-        typer.echo("  No requests were selected.")
+        typer.echo("  No pipeline items were selected.")
     for item in input_results:
         state = item["status"]
         color = "green" if state == "completed" else "yellow" if state == "blocked" else "red"
         label = typer.style(state.upper(), fg=color, bold=True)
         typer.echo(
-            f"  {label}  {item['request'] or '(unnamed)'} "
+            f"  {label}  {item['item'] or '(unnamed)'} "
             f"[{item['succeeded']} succeeded, {item['failed']} failed, {item['blocked']} blocked]"
         )
 
@@ -131,10 +131,10 @@ def _print_plan_report(
         else:
             state, color = "WAITING", "yellow"
         label = typer.style(state, fg=color, bold=True)
-        request_name = task["request"].get("name", "(unnamed)")
+        item_name = task.get("item", task["request"]).get("name", "(unnamed)")
         dependencies = f"; after {', '.join(task['waiting_for'])}" if task["waiting_for"] else ""
         typer.echo(
-            f"  {label} {task['id']}  {request_name} / {task['name']} → {task['processor']} "
+            f"  {label} {task['id']}  {item_name} / {task['name']} → {task['processor']} "
             f"[{task['units']} units; ~{float(task['units']) * 4:g} GiB; {placement}{dependencies}]"
         )
         config = task.get("processor_config", {})
@@ -150,7 +150,7 @@ def _print_plan_report(
         before_actions = step_config.get("before", []) if isinstance(step_config, dict) else []
         for action in (before_actions if isinstance(before_actions, list) else []):
             if isinstance(action, dict):
-                details = action.get("path", action.get("target", ""))
+                details = action.get("path", action.get("output", action.get("target", "")))
                 typer.echo(f"       before: {action.get('action', 'unknown')} {details}".rstrip())
 
     failures = sum(not result.passed for result in validations)
@@ -341,7 +341,7 @@ def run(
         status = "failed" if failed else "blocked" if blocked else "completed"
         input_results.append({
             "pipeline": first["pipeline"],
-            "request": first["request"].get("name"),
+            "item": first.get("item", first["request"]).get("name"),
             "status": status,
             "succeeded": succeeded,
             "failed": failed,
