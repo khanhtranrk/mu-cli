@@ -633,262 +633,250 @@ songs:
     cover_with: 1280
     cover_height: 768
 
-  - name: Night Garden Radio
-    style: "English indie pop, soft analog synths, electric piano, brushed drums, intimate lead vocal opening into a communal late-night chorus"
+  - name: Seoul After Midnight
+    style: "Korean indie pop, mellow electric piano, city-pop bass, soft synth textures, intimate Korean vocal building to a warm ensemble chorus"
     lyrics: |
       [Verse 1]
-      We strung a line of little bulbs above the roof,
-      And carried folding chairs up four flights of stairs.
-      The city kept its restless engine running,
-      While basil leaves breathed softly in the air.
-      My neighbor tuned an old and stubborn radio,
-      Its wooden case worn smooth by many hands.
-      A voice from somewhere far beyond the river
-      Sang like a friend who somehow understands.
+      막차가 떠난 뒤의 골목은 조용해지고
+      편의점 불빛만 젖은 도로를 비춰
+      야간 근무를 마친 사람들의 어깨 위로
+      새벽의 찬 공기가 천천히 내려와
+      나는 종이컵의 온기를 두 손에 담고
+      오늘 하루의 무게를 잠시 내려놔
+      빌딩 사이 작은 창마다 다른 꿈들이
+      꺼지지 않은 별처럼 밤을 지키고 있어
 
       [Pre-Chorus]
-      One window opened, then another;
-      The night grew warmer as we gathered.
+      멀리서 첫 버스의 엔진 소리가 들려
+      아직 끝나지 않은 마음을 깨워
 
       [Chorus]
-      This is the night garden radio,
-      Sending small bright signals through the dark.
-      If you're awake and feeling far from home,
-      Turn the dial and listen for a heart.
-      We have no perfect answers here,
-      Just a song, a chair, a little time.
-      This is the night garden radio;
-      Your quiet voice can travel next to mine.
+      서울의 자정 너머, 우리 아직 여기 있어
+      각자의 외로운 밤을 지나 같은 하늘 아래
+      이름 모를 창문마다 누군가의 노래가 켜져
+      작은 불빛 하나로도 길을 찾을 수 있어
+      오늘이 아무리 길고 희미하게 느껴져도
+      아침은 우리를 잊지 않고 찾아올 거야
 
       [Verse 2]
-      A nurse came up still wearing her blue jacket,
-      A student brought a book she couldn't read.
-      The baker told us how he missed the ocean,
-      Then passed around the bread he'd saved to feed.
-      We spoke of rent and parents growing older,
-      Of plans that changed and chances left behind.
-      No one tried to make the sorrow smaller;
-      We let it sit beneath the string lights' shine.
+      횡단보도 앞에서 잠든 꽃을 파는 아저씨
+      마지막 전철을 놓친 학생의 웃음소리
+      병원 창가에 기대어 잠깐 눈을 붙인 간호사
+      모두 다른 이유로 이 밤을 건너고 있어
+      나는 휴대전화 속 오래된 사진을 열어
+      바닷가에서 함께 웃던 얼굴을 바라봐
+      보고 싶다는 말은 아직 보내지 못했지만
+      마음은 먼저 그곳의 파도에 닿아 있어
 
       [Verse 3]
-      By midnight, someone played a three-chord melody,
-      And every rooftop seemed to lean in close.
-      A child fell asleep beneath a sweater,
-      While traffic blurred below like distant boats.
-      At dawn we watered every box of seedlings,
-      Then carried all the chairs back down the stair.
-      The city woke, but something stayed between us:
-      A little patch of sky we learned to share.
+      빵집 문이 열리고 고소한 냄새가 번져
+      청소차가 지나간 자리에 물기가 반짝여
+      어제의 실수도 아직 나를 따라오지만
+      한 걸음 더 걸으면 조금 멀어질 거야
+      누군가 먼저 건넨 따뜻한 캔커피 하나
+      말없이 내민 친절이 긴 밤을 바꿔
+      낯선 사람들 사이에 작은 다리가 놓여
+      우리는 서로 모른 채 서로를 살게 해
 
       [Bridge]
-      You do not have to know the whole way home;
-      Sometimes a voice can make the first mile less alone.
-      Wherever your small light is tonight,
-      Leave it on; we'll answer from our side.
+      창문을 열어 봐, 같은 바람이 불어와
+      혼자라고 느낀 마음도 잠시 쉬어 가
+      불을 켜 둔 누군가가 저기에도 있다면
+      이 밤의 끝에서 우리 다시 만날 거야
 
       [Final Chorus]
-      This is the night garden radio,
-      Sending little constellations through the dark.
-      If you're awake and feeling far from home,
-      Turn the dial and listen for a heart.
-      We have no perfect answers here,
-      But there's a place for every voice and time.
-      This is the night garden radio;
-      Your quiet song can travel next to mine.
-    cover_prompt: "English indie-pop artwork, neighbors gathered in a small rooftop garden at night beneath warm string lights, an old wooden radio beside herb planters, apartment windows glowing across the city, intimate community atmosphere under a deep indigo sky, cinematic and hopeful, no text"
+      서울의 자정 너머, 우리 여전히 여기 있어
+      각자의 긴 하루를 지나 새 아침을 맞이해
+      이름 모를 창문마다 작은 노래가 번져
+      서로의 불빛을 따라 집으로 돌아가
+      오늘이 아무리 길고 희미하게 느껴져도
+      아침은 우리를 잊지 않고 찾아올 거야
+    cover_prompt: "Korean indie-pop album art, a quiet Seoul side street after midnight, a night-shift worker holding a warm paper cup beneath a convenience-store awning, apartment windows glowing above rain-polished pavement, first hint of dawn between buildings, intimate cinematic blue and amber light, no text"
     cover_with: 1280
     cover_height: 768
 
-  - name: Zhi Shang Chun Tian
-    style: "Mandarin Chinese folk-pop, warm piano, plucked pipa and acoustic guitar, gentle percussion, reflective verses and a bright hopeful chorus"
+  - name: Baramui Jip
+    style: "Korean acoustic folk, delicate guitar, gayageum accents, soft janggu pulse, expressive vocal and a spacious communal chorus"
     lyrics: |
       [Verse 1]
-      搬家的那天，街口的梧桐落了叶，
-      纸箱里装着旧照片和没寄出的信。
-      新房间的墙壁还留着淡淡的白，
-      窗外只有陌生的车声经过不停。
-      我把一颗种子放进旧茶杯里，
-      是外婆留下的牵牛花，已经睡了许多年。
-      每天清晨我给它一点水和阳光，
-      像给忙乱的日子留下一句明天见。
+      바람이 집을 찾아오는 섬의 아침
+      파도는 돌담 아래 낮은 말을 건네
+      어머니는 물질복을 챙겨 문을 나서고
+      아버지는 오래된 그물을 살펴보네
+      젖은 장갑 사이로 세월이 스며들고
+      해녀들의 숨비소리가 물 위에 번져
+      나는 마루 끝에 앉아 그 소릴 들으며
+      바다가 오늘도 무사하기를 빌어
 
       [Pre-Chorus]
-      土地不问我们来自哪里，
-      只要肯照料，就会慢慢回应。
+      바람은 방향을 바꾸어도
+      돌아갈 집은 여기 있다고
 
       [Chorus]
-      在纸上种一片春天，寄给远方的人，
-      让一封信越过山，也越过沉默的门。
-      若新的生活还没有熟悉的声音，
-      就把善意一粒一粒，种进陌生的街邻。
-      等第一片叶子，轻轻推开窗，
-      我们便知道，春天也认得新地方。
+      바람의 집, 파도의 집, 우리들의 작은 섬
+      검은 돌과 푸른 물이 서로를 품은 곳
+      멀리 떠난 마음도 물길을 따라 돌아와
+      부엌의 불빛 아래 다시 이름을 부르네
+      바다가 거칠어도 손을 놓지 않으면
+      우리는 서로의 집이 되어 줄 거야
 
       [Verse 2]
-      楼下的阿姨借我一把小剪刀，
-      对门的孩子教我认出附近的路。
-      我们在楼梯间交换几盆绿植，
-      也交换各自家乡的菜谱和祝福。
-      有人刚刚退休，有人夜班才归来，
-      有人把孩子送去很远的学校读书。
-      我们把闲置的桌子搬到院子中间，
-      让一顿晚饭有了更多可以坐下的人。
+      해 질 무렵 어머니가 바구니를 내려놓고
+      젖은 머리칼을 수건으로 감싸네
+      오늘은 성게보다 조개가 많았다며
+      작은 웃음으로 저녁상을 준비해
+      이웃집 할머니는 갓 잡은 생선을 나누고
+      아이들은 마당에서 고무줄을 뛰어넘어
+      멀리서 들려오는 배의 엔진 소리 위로
+      오래된 민요가 저녁 공기를 채워
 
       [Verse 3]
-      几个月后，牵牛花爬上了窗台，
-      蓝色的小花迎着晨光一朵朵开。
-      我拍下照片寄回外婆的老家，
-      她回信说新土也能养出旧日的爱。
-      那天我终于记住了每条街的名字，
-      也有人在门口叫我一声回来。
-      原来归属并不是一开始就拥有，
-      而是一次次伸出手，慢慢留下来。
+      몇 해 뒤 나는 큰 도시로 길을 떠났고
+      네온과 빌딩 숲에서 바다를 잊은 듯했어
+      하지만 비 오는 밤 창가에 서면
+      파도처럼 밀려오는 섬의 냄새가 있어
+      어머니의 짧은 안부, 아버지의 기침 소리
+      편지 속에 눌러 담은 귤꽃 향기
+      그 모든 것이 먼 곳의 하루를 감싸
+      낯선 방 한구석에 작은 섬을 놓아
 
       [Bridge]
-      若你刚到一座陌生的城，
-      不必急着把所有路都走明。
-      一杯热茶，一盆小小的绿，
-      也能让一扇窗开始有家的光。
+      바다는 떠나는 길이기도 하고
+      돌아오는 길이기도 해
+      수평선 너머를 오래 바라본 뒤에
+      우리는 서로의 목소리를 따라와
 
       [Final Chorus]
-      在纸上种一片春天，寄给远方的人，
-      让一封信越过山，也越过沉默的门。
-      若新的生活还没有熟悉的声音，
-      就把善意一粒一粒，种进每条街邻。
-      等满窗的花朵，轻轻迎着阳光，
-      我们会知道，春天就在新地方。
-    cover_prompt: "Mandarin folk-pop album art, a sunlit new apartment window with a blue morning-glory vine growing from a chipped old teacup, handwritten letters and family photographs nearby, neighbors sharing potted plants in the courtyard below, tender feeling of building a home, no text"
+      바람의 집, 파도의 집, 우리들의 작은 섬
+      검은 돌과 푸른 물이 서로를 품은 곳
+      멀리 떠난 마음도 물길을 따라 돌아와
+      부엌의 불빛 아래 함께 저녁을 나누네
+      바다가 거칠어도 손을 놓지 않으면
+      우리는 서로의 집이 되어 줄 거야
+    cover_prompt: "Korean folk album artwork on Jeju Island, an older haenyeo diver returning to a black-stone shore at dusk with a woven seafood basket, family waiting beside a modest stone-walled home, wind moving silver grass, deep blue sea and a warm kitchen window, respectful and poetic, no text"
     cover_with: 1280
     cover_height: 768
 
-  - name: Umibe No Yuubinkyoku
-    style: "Japanese cinematic folk, acoustic guitar, piano, subtle strings and harmonica, a calm but emotionally rising vocal about distance and reunion"
+  - name: Gwaenchanha Neoui Gyejeol
+    style: "Korean piano ballad, gentle piano and acoustic guitar, restrained strings, emotionally rich lead vocal growing into a reassuring final chorus"
     lyrics: |
       [Verse 1]
-      海辺の小さな郵便局には
-      古い時計と青いポストがある
-      雨の日も風の日も局員さんは
-      坂道を上って島の家を訪ねる
-      船が来ない週が続いた冬
-      港の灯りは霧に隠れていた
-      それでも手紙を待つ人たちは
-      窓辺に椅子を置いて海を見ていた
+      네가 처음 혼자 살던 작은 방에는
+      풀지 못한 상자들이 벽을 따라 쌓였지
+      창문 밖 공사장의 망치 소리 사이로
+      너는 괜찮다는 말을 매일 연습했어
+      새벽까지 켜 둔 책상 위의 스탠드
+      식어 버린 국과 접어 둔 시험지
+      누구에게도 말하지 못한 마음들이
+      조용히 네 베개 아래로 흘러내렸어
 
       [Pre-Chorus]
-      届くまでに時間がかかっても
-      誰かを想う気持ちは遅れない
+      잘해 내지 못한 하루도
+      네가 살아 낸 하루야
 
       [Chorus]
-      青いポストに願いを預けて
-      波の向こうのあなたへ書こう
-      返事がすぐには来なくても
-      この声は潮風に乗っていく
-      離れた島と町を結ぶように
-      一通の手紙が橋になる
-      今日も海辺の郵便局から
-      小さな希望が旅立っていく
+      괜찮아, 너의 계절은 아직 끝나지 않았어
+      꽃이 늦게 피는 나무도 봄을 만나
+      잠시 멈춘 발걸음은 길을 잃은 게 아니야
+      숨을 고르고 다시 바라보는 시간이야
+      세상이 너무 빠르게 앞서가는 것 같아도
+      너의 속도로 걸어도 괜찮아
 
       [Verse 2]
-      祖母は毎週同じ便箋を選び
-      庭の椿のことを少しずつ書いた
-      孫は遠い町の寮の窓から
-      初めての雪と試験の話を返した
-      文字は時々かすれていたけれど
-      間違えた漢字もそのまま残した
-      何度も読み返すそのたびに
-      二人の暮らしが同じ机に並んだ
+      오랜만에 찾아온 친구는 문 앞에 앉아
+      무슨 일이 있었는지 묻지 않고 기다렸어
+      함께 끓인 라면의 김이 방 안에 차오르고
+      오래 참았던 웃음이 조금씩 돌아왔지
+      너는 지난달의 실패를 천천히 말했고
+      친구는 자기 이야기도 꺼내 놓았어
+      완벽한 답 대신 따뜻한 물 한 잔이
+      두 사람 사이의 밤을 견디게 했어
 
       [Verse 3]
-      春の初めに船が港へ戻り
-      町から来た人が桟橋に立つ
-      祖母は小さな花束を手に
-      何も急がずゆっくり歩いた
-      局員さんは配達鞄を閉じて
-      海を見ながら深く息をした
-      届ける仕事の向こう側には
-      会いたい人の笑顔が待っていた
+      겨울이 물러난 뒤 골목에 목련이 피고
+      이삿짐 상자는 하나씩 책장으로 바뀌었어
+      너는 좋아하는 노래를 다시 틀어 놓고
+      아침마다 작은 화분에 물을 주었지
+      어느 날 면접에서 좋은 소식을 듣고
+      다른 날에는 또 마음이 무너지기도 해
+      그래도 이제는 넘어지는 순간마다
+      스스로의 손을 잡아 일으킬 수 있어
 
       [Bridge]
-      海は二つの岸を分けるけれど
-      同じ月明かりを両方へ届ける
-      言葉を一つ、封筒に入れて
-      会えない時間を越えていこう
+      빠른 대답을 찾지 않아도 돼
+      모든 상처가 오늘 낫지 않아도 돼
+      네가 여기 있다는 그 한 가지로
+      내일을 시작하기엔 충분해
 
       [Final Chorus]
-      青いポストに願いを預けて
-      波の向こうのあなたへ書こう
-      長い冬を越えたその先で
-      この声はきっと手のひらに届く
-      離れた島と町を結ぶように
-      一通の手紙が橋になる
-      今日も海辺の郵便局から
-      ただいまの言葉が旅立っていく
-    cover_prompt: "Japanese folk-ballad artwork, a tiny seaside post office on a misty island, an elderly woman holding a letter beside a vivid blue mailbox, a ferry returning to the harbor beneath the first clear light of spring, quiet emotional reunion, cinematic coastal palette, no text"
+      괜찮아, 너의 계절은 계속 이어지고 있어
+      작은 잎이 돋는 소리도 봄의 시작
+      잠시 멈춘 발걸음도 너의 길 한가운데
+      돌아보고 쉬어 가는 소중한 시간이야
+      세상이 아무리 멀리 앞서가는 것 같아도
+      너의 속도로 걸으면 너에게 닿을 거야
+    cover_prompt: "Korean piano-ballad cover, a young person sitting by a small apartment window at early spring, exam papers and moving boxes slowly replaced by a bookcase and a thriving potted magnolia, a close friend sharing a simple late-night meal, tender hopeful natural light, no text"
     cover_with: 1280
     cover_height: 768
 
-  - name: Den Qua Pho Cu
-    style: "Vietnamese acoustic soul, đàn bầu and piano, mellow bass, brushed drums, heartfelt storytelling vocal with a communal final chorus"
+  - name: Uriui Jageun Byeol
+    style: "Korean upbeat pop-rock, bright electric guitars, punchy live drums, youthful group harmonies and a triumphant singalong chorus"
     lyrics: |
       [Verse 1]
-      Đèn qua phố cũ vàng lên sau cơn mưa,
-      Mái hiên nhỏ còn thơm mùi bánh mới.
-      Bà ngồi trước cửa têm trầu chậm rãi,
-      Nhìn dòng xe qua như nước chảy bên đường.
-      Tiệm sửa xe của chú Ba vừa kéo cửa,
-      Cây me già rụng lá xuống vai người.
-      Con hẻm hẹp từng in dấu chân tuổi nhỏ,
-      Nay bảng hiệu sáng hơn, tiếng phố cũng đông rồi.
+      운동장 끝 오래된 골대 아래
+      우리는 졸업 사진을 찍고 흩어졌어
+      커다란 꿈은 서로 다른 모양이었고
+      가진 용기보다 걱정이 더 많았지
+      첫 출근 날 길을 잘못 들어 헤매고
+      첫 공연에선 박자를 놓쳐 웃었어
+      잘될 거라고 믿었던 일들이 틀어져도
+      너는 다음 곡을 만들자고 했지
 
       [Pre-Chorus]
-      Phố đổi thay qua từng mùa gió,
-      Nhưng một tiếng gọi tên vẫn làm lòng quay về.
+      넘어져도 무릎의 먼지를 털고
+      아직 남은 목소리로 세어 봐
 
       [Chorus]
-      Đèn qua phố cũ, xin đừng tắt vội,
-      Cho người đi xa nhận ra lối về.
-      Dẫu con đường mới thêm bao nhà cao rộng,
-      Vẫn còn hiên xưa chừa một chỗ ngồi.
-      Ta mang theo tiếng rao trong buổi sớm,
-      Mang mùi cà phê qua những tháng năm.
-      Đèn qua phố cũ, soi giùm ký ức,
-      Để mai trở về, còn thấy người thân.
+      우리는 작은 별, 서로를 비추는 별
+      가장 어두운 밤에 더 잘 보이는 빛
+      혼자서는 몰랐던 길을 함께 그리며
+      한 걸음씩 우리의 내일을 켜
+      높은 곳에 닿지 않아도 충분히 빛나
+      네가 여기 있고 내가 여기 있으니까
 
       [Verse 2]
-      Mẹ kể ngày xưa con hay ngồi trước cửa,
-      Đợi xe kem leng keng cuối buổi trưa.
-      Bạn hàng xóm chia nhau từng quyển truyện,
-      Đến khi đèn lên mới chịu chạy vào nhà.
-      Giờ đứa làm xa, đứa theo nghề khác,
-      Có người bận con nhỏ, có người đổi quê.
-      Nhưng mỗi dịp giỗ, sân nhà đông đủ,
-      Tiếng cười lấp đầy khoảng trống ngoài hè.
+      한 친구는 바다 건너 도시로 떠났고
+      한 친구는 오래 바라던 가게를 열었어
+      누군가는 잠시 모든 걸 내려놓았고
+      누군가는 다시 학교 문을 두드렸지
+      우리는 달라진 시간표를 맞춰 보며
+      늦은 저녁 작은 식탁에 둘러앉아
+      지난달의 눈물과 이번 주의 농담을
+      접시 사이에 나누어 놓았어
 
       [Verse 3]
-      Con đi ngang hàng cây vừa bị đốn,
-      Thấy bác thợ trồng cây mới cạnh bồn hoa.
-      Một bé gái cầm tay ông qua phố,
-      Dừng lại nghe người bán hàng mời trái na.
-      Con chợt hiểu quê nhà không đứng yên,
-      Nó lớn lên cùng những người còn ở lại.
-      Chỉ cần ta còn biết nhường nhau một lối,
-      Con phố này vẫn có chỗ cho ngày mai.
+      오래된 동네엔 새 건물이 들어서고
+      그 아래 골목엔 여전히 분식집이 있어
+      사장님은 우리의 이름을 기억하고
+      익숙한 노래를 라디오에서 틀어 주네
+      세상은 자꾸 우리를 비교하려 하지만
+      각자의 길에는 각자의 계절이 있어
+      우리가 함께 버틴 수많은 밤이
+      내일을 향한 든든한 합창이 돼
 
       [Bridge]
-      Nếu đời cuốn ta đi qua nhiều ngả,
-      Hãy giữ một câu hỏi thăm trong lòng.
-      Một ngọn đèn không xua tan hết tối,
-      Nhưng đủ soi cho ai đó qua đường.
+      누가 먼저 도착하는지는 중요하지 않아
+      뒤처진 친구를 기다리는 마음이
+      우리가 걸어온 길을 빛나게 해
+      오늘도 서로의 이름을 크게 불러
 
       [Final Chorus]
-      Đèn qua phố cũ, xin đừng tắt vội,
-      Cho người đi xa nhận ra lối về.
-      Dẫu con đường mới thêm bao nhà cao rộng,
-      Vẫn còn hiên xưa chừa một chỗ ngồi.
-      Ta mang theo tiếng rao trong buổi sớm,
-      Mang tình xóm giềng qua những tháng năm.
-      Đèn qua phố cũ, soi giùm ký ức,
-      Để mai trở về, vẫn thấy quê hương.
-    cover_prompt: "Vietnamese acoustic-soul cover on an old city lane after rain, a warm streetlamp above a small family doorway, an elderly woman on the porch, a newly planted young tree beside a familiar tamarind, motorbike lights reflected on wet pavement, nostalgic yet welcoming, cinematic amber light, no text"
+      우리는 작은 별, 서로를 비추는 별
+      가장 어두운 밤에 더 선명해지는 빛
+      넘어지고 다시 일어선 모든 순간이
+      한 줄씩 모여 우리의 노래가 돼
+      높은 곳에 닿지 않아도 충분히 빛나
+      네가 여기 있고 우리가 함께 있으니까
+    cover_prompt: "Korean pop-rock album artwork, four longtime friends meeting on a rooftop at twilight, city skyline and distant school athletic field visible behind them, hands raised together beneath the first stars, energetic youthful camaraderie, vivid cobalt and warm coral colors, no text"
     cover_with: 1280
     cover_height: 768
