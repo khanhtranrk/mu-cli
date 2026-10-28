@@ -156,8 +156,11 @@ workloads:
     - '{params[output]}'
     - --score
     - '{params[score]}'
+    device_args:
+    - --device
+    - '{schedule[device_family]}{schedule[device_index]}'
     units: 3
-  sd-cli:
+  qwen:
     params:
       prompt:
         type: string
@@ -191,6 +194,9 @@ workloads:
     - '{params[cover_height]}'
     - -o
     - '{params[output]}'
+    device_args:
+    - --device
+    - '{schedule[device_family]}{schedule[device_index]}'
     units: 3
   demucs:
     params:
@@ -314,7 +320,7 @@ pipeline:
       - type: create-dir
         path: '{session[output_dir]}/{params[name]}'
       run:
-        workload: sd-cli
+        workload: qwen
         args:
           output: '{session[output_dir]}/{params[name]}/cover.png'
           prompt: '{params[cover_prompt]}'
