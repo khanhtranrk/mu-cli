@@ -26,6 +26,8 @@ uv run mu --help
 
 `--working_dir` defaults to the current directory. Mu creates `output/` and `cache/` there. `--sys_cache_dir` defaults to `~/.cache`. Unless `--device` is supplied, Mu detects supported NVIDIA/AMD GPUs. Workload `units` defaults to zero (CPU-only); each unit represents 4 GiB of VRAM.
 
+Mu schedules nodes from all supplied requests together. Nodes whose dependencies have completed can run concurrently; a node starts only when one GPU has enough free units for its workload. A node releases its allocation after its actions and workload finish, so newly ready nodes can use that capacity.
+
 ## Spec format
 
 A spec can contain `master-flow`, `prepare`, `workloads`, and `pipeline` sections. Workloads declare their parameter schema, environment, executable target, argument vector, optional device arguments, and scheduler units. Pipelines define their parameter schema, context, and named nodes. Nodes can define conditions, actions, a workload call, and dependencies.

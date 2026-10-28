@@ -396,7 +396,7 @@ def run_requests(
     device: list[str] = typer.Option([], "--device", help="family,index,max-units (repeatable)."),
 ) -> None:
     """Execute pipeline requests described by YAML or JSON parameter files."""
-    from mu.runtime import RuntimeError, execute_pipeline, read_data
+    from mu.runtime import RuntimeError, execute_pipelines, read_data
     if not request: typer.echo("At least one --request PIPELINE,FILE is required", err=True); raise typer.Exit(2)
     try:
         definition = _load_runtime_spec(spec)
@@ -422,10 +422,11 @@ def run_requests(
             parsed.extend((pipeline_name, entry) for entry in params)
         prepare_context = dict(base)
         _run_prepare_actions(definition, prepare_context, Path(base["session"]["working_dir"]), label="run")
-        for index, (pipeline_name, params) in enumerate(parsed, start=1):
+        for index, (pipeline_name, _) in enumerate(parsed, start=1):
             typer.echo(f"[REQUEST] Starting {index}/{len(parsed)}: pipeline {pipeline_name}")
-            states = execute_pipeline(definition, pipeline_name, params, base, devices, Path(base["session"]["working_dir"]))
-            if any(value == "failed" for value in states.values()): raise RuntimeError(f"pipeline {pipeline_name!r} failed")
+        outcomes = execute_pipelines(definition, parsed, base, devices, Path(base["session"]["working_dir"]))
+        if any(value == "failed" for states in outcomes for value in states.values()):
+            raise RuntimeError("one or more pipeline requests failed")
     except Exception as exc:
         typer.echo(f"Run failed: {exc}", err=True); raise typer.Exit(1) from exc
 
@@ -453,7 +454,7 @@ def master_flow_run(
     device: list[str] = typer.Option([], "--device"),
 ) -> None:
     """Fetch and execute a remote master-flow spec."""
-    from mu.runtime import RuntimeError, execute_pipeline
+    from mu.runtime import RuntimeError, execute_pipelines
     try:
         spec = _fetch_url(spec_url)
         typer.echo("[MASTER-FLOW] Spec fetched")
@@ -482,9 +483,12 @@ def master_flow_run(
                     queued.extend((item, entry) for entry in payload)
             if not queued: break
             typer.echo(f"[MASTER-FLOW] Fetched {len(queued)} request object(s); executing")
-            for item, payload in queued:
-                states = execute_pipeline(spec, item["pipeline"], payload, base, devices, Path(base["session"]["working_dir"]))
-                if any(value == "failed" for value in states.values()): raise RuntimeError(f"pipeline {item['pipeline']!r} failed")
+            outcomes = execute_pipelines(
+                spec, [(item["pipeline"], payload) for item, payload in queued],
+                base, devices, Path(base["session"]["working_dir"]),
+            )
+            if any(value == "failed" for states in outcomes for value in states.values()):
+                raise RuntimeError("one or more master-flow pipeline requests failed")
             requests = [item for item in requests if item.get("refresh_after_done")]
             if not requests: break
     except Exception as exc:

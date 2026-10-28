@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 import time
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from copy import deepcopy
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -170,74 +172,176 @@ def execute_workload(spec: dict[str, Any], name: str, supplied: dict[str, Any], 
     print(f"[WORKLOAD] {name}: completed in {time.perf_counter() - started:.1f}s", flush=True)
 
 
-def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str, Any], base: dict[str, Any], devices: list[ComputeDevice], workdir: Path) -> dict[str, str]:
-    definition = spec.get("pipeline", {}).get(pipeline_name)
-    if not isinstance(definition, dict): raise RuntimeError(f"pipeline {pipeline_name!r} is not defined")
-    context = dict(base)
-    _apply_context(context, _render(definition.get("context", {}), context))
-    context["params"] = params_for(definition.get("params", {}), request, context, f"pipeline {pipeline_name}")
-    nodes = definition.get("nodes", [])
-    if not isinstance(nodes, list): raise RuntimeError("pipeline.nodes must be a list")
-    by_name = {node.get("name"): node for node in nodes}
-    if len(by_name) != len(nodes) or None in by_name: raise RuntimeError("node names must be unique")
-    print(f"[PIPELINE] {pipeline_name}: started ({len(nodes)} nodes)", flush=True)
-    states: dict[str, str] = {}; pending = list(nodes)
-    while pending:
-        progressed = False
-        for node in list(pending):
-            deps = node.get("depends_on", [])
-            if any(d.get("node", d.get("name")) not in states for d in deps): continue
-            if any(not condition(d.get("condition"), {**context, "node": {"name": d.get("node", d.get("name"))}}, states) for d in deps):
-                print(f"[BLOCKED] {pipeline_name}/{node.get('name')}: dependency condition failed", flush=True)
-                states[node.get("name")] = "failed"
-                pending.remove(node); progressed = True
+def _execute_node(
+    spec: dict[str, Any], pipeline_name: str, node: dict[str, Any], context: dict[str, Any],
+    states: dict[str, str], device: ComputeDevice | None, workdir: Path,
+) -> tuple[str, str | None]:
+    name = node["name"]
+    node_context = deepcopy(context)
+    node_context["node"] = {"name": name, "status": "running", "total_units": 0}
+    _apply_context(node_context, _render(node.get("context", {}), node_context))
+    state, error = "success", None
+    started = time.perf_counter()
+    print(f"[NODE] {pipeline_name}/{name}: starting", flush=True)
+    try:
+        if node.get("skip_if") and condition(node["skip_if"], node_context, states):
+            print(f"[SKIP] {pipeline_name}/{name}: skip_if matched", flush=True)
+            if node.get("postcondition") and not condition(node["postcondition"], node_context, states):
+                raise RuntimeError(f"node {name!r} postcondition failed after skip")
+        else:
+            if node.get("precondition"):
+                if not condition(node["precondition"], node_context, states):
+                    print(f"[CHECK] {pipeline_name}/{name}: precondition failed", flush=True)
+                    raise RuntimeError(f"node {name!r} precondition failed")
+                print(f"[CHECK] {pipeline_name}/{name}: precondition passed", flush=True)
+            for index, action in enumerate(node.get("before_run", []), start=1):
+                run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} before_run[{index}]")
+            run = node.get("run")
+            if isinstance(run, dict):
+                workload = run.get("workload")
+                config = spec.get("workloads", {}).get(workload, {})
+                node_context["node"]["total_units"] = config.get("units", 0)
+                execute_workload(spec, workload, _render(run.get("args", {}), node_context), node_context, device, workdir)
+            for index, action in enumerate(node.get("after_run", []), start=1):
+                run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} after_run[{index}]")
+            if node.get("postcondition"):
+                if not condition(node["postcondition"], node_context, states):
+                    raise RuntimeError(f"node {name!r} postcondition failed")
+                print(f"[CHECK] {pipeline_name}/{name}: postcondition passed", flush=True)
+    except Exception as exc:
+        state, error = "failed", str(exc)
+    final_states = {**states, name: state}
+    for index, action in enumerate(node.get("finally", []), start=1):
+        node_context["node"]["status"] = state
+        try:
+            run_action(action, node_context, final_states, workdir, label=f"{pipeline_name}/{name} finally[{index}]")
+        except Exception as exc:
+            state, error = "failed", str(exc)
+            final_states[name] = state
+    elapsed = time.perf_counter() - started
+    if state == "failed": print(f"[FAIL] {pipeline_name}/{name} after {elapsed:.1f}s: {error}", flush=True)
+    else: print(f"[OK] {pipeline_name}/{name} {state} in {elapsed:.1f}s", flush=True)
+    return state, error
+
+
+def execute_pipelines(
+    spec: dict[str, Any], requests: list[tuple[str, dict[str, Any]]], base: dict[str, Any],
+    devices: list[ComputeDevice], workdir: Path,
+) -> list[dict[str, str]]:
+    """Schedule ready nodes across all requests, respecting dependencies and GPU units."""
+    jobs: dict[str, dict[str, Any]] = {}
+    results: list[dict[str, str]] = []
+    job_by_request_name: dict[tuple[int, str], str] = {}
+    order: list[str] = []
+    for request_index, (pipeline_name, request) in enumerate(requests):
+        definition = spec.get("pipeline", {}).get(pipeline_name)
+        if not isinstance(definition, dict): raise RuntimeError(f"pipeline {pipeline_name!r} is not defined")
+        context = dict(base)
+        _apply_context(context, _render(definition.get("context", {}), context))
+        context["params"] = params_for(definition.get("params", {}), request, context, f"pipeline {pipeline_name}")
+        nodes = definition.get("nodes", [])
+        if not isinstance(nodes, list): raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must be a list")
+        names = [node.get("name") for node in nodes]
+        if any(not isinstance(name, str) or not name for name in names) or len(set(names)) != len(names):
+            raise RuntimeError(f"pipeline {pipeline_name!r} node names must be unique non-empty strings")
+        print(f"[PIPELINE] {pipeline_name} request {request_index + 1}: queued ({len(nodes)} nodes)", flush=True)
+        results.append({})
+        for node in nodes:
+            job_id = f"p{request_index}:{node['name']}"
+            job_by_request_name[(request_index, node["name"])] = job_id
+            order.append(job_id)
+            jobs[job_id] = {
+                "request_index": request_index, "pipeline": pipeline_name,
+                "context": context, "node": node, "status": "pending",
+            }
+
+    device_free = {device.index: float(device.capacity_units) for device in devices}
+    futures: dict[Future[tuple[str, str | None]], tuple[str, ComputeDevice | None, float]] = {}
+    max_workers = max(1, min(32, len(jobs)))
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="mu-node") as pool:
+        while any(job["status"] in {"pending", "running"} for job in jobs.values()):
+            launched = False
+            for job_id in order:
+                job = jobs[job_id]
+                if job["status"] != "pending": continue
+                request_index = job["request_index"]
+                node = job["node"]
+                dependencies = node.get("depends_on", [])
+                dependency_jobs = []
+                waiting = False
+                for dependency in dependencies:
+                    dependency_name = dependency.get("node", dependency.get("name"))
+                    dependency_id = job_by_request_name.get((request_index, dependency_name))
+                    if dependency_id is None: raise RuntimeError(f"node {node['name']!r} depends on unknown node {dependency_name!r}")
+                    dependency_jobs.append((dependency, dependency_id))
+                    if jobs[dependency_id]["status"] in {"pending", "running"}: waiting = True
+                if waiting: continue
+                pipeline_states = results[request_index]
+                failed_dependency = False
+                for dependency, dependency_id in dependency_jobs:
+                    dependency_name = jobs[dependency_id]["node"]["name"]
+                    dep_context = {**job["context"], "node": {"name": dependency_name, "status": pipeline_states.get(dependency_name)}}
+                    if not condition(dependency.get("condition"), dep_context, pipeline_states):
+                        print(f"[BLOCKED] {job['pipeline']}/{node['name']}: dependency {dependency_name} condition failed", flush=True)
+                        job["status"] = "failed"
+                        pipeline_states[node["name"]] = "failed"
+                        failed_dependency = True
+                        break
+                if failed_dependency: continue
+
+                run = node.get("run")
+                workload = run.get("workload") if isinstance(run, dict) else None
+                units = float(spec.get("workloads", {}).get(workload, {}).get("units", 0)) if workload else 0.0
+                device: ComputeDevice | None = None
+                if units > 0:
+                    fitting = [candidate for candidate in devices if candidate.capacity_units >= units]
+                    if fitting:
+                        available = [candidate for candidate in fitting if device_free[candidate.index] >= units]
+                        if not available: continue
+                        device = min(available, key=lambda candidate: device_free[candidate.index] - units)
+                    else:
+                        print(f"[SCHEDULE] {job['pipeline']}/{node['name']}: no GPU fits {units:g} units; using CPU", flush=True)
+                if len(futures) >= max_workers: continue
+                job["status"] = "running"
+                if device:
+                    device_free[device.index] -= units
+                print(f"[SCHEDULE] {job['pipeline']}/{node['name']}: dispatched ({units:g} units; {device.backend + ':' + device.index if device else 'cpu'})", flush=True)
+                future = pool.submit(
+                    _execute_node, spec, job["pipeline"], node, job["context"],
+                    dict(pipeline_states), device, workdir,
+                )
+                futures[future] = (job_id, device, units)
+                launched = True
+
+            if not futures:
+                if any(job["status"] == "pending" for job in jobs.values()):
+                    raise RuntimeError("scheduler deadlock: pending nodes cannot be assigned")
+                break
+            if not launched or len(futures) >= max_workers:
+                completed, _ = wait(futures, return_when=FIRST_COMPLETED)
+            else:
                 continue
-            name = node["name"]; node_context = dict(context)
-            node_context["node"] = {"name": name, "status": "running", "total_units": 0}
-            _apply_context(node_context, _render(node.get("context", {}), node_context))
-            state = "success"
-            started = time.perf_counter()
-            print(f"[NODE] {pipeline_name}/{name}: starting", flush=True)
-            try:
-                if node.get("skip_if") and condition(node["skip_if"], node_context, states):
-                    state = "success"
-                    print(f"[SKIP] {pipeline_name}/{name}: skip_if matched", flush=True)
-                    if node.get("postcondition") and not condition(node["postcondition"], node_context, states):
-                        raise RuntimeError(f"node {name!r} postcondition failed after skip")
-                else:
-                    if node.get("precondition"):
-                        if not condition(node["precondition"], node_context, states):
-                            print(f"[CHECK] {pipeline_name}/{name}: precondition failed", flush=True)
-                            raise RuntimeError(f"node {name!r} precondition failed")
-                        print(f"[CHECK] {pipeline_name}/{name}: precondition passed", flush=True)
-                    for index, action in enumerate(node.get("before_run", []), start=1):
-                        run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} before_run[{index}]")
-                    run = node.get("run")
-                    if isinstance(run, dict):
-                        workload = run.get("workload")
-                        config = spec.get("workloads", {}).get(workload, {})
-                        units = config.get("units", 0); node_context["node"]["total_units"] = units
-                        device = next((d for d in devices if d.capacity_units >= units), None) if units else None
-                        execute_workload(spec, workload, _render(run.get("args", {}), node_context), node_context, device, workdir)
-                    for index, action in enumerate(node.get("after_run", []), start=1):
-                        run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} after_run[{index}]")
-                    if node.get("postcondition"):
-                        if not condition(node["postcondition"], node_context, states): raise RuntimeError(f"node {name!r} postcondition failed")
-                        print(f"[CHECK] {pipeline_name}/{name}: postcondition passed", flush=True)
-            except Exception as exc:
-                state = "failed"; error = str(exc)
-            states[name] = state
-            for index, action in enumerate(node.get("finally", []), start=1):
-                node_context["node"]["status"] = state
-                try: run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} finally[{index}]")
-                except Exception as exc: state = "failed"; error = str(exc)
-            states[name] = state
-            elapsed = time.perf_counter() - started
-            if state == "failed": print(f"[FAIL] {pipeline_name}/{name} after {elapsed:.1f}s: {error}", flush=True)
-            else: print(f"[OK] {pipeline_name}/{name} {state} in {elapsed:.1f}s", flush=True)
-            pending.remove(node); progressed = True
-        if not progressed: raise RuntimeError("pipeline dependencies are cyclic or reference unknown nodes")
-    succeeded = sum(value == "success" for value in states.values())
-    failed = sum(value == "failed" for value in states.values())
-    print(f"[PIPELINE] {pipeline_name}: finished ({succeeded} succeeded, {failed} failed)", flush=True)
-    return states
+            for future in completed:
+                job_id, device, units = futures.pop(future)
+                if device: device_free[device.index] += units
+                try:
+                    state, error = future.result()
+                except Exception as exc:
+                    state, error = "failed", f"unexpected node runner error: {exc}"
+                job = jobs[job_id]
+                job["status"] = state
+                results[job["request_index"]][job["node"]["name"]] = state
+                if state == "failed" and error:
+                    print(f"[NODE-ERROR] {job['pipeline']}/{job['node']['name']}: {error}", flush=True)
+
+    for index, (pipeline_name, _) in enumerate(requests):
+        states = results[index]
+        succeeded = sum(value == "success" for value in states.values())
+        failed = sum(value == "failed" for value in states.values())
+        print(f"[PIPELINE] {pipeline_name} request {index + 1}: finished ({succeeded} succeeded, {failed} failed)", flush=True)
+    return results
+
+
+def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str, Any], base: dict[str, Any], devices: list[ComputeDevice], workdir: Path) -> dict[str, str]:
+    """Compatibility wrapper for scheduling one pipeline request."""
+    return execute_pipelines(spec, [(pipeline_name, request)], base, devices, workdir)[0]
