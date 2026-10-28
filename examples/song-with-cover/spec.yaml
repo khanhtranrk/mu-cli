@@ -1,200 +1,362 @@
-version: 1.0
-
-repair:
-  # Download all required GGUF and safetensors files into {cache_dir}/models.
-  - action: command
-    steps:
-      - [hf, download, Serveurperso/YuE2-GGUF, YuE2-Vae-F32.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Serveurperso/YuE2-GGUF, YuE2-3B-BF16.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Serveurperso/YuE2-GGUF, MERT-v2-FullSong-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Serveurperso/YuE2-GGUF, SheetSage2-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, Serveurperso/YuE2-GGUF, yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, unsloth/Qwen-Image-2.1-GGUF, qwen-image-2.1-Q4_K_M.gguf, --local-dir, "{cache_dir}/models"]
-      - [hf, download, unsloth/Qwen-Image-2.1-FP8, vae/qwen_image_2.1_vae_bf16.safetensors, --local-dir, "{cache_dir}/models"]
-      - [hf, download, unsloth/Qwen3-VL-8B-Instruct-GGUF, Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf, --local-dir, "{cache_dir}/models"]
-    validate:
-      - condition: file-existed
-        target: "{cache_dir}/models/YuE2-Vae-F32.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/YuE2-3B-BF16.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/MERT-v2-FullSong-Q8_0.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/SheetSage2-Q8_0.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/qwen-image-2.1-Q4_K_M.gguf"
-      - condition: file-existed
-        target: "{cache_dir}/models/vae/qwen_image_2.1_vae_bf16.safetensors"
-      - condition: file-existed
-        target: "{cache_dir}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf"
-
-  - action: command
-    steps:
-      - [uv, tool, install, demucs, --with, wrapt, --with, numpy]
-    validate:
-      - condition: exit-zero
-        target: [demucs, --help]
-
-  - action: command
-    steps:
-      - [uv, tool, install, whisperx, --with, wrapt]
-    validate:
-      - condition: exit-zero
-        target: [whisperx, --help]
-
-  # These two programs are expected to be installed/built already.
-  - action: command
-    steps: []
-    validate:
-      - condition: file-existed
-        target: "{cache_dir}/bin/yue-synth"
-      - condition: exit-one
-        target: ["{cache_dir}/bin/yue-synth", --help]
-      - condition: file-existed
-        target: "{cache_dir}/bin/sd-cli"
-      - condition: exit-zero
-        target: ["{cache_dir}/bin/sd-cli", --help]
-
-processors:
+master-flow:
+  requests: []
+prepare:
+- type: execute-commands
+  skip_if:
+    operator: and
+    props:
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
+  commands:
+  - target: hf
+    args:
+    - download
+    - Serveurperso/YuE2-GGUF
+    - YuE2-Vae-F32.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - Serveurperso/YuE2-GGUF
+    - YuE2-3B-BF16.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - Serveurperso/YuE2-GGUF
+    - MERT-v2-FullSong-Q8_0.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - Serveurperso/YuE2-GGUF
+    - SheetSage2-Q8_0.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - Serveurperso/YuE2-GGUF
+    - yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - unsloth/Qwen-Image-2.1-GGUF
+    - qwen-image-2.1-Q4_K_M.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - unsloth/Qwen-Image-2.1-FP8
+    - vae/qwen_image_2.1_vae_bf16.safetensors
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  - target: hf
+    args:
+    - download
+    - unsloth/Qwen3-VL-8B-Instruct-GGUF
+    - Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
+    - --local-dir
+    - '{sys[cache_dir]}/models'
+  postcondition:
+    operator: and
+    props:
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
+    - operator: file-exists
+      path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
+- type: execute-command
+  skip_if:
+    operator: exit-code
+    target:
+    - demucs
+    - --help
+  target: uv
+  args:
+  - tool
+  - install
+  - demucs
+  - --with
+  - wrapt
+  - --with
+  - numpy
+  postcondition:
+    operator: exit-code
+    target:
+    - demucs
+    - --help
+- type: execute-command
+  skip_if:
+    operator: exit-code
+    target:
+    - whisperx
+    - --help
+  target: uv
+  args:
+  - tool
+  - install
+  - whisperx
+  - --with
+  - wrapt
+  postcondition:
+    operator: exit-code
+    target:
+    - whisperx
+    - --help
+workloads:
   yue2:
-    target: "{cache_dir}/bin/yue-synth"
     params:
-      - --model
-      - "{models[YuE2-3B-BF16]}"
-      - --vae
-      - "{models[YuE2-Vae-F32]}"
-      - --request
-      - "{step[request]}"
-      - --out
-      - "{step[output]}"
-      - --score
-      - "{step[score]}"
+      request:
+        type: string
+      output:
+        type: string
+      score:
+        type: string
+    target: '{sys[cache_dir]}/bin/yue-synth'
+    args:
+    - --model
+    - '{sys[models][YuE2-3B-BF16]}'
+    - --vae
+    - '{sys[models][YuE2-Vae-F32]}'
+    - --request
+    - '{params[request]}'
+    - --out
+    - '{params[output]}'
+    - --score
+    - '{params[score]}'
     units: 3
-
   sd-cli:
-    target: "{cache_dir}/bin/sd-cli"
     params:
-      - --diffusion-model
-      - "{models[qwen-image-2.1-Q4_K_M]}"
-      - --vae
-      - "{models[vae/qwen_image_2.1_vae_bf16]}"
-      - --llm
-      - "{models[Qwen3-VL-8B-Instruct-UD-Q4_K_XL]}"
-      - --flash-attn
-      - off,diffusion=on
-      - --prompt
-      - "{step[prompt]}"
-      - --steps
-      - "24"
-      - --cfg-scale
-      - "5.0"
-      - --sampling-method
-      - euler
-      - -W
-      - "{step[cover_with]}"
-      - -H
-      - "{step[cover_height]}"
-      - -o
-      - "{step[output]}"
+      prompt:
+        type: string
+      cover_with:
+        type: string
+      cover_height:
+        type: string
+      output:
+        type: string
+    target: '{sys[cache_dir]}/bin/sd-cli'
+    args:
+    - --diffusion-model
+    - '{sys[models][qwen-image-2.1-Q4_K_M]}'
+    - --vae
+    - '{sys[models][vae/qwen_image_2.1_vae_bf16]}'
+    - --llm
+    - '{sys[models][Qwen3-VL-8B-Instruct-UD-Q4_K_XL]}'
+    - --flash-attn
+    - off,diffusion=on
+    - --prompt
+    - '{params[prompt]}'
+    - --steps
+    - '24'
+    - --cfg-scale
+    - '5.0'
+    - --sampling-method
+    - euler
+    - -W
+    - '{params[cover_with]}'
+    - -H
+    - '{params[cover_height]}'
+    - -o
+    - '{params[output]}'
     units: 3
-
   demucs:
-    target: uvx
     params:
-      - demucs
-      - -n
-      - htdemucs
-      - --two-stems=vocals
-      - --shifts
-      - "1"
-      - -j
-      - "2"
-      - -o
-      - "{step[output]}"
-      - "{step[input]}"
-    device_args: ["-d", "cuda:{device_index}"]
+      input:
+        type: string
+      output:
+        type: string
+    target: uvx
+    args:
+    - demucs
+    - -n
+    - htdemucs
+    - --two-stems=vocals
+    - --shifts
+    - '1'
+    - -j
+    - '2'
+    - -o
+    - '{params[output]}'
+    - '{params[input]}'
     units: 1
-
+    device_args:
+    - -d
+    - cuda:{schedule[device_index]}
   whisperx:
-    target: uvx
     params:
-      - whisperx
-      - "{step[input]}"
-      - --model
-      - large-v3
-      - --device
-      - cuda
-      - --batch_size
-      - "4"
-      - --output_dir
-      - "{step[output]}"
-      - --output_format
-      - all
-    device_args: [--device_index, "{device_index}"]
+      input:
+        type: string
+      output:
+        type: string
+    target: uvx
+    args:
+    - whisperx
+    - '{params[input]}'
+    - --model
+    - large-v3
+    - --device
+    - cuda
+    - --batch_size
+    - '4'
+    - --output_dir
+    - '{params[output]}'
+    - --output_format
+    - all
     units: 3
-
-pipelines:
+    device_args:
+    - --device_index
+    - '{schedule[device_index]}'
+pipeline:
   song-with-cover:
-    for-each: songs
-    as: song
-    steps:
-      - name: generate-song
-        processor: yue2
-        before:
-          - action: create-dir
-            path: "{output_dir}/{song[name]}"
-          - action: write-json-from-context
-            output: "{cache_dir}/requests/{song[name]}/{song[name]}.json"
-            content:
-              name: "{song[name]}"
-              style: "{song[style]}"
-              lyrics: "{song[lyrics]}"
-        output: "{output_dir}/{song[name]}/{song[name]}.mp3"
-        score: "{output_dir}/{song[name]}/{song[name]}.abc"
-        request: "{cache_dir}/requests/{song[name]}/{song[name]}.json"
-        validate:
-          - condition: file-existed
-            target: "{output_dir}/{song[name]}/{song[name]}.mp3"
-          - condition: file-existed
-            target: "{output_dir}/{song[name]}/{song[name]}.abc"
-          - condition: exit-one
-            target: ["{cache_dir}/bin/yue-synth", --help]
-
-      - name: generate-cover
-        processor: sd-cli
-        prompt: "{song[cover_prompt]}"
-        cover_with: "{song[cover_with]}"
-        cover_height: "{song[cover_height]}"
-        before:
-          - action: create-dir
-            path: "{output_dir}/{song[name]}"
-        output: "{output_dir}/{song[name]}/cover.png"
-        validate:
-          - condition: file-existed
-            target: "{output_dir}/{song[name]}/cover.png"
-
-      - name: separate-vocals
-        processor: demucs
-        input: "{output_dir}/{song[name]}/{song[name]}.mp3"
-        output: "{output_dir}/{song[name]}/separated"
-        before:
-          - action: create-dir
-            path: "{output_dir}/{song[name]}/separated"
-        waiting-for: [generate-song]
-        validate:
-          - condition: file-existed
-            target: "{output_dir}/{song[name]}/separated/htdemucs/{song[name]}/vocals.wav"
-
-      - name: transcribe-vocals
-        processor: whisperx
-        input: "{output_dir}/{song[name]}/separated/htdemucs/{song[name]}/vocals.wav"
-        output: "{output_dir}/{song[name]}/transcript"
-        before:
-          - action: create-dir
-            path: "{output_dir}/{song[name]}/transcript"
-        waiting-for: [separate-vocals]
-        validate:
-          - condition: file-existed
-            target: "{output_dir}/{song[name]}/transcript/vocals.json"
+    params:
+      name:
+        type: string
+      style:
+        type: string
+      lyrics:
+        type: string
+      cover_prompt:
+        type: string
+      cover_with:
+        type: number
+        default: 1280
+      cover_height:
+        type: number
+        default: 768
+    nodes:
+    - name: generate-song
+      skip_if:
+        operator: and
+        props:
+        - operator: file-exists
+          path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+        - operator: file-exists
+          path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+      postcondition:
+        operator: and
+        props:
+        - operator: file-exists
+          path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+        - operator: file-exists
+          path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+        - operator: exit-code
+          expected: 1
+          target:
+          - '{sys[cache_dir]}/bin/yue-synth'
+          - --help
+      precondition:
+        operator: exit-code
+        expected: 1
+        target:
+        - '{sys[cache_dir]}/bin/yue-synth'
+        - --help
+      before_run:
+      - type: create-dir
+        path: '{session[output_dir]}/{params[name]}'
+      - type: write-json
+        path: '{session[cache_dir]}/requests/{params[name]}/{params[name]}.json'
+        content:
+          name: '{params[name]}'
+          style: '{params[style]}'
+          lyrics: '{params[lyrics]}'
+      run:
+        workload: yue2
+        args:
+          request: '{session[cache_dir]}/requests/{params[name]}/{params[name]}.json'
+          output: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+          score: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+    - name: generate-cover
+      precondition:
+        operator: exit-code
+        target:
+        - '{sys[cache_dir]}/bin/sd-cli'
+        - --help
+      skip_if:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/cover.png'
+      postcondition:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/cover.png'
+      before_run:
+      - type: create-dir
+        path: '{session[output_dir]}/{params[name]}'
+      run:
+        workload: sd-cli
+        args:
+          output: '{session[output_dir]}/{params[name]}/cover.png'
+          prompt: '{params[cover_prompt]}'
+          cover_with: '{params[cover_with]}'
+          cover_height: '{params[cover_height]}'
+    - name: separate-vocals
+      skip_if:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
+      postcondition:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
+      depends_on:
+      - node: generate-song
+        condition:
+          operator: node_status
+          expected: success
+      before_run:
+      - type: create-dir
+        path: '{session[output_dir]}/{params[name]}/separated'
+      run:
+        workload: demucs
+        args:
+          output: '{session[output_dir]}/{params[name]}/separated'
+          input: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+    - name: transcribe-vocals
+      skip_if:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
+      postcondition:
+        operator: file-exists
+        path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
+      depends_on:
+      - node: separate-vocals
+        condition:
+          operator: node_status
+          expected: success
+      before_run:
+      - type: create-dir
+        path: '{session[output_dir]}/{params[name]}/transcript'
+      run:
+        workload: whisperx
+        args:
+          output: '{session[output_dir]}/{params[name]}/transcript'
+          input: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'

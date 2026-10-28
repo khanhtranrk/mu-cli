@@ -16,7 +16,7 @@ class ValidationResult:
     message: str
 
 
-CheckHandler = Callable[[Any, Path], ValidationResult]
+CheckHandler = Callable[[Any, Path, Any], ValidationResult]
 CHECKS: dict[str, CheckHandler] = {}
 
 
@@ -29,18 +29,19 @@ def register_check(name: str) -> Callable[[CheckHandler], CheckHandler]:
 
 
 @register_check("file-existed")
-def file_existed(target: Any, base_dir: Path) -> ValidationResult:
+def file_existed(target: Any, base_dir: Path, expected: Any = True) -> ValidationResult:
     if not isinstance(target, str):
         raise ValidationError("file-existed target must be a path string")
     path = Path(target).expanduser()
     if not path.is_absolute():
         path = base_dir / path
     exists = path.exists()
-    return ValidationResult(exists, f"file-existed: {path} {'exists' if exists else 'does not exist'}")
+    passed = exists == expected
+    return ValidationResult(passed, f"file-existed: {path} {'exists' if exists else 'does not exist'}")
 
 
 @register_check("exit-zero")
-def exit_zero(target: Any, base_dir: Path) -> ValidationResult:
+def exit_zero(target: Any, base_dir: Path, expected: Any = 0) -> ValidationResult:
     if not isinstance(target, list) or not target or not all(isinstance(arg, str) for arg in target):
         raise ValidationError("exit-zero target must be a non-empty list of command arguments")
     try:
@@ -54,7 +55,7 @@ def exit_zero(target: Any, base_dir: Path) -> ValidationResult:
 
 
 @register_check("exit-one")
-def exit_one(target: Any, base_dir: Path) -> ValidationResult:
+def exit_one(target: Any, base_dir: Path, expected: Any = 1) -> ValidationResult:
     if not isinstance(target, list) or not target or not all(isinstance(arg, str) for arg in target):
         raise ValidationError("exit-one target must be a non-empty list of command arguments")
     try:
@@ -65,6 +66,22 @@ def exit_one(target: Any, base_dir: Path) -> ValidationResult:
     detail = completed.stderr.strip() or completed.stdout.strip()
     suffix = f" ({detail})" if detail else ""
     return ValidationResult(completed.returncode == 1, f"exit-one: {' '.join(target)} {status}{suffix}")
+
+
+@register_check("exit-code")
+def exit_code(target: Any, base_dir: Path, expected: Any = 0) -> ValidationResult:
+    if not isinstance(target, list) or not target or not all(isinstance(arg, str) for arg in target):
+        raise ValidationError("exit-code target must be a non-empty list of command arguments")
+    if not isinstance(expected, int) or isinstance(expected, bool):
+        raise ValidationError("exit-code expected must be an integer")
+    try:
+        completed = subprocess.run(target, cwd=base_dir, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        return ValidationResult(False, f"exit-code: could not run {target[0]}: {exc}")
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    suffix = f" ({detail})" if detail else ""
+    passed = completed.returncode == expected
+    return ValidationResult(passed, f"exit-code: {' '.join(target)} returned {completed.returncode}; expected {expected}{suffix}")
 
 
 def validate_action_checks(
@@ -81,7 +98,7 @@ def validate_action_checks(
             raise ValidationError(f"validate[{index}].target is required")
         try:
             target = _render(check["target"], context or {})
-            results.append(CHECKS[kind](target, base_dir))
+            results.append(CHECKS[kind](target, base_dir, check.get("expected", 0 if kind == "exit-code" else True)))
         except ValidationError as exc:
             raise ValidationError(f"validate[{index}]: {exc}") from exc
     return results

@@ -1,882 +1,879 @@
-version: 1.0
-
-songs:
-  - name: The Orchard Keeps Time
-    style: "English indie folk, fingerpicked acoustic guitar, warm cello, steady percussion, intimate lead vocal with a wide final chorus"
-    lyrics: |
-      [Verse 1]
-      At the edge of town the orchard leans toward morning,
-      Old branches comb the mist from the fields.
-      My grandfather taught me the names of every tree,
-      And how a patient hand can coax a branch to yield.
-      We carried tin pails through the rows in September,
-      With cider-sweet air settling into our clothes.
-      He said the years were rings beneath the bark,
-      Each one a quiet record of what grows.
-
-      [Pre-Chorus]
-      Some seasons give and some seasons take,
-      Some roots hold fast while the high limbs shake.
-
-      [Chorus]
-      The orchard keeps time when the clocks run late,
-      In blossom and frost, in the fallen fruit.
-      We are only passing through its open gate,
-      But the ground remembers every careful root.
-      If I lose my way, let the old trees show
-      How to bend with the weather and still grow.
-
-      [Verse 2]
-      Now the ladder rests where the tall grass gathers,
-      And his empty chair looks west at the hill.
-      I came back alone with a box of pruning shears,
-      Unsure if I could learn the work he taught me still.
-      A little green leaf opened under my fingers,
-      Though the branch had been broken by the winter wind.
-      I heard his laugh in the crows above the barn,
-      And felt the long work of beginning again.
-
-      [Verse 3]
-      The neighbors came with jars and borrowed baskets,
-      Their children raced the rows at the end of the day.
-      We pressed the apples while the sunset turned copper,
-      And saved the smallest seeds to give away.
-      One day these trees will shade a different family,
-      Who'll learn that care is more than what we own.
-      The orchard will keep making room for the future,
-      Long after our footsteps have gone home.
-
-      [Bridge]
-      Nothing we love stays still forever;
-      The hand lets go, the roots hold together.
-      A life can end and still leave a way
-      For another green morning to find the day.
-
-      [Final Chorus]
-      The orchard keeps time when the clocks run late,
-      In blossom and frost, in the fallen fruit.
-      We are only passing through its open gate,
-      Yet the ground remembers every careful root.
-      If I lose my way, let the old trees show
-      How to bend with the weather and still grow.
-    cover_prompt: "Reflective indie-folk album art, an old apple orchard at dawn in early autumn, one weathered wooden ladder beneath a broad tree, a young person gathering apples as neighbors arrive with baskets, mist over distant fields, soft copper and moss-green colors, natural cinematic light, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Shan Hai Zhi Jian
-    style: "Mandarin Chinese cinematic folk pop, guzheng accents, piano, warm strings, restrained verses and an expansive hopeful chorus"
-    lyrics: |
-      [Verse 1]
-      我把旧地图折进背包，沿着清晨出发，
-      山影落在肩上，像一句没说完的话。
-      车窗外的村庄慢慢退成远处的灯，
-      妈妈在门前挥手，风替我回答。
-      我曾以为远方会把迷惘全部带走，
-      直到夜色降临，才听见心里的潮声。
-      原来每一段路都藏着熟悉的回音，
-      把走散的勇气，一点一点唤醒。
-
-      [Pre-Chorus]
-      山很高，海很宽，脚步也会疲倦，
-      可天亮以前，星光一直没有走远。
-
-      [Chorus]
-      在山海之间，我寻找自己的方向，
-      让风吹过脸庞，让河流记住愿望。
-      不必赶在谁的前面，不必假装坚强，
-      一步一步走过黑夜，也能走到有光的地方。
-      若故乡在身后，若明天仍漫长，
-      心里那盏灯，会陪我越过山海的回响。
-
-      [Verse 2]
-      我遇见修桥的老人，听他讲洪水与春天，
-      他把一颗小石子放进我的掌心里面。
-      他说河水绕过岩石，从来不是认输，
-      是找到另一条路，仍然奔向平原。
-      我把这句话带进拥挤陌生的城市，
-      在窗边种下一盆从家乡带来的花。
-      雨落在屋檐，像远方寄来的信，
-      写着不管走多远，总有人等我回家。
-
-      [Verse 3]
-      后来我学会停下，看看路旁的云，
-      学会把没完成的梦，放进明天继续。
-      那些曾经害怕失去的名字和声音，
-      成了我穿过风雨时，最温柔的地图。
-      山那边仍有山，海的尽头还有潮汐，
-      可我不再要求答案一次说清。
-      当脚下这一寸土地终于变得熟悉，
-      我知道远行也能让人回到自己。
-
-      [Bridge]
-      若你也在夜路上，别急着追赶太阳，
-      每颗星都用自己的速度发亮。
-      把疲惫交给风，把希望留在胸膛，
-      明天会从你愿意再迈步的地方开始。
-
-      [Final Chorus]
-      在山海之间，我找到了自己的方向，
-      让风吹过脸庞，让河流带走忧伤。
-      不必赶在谁的前面，我们并肩歌唱，
-      一步一步走过黑夜，就能走到有光的地方。
-      无论故乡多远，无论明天多漫长，
-      心里那盏灯，会陪我们越过山海的回响。
-    cover_prompt: "Mandarin folk-pop album cover, a lone traveler on a mountain pass looking toward a distant silver sea at sunrise, a small hometown map tucked into a backpack, winding river below, layered blue mountains and pale gold clouds, poetic cinematic landscape, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Yoake No Eki
-    style: "Japanese alternative pop, piano-led verses, understated drums, shimmering guitar, emotional strings opening into a bright chorus"
-    lyrics: |
-      [Verse 1]
-      夜明け前の駅に　白い息が浮かぶ
-      古いベンチの端で　切符を握りしめた
-      改札の向こうには　眠った町の灯り
-      君が笑った坂道も　窓の外へ消える
-      何度も書き直した　短い手紙の言葉
-      伝えられないまま　鞄の底にしまう
-      発車を告げる声が　静けさをほどいて
-      まだ知らない明日へ　列車が走り出す
-
-      [Pre-Chorus]
-      離れることだけが　別れじゃないと
-      風の音がそっと　教えてくれた
-
-      [Chorus]
-      夜明けの駅から　僕らは旅立つ
-      それぞれの夢を　胸に抱きながら
-      遠く離れても　同じ空を見上げ
-      迷った夜には　あの日の歌を思い出す
-      さよならの先に　続いている道を
-      小さな勇気で　歩いていこう
-
-      [Verse 2]
-      窓に映る顔は　少し大人びていて
-      知らない町の名前が　ひとつずつ近づく
-      雨の日のホームで　傘を寄せた人や
-      眠れない夜に読んだ　本のページの匂い
-      出会った人の声が　心に積もるたび
-      帰る場所の形も　少しずつ変わった
-      それでも夕暮れに　遠い汽笛を聞けば
-      あの町の川辺まで　想いは戻っていく
-
-      [Verse 3]
-      いつか同じ駅で　また会える日が来たら
-      あの日言えなかった　言葉を渡したい
-      大きな夢の話も　失敗した話も
-      笑いながら話せる　自分でいたいんだ
-      旅は終わるために　始まるのではなく
-      新しい景色の中　自分を知るため
-      発車ベルの余韻が　胸の奥で鳴る
-      その音を道しるべに　今日も歩いていく
-
-      [Bridge]
-      さよならは扉を閉じる音じゃない
-      次のページを開く　合図になる
-      遠くの君にも　この歌が届くなら
-      同じ朝を生きていると伝えたい
-
-      [Final Chorus]
-      夜明けの駅から　僕らは旅立つ
-      それぞれの夢を　今も抱きながら
-      遠く離れても　同じ空の下で
-      迷った夜には　あの日の歌を口ずさむ
-      さよならの先に　続いている道を
-      確かな足音で　歩いていこう
-    cover_prompt: "Japanese alternative-pop artwork, a quiet rural train platform just before sunrise, one young traveler holding a paper ticket, the departing train reflecting a pale peach sky, distant town lights and misty hills, wistful yet hopeful, cinematic composition, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Mua Nuoc Noi
-    style: "Vietnamese contemporary folk, dan tranh and acoustic guitar, gentle river percussion, expressive warm vocal and communal chorus"
-    lyrics: |
-      [Verse 1]
-      Nước từ thượng nguồn về qua bờ tre trước ngõ,
-      Con đường quen bỗng hóa thành một nhánh sông.
-      Má xắn quần, chèo xuồng qua vườn đầy bông súng,
-      Ba kê cao chiếc radio tránh mưa dông.
-      Lũ trẻ cười vang khi cá linh về theo nước,
-      Khói bếp thơm bay quấn lấy mái nhà tranh.
-      Mùa nước nổi mang phù sa về bồi đắp,
-      Dẫu mênh mông, quê mình vẫn xanh lành.
-
-      [Pre-Chorus]
-      Nước lên thì mình kê thêm chiếc sàn,
-      Gió đổi chiều thì nắm lấy tay nhau.
-
-      [Chorus]
-      Ơi con nước, đưa mùa qua đồng rộng,
-      Chở tiếng hò đi khắp những bờ xa.
-      Nhà mình nhỏ mà tình người thì rộng,
-      Có nhau rồi, sóng lớn cũng hóa hiền hòa.
-      Khi con nước ròng, bùn non còn ở lại,
-      Mai lúa lên xanh từ những tháng ngày qua.
-
-      [Verse 2]
-      Ngoại kể ngày xưa qua sông không có bến,
-      Người gọi đò bằng ngọn đèn dầu leo lét đêm.
-      Ngoại giữ trong chum vài hạt giống tốt,
-      Chờ đất khô rồi gieo xuống cạnh thềm.
-      Năm nay con về khi mùa mưa vừa chạm ngõ,
-      Thấy tóc ngoại bạc thêm dưới mái hiên nhà.
-      Ngoại hỏi thành phố có còn nhiều khói bụi,
-      Con chỉ cười: ở đâu cũng nhớ phù sa.
-
-      [Verse 3]
-      Mấy đứa bạn xưa giờ đi làm xa xứ,
-      Đứa gửi tiền về, đứa gửi tiếng cười qua điện thoại.
-      Tụi mình hẹn nhau bên bờ đê đầu xóm,
-      Chia nồi canh chua, kể chuyện những ngày dài.
-      Trăng rải bạc lên mặt nước đang lặng,
-      Một chiếc xuồng chở tiếng hát về ngang.
-      Con hiểu quê nhà đâu chỉ là nơi trở lại,
-      Mà là cách người ta đợi nhau sang.
-
-      [Bridge]
-      Nước có lúc dâng cao, có khi lùi xa,
-      Đời người cũng qua bao mùa nắng mưa.
-      Cứ gieo điều tử tế vào lòng đất,
-      Rồi ngày mai sẽ nở những bông mùa.
-
-      [Final Chorus]
-      Ơi con nước, đưa mùa qua đồng rộng,
-      Chở tiếng hò đi khắp những bờ xa.
-      Nhà mình nhỏ mà tình người thì rộng,
-      Có nhau rồi, sóng lớn cũng hóa hiền hòa.
-      Khi con nước ròng, phù sa còn ở lại,
-      Mai lúa lên xanh trên đất mẹ bao la.
-    cover_prompt: "Vietnamese folk album cover during the Mekong flood season, a family rowing a small wooden boat past a stilted riverside home, water lilies and floating hyacinths, children laughing as fishers bring in their nets, warm cooking smoke and soft monsoon light, vivid but natural, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Letters To The Deep
-    style: "English atmospheric rock, rolling toms, electric guitar swells, piano, earnest vocal, dramatic ocean-sized final chorus"
-    lyrics: |
-      [Verse 1]
-      We wrote our questions on a paper boat,
-      And let it drift beyond the harbor wall.
-      The tide took every careless word we spoke,
-      Then brought back shells too small to hold it all.
-      My sister kept a jar of beach glass,
-      Green as the sea beneath a cloudy sky.
-      She said the shore remembers every footstep,
-      Even when the names and footprints dry.
-
-      [Pre-Chorus]
-      Beneath the waves, the dark is full of sound;
-      The world is breathing where we cannot see.
-
-      [Chorus]
-      Send our letters to the deep blue water,
-      Ask the turning tide to carry them through.
-      We were born beside this restless border,
-      We belong to the wide and changing blue.
-      If we take more than the earth can give us,
-      Let us learn to mend what we undo.
-      Leave a cleaner coast for those who follow;
-      Let the sea keep singing something true.
-
-      [Verse 2]
-      At dawn we walked the cove with canvas sacks,
-      While gulls drew circles over broken foam.
-      We found a net tangled around the rocks,
-      And pulled it free before the boats came home.
-      A child held up a bottle cap like treasure,
-      Then asked who had forgotten it behind.
-      We had no easy answer for the question,
-      So we began with what we could remove.
-
-      [Verse 3]
-      The harbor lights came on across the water,
-      Each window like a promise on the shore.
-      The fishermen repaired their weathered ropes,
-      And neighbors shared the work from door to door.
-      No single hand can turn the tide alone,
-      But many hands can change what reaches land.
-      Tomorrow starts in ordinary choices,
-      In how we care for what we do not own.
-
-      [Bridge]
-      The ocean does not need our grand promises;
-      It needs the patient work we do each day.
-      A thousand small repairs can shape a future,
-      Where life has room to find another way.
-
-      [Final Chorus]
-      Send our letters to the deep blue water,
-      Let the turning tide carry our reply:
-      We will guard the fragile, living border,
-      Keep the shore and open sky in view.
-      If we take more than the earth can give us,
-      We can mend the harm and start anew.
-      Leave a cleaner coast for those who follow;
-      Let the sea keep singing something true.
-    cover_prompt: "Atmospheric rock album artwork, a small coastal community cleaning a rocky shore at dawn, reusable canvas sacks, glassy blue water and seabirds, harbor lights fading as the sun rises, environmental care shown with hope rather than disaster, cinematic sea blues and silver, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Zhi Yuan De Feng Zheng
-    style: "Mandarin Chinese acoustic pop, guzheng and piano, light hand percussion, tender father-child duet feeling, uplifting full-band chorus"
-    lyrics: |
-      [Verse 1]
-      父亲把竹条削成细细的骨架，
-      我在旧报纸上画了一只蓝色的鸟。
-      浆糊粘住指尖，窗外风吹过院墙，
-      他笑着说，别怕，风会帮你飞高。
-      我踮起脚尖，把线轴握得很紧，
-      小小的纸鸢摇摇晃晃离开屋檐。
-      那一刻天空像突然打开的门，
-      我追着它跑过田埂和金色的麦田。
-
-      [Pre-Chorus]
-      线在手里，风在远方，
-      你说放开一点，它才看得见天光。
-
-      [Chorus]
-      飞吧，飞吧，飞向更远的地方，
-      穿过白云，越过山岗。
-      我会记得你掌心的温度，
-      和那句跌倒以后也要自己站起来的话。
-      飞吧，飞吧，风再大也别慌张，
-      只要心里有家，远方就不再遥远。
-
-      [Verse 2]
-      后来我背上行囊，离开熟悉的小城，
-      车站的钟声把夏天敲得很长。
-      父亲没有多说，只把一把旧伞递给我，
-      叮嘱我遇见暴雨，先找地方躲藏。
-      城市的霓虹很亮，夜晚却有些空，
-      我在加班的窗边想起那只纸鸢。
-      电话那头他说院里的桂花开了，
-      风吹过的时候，香气越过了山。
-
-      [Verse 3]
-      多年以后我带着自己的孩子回家，
-      父亲的头发已经像冬天一样白。
-      我们重新削竹条，重新糊好纸面，
-      他握住孩子的手，让她学着放线。
-      纸鸢飞过屋顶，飞过老树的影子，
-      三个人的笑声落在晚霞之间。
-      我突然明白离开不是忘记故乡，
-      是把它的温柔带到每一个明天。
-
-      [Bridge]
-      线会松，也会紧，风会变换方向，
-      爱不是把谁留在身旁。
-      是你敢去看更远的天，
-      我仍在这里，为你留一盏灯光。
-
-      [Final Chorus]
-      飞吧，飞吧，飞向更远的地方，
-      穿过白云，越过山岗。
-      我会记得你掌心的温度，
-      也把这份温柔交到下一双手上。
-      飞吧，飞吧，风再大也别慌张，
-      只要心里有家，我们就不会走散。
-    cover_prompt: "Mandarin acoustic-pop album art, a father teaching his young child to fly a handmade blue paper kite in a golden wheat field, an older grandparent watching from a farmhouse doorway, warm late-summer breeze, affectionate multigenerational scene, soft cinematic sunlight, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Hoshikuzu No Toshokan
-    style: "Japanese dream pop, soft piano, brushed drums, ambient guitar, delicate vocal that grows into a luminous orchestral refrain"
-    lyrics: |
-      [Verse 1]
-      閉館時間を過ぎた図書館で
-      雨の匂いが本の背表紙に残る
-      返し忘れた一冊を抱えたまま
-      窓辺の椅子に静かに座った
-      誰かの旅を描いた古い物語
-      ページの間から銀杏の葉が落ちる
-      何年も前の秋を閉じ込めた色が
-      今夜の私に小さく話しかける
-
-      [Pre-Chorus]
-      読み終えた言葉も消えはしない
-      心の奥で星のように光る
-
-      [Chorus]
-      星屑の図書館で　夢を借りていこう
-      まだ知らない世界の扉を開こう
-      誰かが残した一行の願いが
-      暗い夜道を照らす灯りになる
-      いつか返すその日まで　大切に抱いて
-      私だけの物語を続けていこう
-
-      [Verse 2]
-      窓の外では終電が走り去り
-      街の明かりが水たまりに揺れる
-      机に並んだ名も知らない人たちも
-      それぞれの明日を胸に帰っていく
-      司書さんは鍵をかける前に
-      「またおいで」と柔らかく笑った
-      その短い言葉の余白の中に
-      帰る場所を見つけた気がした
-
-      [Verse 3]
-      春になればこの本を返しに来よう
-      新しい誰かがページを開くように
-      私が書きためた小さな詩も
-      いつか誰かの夜に届くだろうか
-      完璧な答えを見つけなくてもいい
-      読み進めるたび景色は変わる
-      しおりの位置を明日に置いて
-      朝の光へ歩き出していく
-
-      [Bridge]
-      物語は終わるたび　次の声を呼ぶ
-      ひとりで読んだ夜も　誰かにつながる
-      静かな頁の奥で　未来が息をする
-      その小さな音を忘れないで
-
-      [Final Chorus]
-      星屑の図書館で　夢を借りていこう
-      まだ知らない世界の扉を開こう
-      誰かが残した一行の願いを
-      今度は私が誰かへ手渡そう
-      いつか返すその日まで　大切に抱いて
-      私だけの物語を歌っていこう
-    cover_prompt: "Japanese dream-pop album cover, a solitary reader in a warm old library after closing time, tall shelves and rain-streaked windows, tiny star-like reflections hovering among the books, a pressed yellow ginkgo leaf on an open page, midnight indigo with soft amber lamps, magical realism, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Qua Mien Gio Cat
-    style: "Vietnamese cinematic folk rock, acoustic guitar, dan bau lines, hand drums, resilient vocal and a broad communal final chorus"
-    lyrics: |
-      [Verse 1]
-      Gió từ miền cát thổi qua hàng phi lao,
-      Mang vị mặn của biển và màu nắng trên vai.
-      Mẹ gánh nước về khi trời chưa sáng,
-      Bóng mẹ dài qua những vệt cát khô rang.
-      Cha vá lại mái nhà sau mùa bão cũ,
-      Buộc từng tàu lá dừa vào khung tre cong.
-      Trong sân nhỏ, em gieo mấy hạt đậu,
-      Tin một ngày xanh sẽ trở lại trên đồng.
-
-      [Pre-Chorus]
-      Đường xa thì đi chậm, trời cao cứ ngước nhìn,
-      Mỗi bàn tay góp lại, cát cũng thành đất lành.
-
-      [Chorus]
-      Qua miền gió cát, ta đi cùng nhau,
-      Dẫu chân trần bỏng rát dưới trời cao.
-      Giữ một giọt mưa trong lòng bàn tay,
-      Giữ tiếng ru nhà mình qua tháng ngày.
-      Khi biển nổi giông, khi đồng khô nứt nẻ,
-      Tình người còn xanh như lá sau mưa.
-      Qua miền gió cát, ta đi cùng nhau,
-      Bình minh sẽ tìm về trên mái nhà.
-
-      [Verse 2]
-      Xóm trên góp tre, xóm dưới góp công,
-      Đào một con mương dẫn nước qua vườn.
-      Bà mang nồi chè ra ngồi bên ngõ,
-      Trẻ con chuyền tay những trái sim thơm.
-      Có người đi xa gửi về chiếc máy bơm,
-      Có người giữ giống lúa chịu hạn trong chum.
-      Mùa đầu tiên nước về ngang bờ ruộng,
-      Cả xóm đứng nhìn, mắt sáng như trăng.
-
-      [Verse 3]
-      Năm tháng cuốn người đi nhiều ngả,
-      Có đứa vào Nam, có đứa lên thành phố xa.
-      Nhưng mỗi lần nghe câu hò trên radio,
-      Lại nhớ bờ cát nơi mình đã lớn lên.
-      Con trở về khi tóc cha thêm bạc,
-      Thấy mẹ vẫn chừa một chỗ cạnh hiên.
-      Mâm cơm quê không nhiều món lạ,
-      Mà đủ làm ấm cả một hành trình dài.
-
-      [Bridge]
-      Ta không chọn được trời mưa hay nắng,
-      Nhưng chọn cách mình đứng cạnh bên nhau.
-      Từ hạt giống nhỏ, từ lời thăm hỏi,
-      Mình dựng ngày mai trên mảnh đất này.
-
-      [Final Chorus]
-      Qua miền gió cát, ta đi cùng nhau,
-      Dẫu chân trần bỏng rát dưới trời cao.
-      Giữ một giọt mưa trong lòng bàn tay,
-      Giữ tiếng ru nhà mình qua tháng ngày.
-      Khi biển nổi giông, khi đồng khô nứt nẻ,
-      Tình người còn xanh như lá sau mưa.
-      Qua miền gió cát, ta đi cùng nhau,
-      Bình minh ở đây, trên mái nhà mình.
-    cover_prompt: "Vietnamese folk-rock cover in a central coastal village, family and neighbors repairing a wind-bent thatched roof and digging a small irrigation channel through sandy fields, rows of casuarina trees and distant sea, first rain clouds gathering after drought, hopeful earthy cinematic palette, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: After The Last Bell
-    style: "English piano-driven alternative pop, nostalgic electric guitar, live drums, layered youthful harmonies and an anthemic final refrain"
-    lyrics: |
-      [Verse 1]
-      The last bell rang through the old brick hallway,
-      And every locker swallowed one more year.
-      We signed our names on the back of a yearbook,
-      Made promises too large to fit in there.
-      The gym was empty but the floor still glittered
-      With paper stars from last night's dance.
-      We stood beneath the scoreboard after midnight,
-      Afraid to call this ending a beginning.
-
-      [Pre-Chorus]
-      We had no map and hardly any money,
-      But every road looked possible that night.
-
-      [Chorus]
-      After the last bell, the world opens wide,
-      With a thousand wrong turns and a thousand new skies.
-      We will lose our way, we will change our minds,
-      We will find each other in the passing lights.
-      Keep the song we sang on the football field;
-      Keep the names we wrote where the paint wore thin.
-      After the last bell, whatever comes next,
-      We are more than the place where we began.
-
-      [Verse 2]
-      Years later, we met in a crowded station,
-      With tired eyes and stories we had earned.
-      Someone had a baby, someone changed their name,
-      Someone came back after every bridge had burned.
-      We laughed about the band that missed its entrance,
-      The science fair volcano made of clay.
-      For a little while the years became a hallway,
-      And we were young enough to stay all day.
-
-      [Verse 3]
-      Some of us stayed near the old river,
-      Some crossed oceans, some never settled down.
-      The empty lot is now a corner market,
-      The library still keeps the windows facing town.
-      I pass the school when evening paints it gold,
-      And hear the distant practice of a song.
-      The bell may ring for someone else tomorrow;
-      The things we learned still travel with us on.
-
-      [Bridge]
-      Growing up is not a door that closes;
-      It is a road that bends beyond our sight.
-      We carry every borrowed bit of courage,
-      And lend it when a friend can't find the light.
-
-      [Final Chorus]
-      After the last bell, the world opens wide,
-      With a thousand wrong turns and a thousand new skies.
-      We have lost our way, we have changed our minds,
-      We have found each other in the passing lights.
-      Keep the song we sang on the football field;
-      Keep the names we wrote where the paint wore thin.
-      After the last bell, whatever comes next,
-      We are more than the place where we began.
-    cover_prompt: "Nostalgic alternative-pop artwork, an empty high-school hallway at golden hour after graduation, scattered paper stars and handwritten yearbook pages, a few friends seen through open gym doors beneath a glowing scoreboard, bittersweet but hopeful, cinematic warm light, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Yue Liang Zhao Hui Lai
-    style: "Mandarin Chinese modern folk ballad, acoustic guitar, bamboo flute, soft percussion, sincere vocal with a warm singalong chorus"
-    lyrics: |
-      [Verse 1]
-      月亮照回来，照亮窗边的旧书桌，
-      照亮母亲种下的薄荷和栀子花。
-      我离开那天，行李装得太满，
-      却忘了带走门口那句慢慢回家。
-      城市的夜很深，灯火挤在玻璃上，
-      每个人都像赶路，却说不清要去哪。
-      我把疲惫藏进没有寄出的信里，
-      直到一阵晚风，把故乡的味道吹来。
-
-      [Pre-Chorus]
-      走过多少街巷，越过多少人海，
-      总有一扇窗，为我留着等待。
-
-      [Chorus]
-      月亮照回来，照在回家的路上，
-      照过旧桥流水，也照过新的远方。
-      若我走得太久，请替我把灯点亮，
-      我会带着风霜，也带着梦回到你身旁。
-      月亮照回来，照见脸上的时光，
-      原来最深的牵挂，从来不需要说谎。
-
-      [Verse 2]
-      父亲把院门修好，换上新的木闩，
-      他说老屋漏雨的地方已经补上。
-      邻居家的孩子长高了许多，
-      追着一只纸飞机跑过晒谷场。
-      我坐在门槛边听他们说近况，
-      也说起这些年跌跌撞撞的愿望。
-      没有人笑我绕了很远的弯路，
-      只把热茶推近，说先吃饭再讲。
-
-      [Verse 3]
-      清晨我陪母亲走到河边，
-      她认出每一棵树，也记得每一道弯。
-      河水带走落叶，却留下岸边的青苔，
-      像日子带走许多，却把温柔留下来。
-      离开时我没有再说永远不走，
-      也不再害怕远方会把自己改变。
-      因为家的方向不是一条固定的线，
-      是有人知道我的名字，等我回来。
-
-      [Bridge]
-      若你也在陌生城市醒来，
-      看一看今晚的月亮吧。
-      它照过每一扇亮着的窗，
-      也照着你走过的路和想念的人。
-
-      [Final Chorus]
-      月亮照回来，照在回家的路上，
-      照过旧桥流水，也照过新的远方。
-      若你走得太久，请记得把灯点亮，
-      总有一份牵挂，会陪你走过漫长。
-      月亮照回来，照见我们脸上的时光，
-      原来最深的牵挂，不会被距离遗忘。
-    cover_prompt: "Mandarin folk-ballad cover, a traveler returning to a modest family courtyard at night, mother tending jasmine and mint beside a warmly lit window, full moon above an old stone bridge and quiet river, reunion expressed through small gestures, gentle blue and amber palette, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Seoul After Midnight
-    style: "Korean indie pop, mellow electric piano, city-pop bass, soft synth textures, intimate Korean vocal building to a warm ensemble chorus"
-    lyrics: |
-      [Verse 1]
-      막차가 떠난 뒤의 골목은 조용해지고
-      편의점 불빛만 젖은 도로를 비춰
-      야간 근무를 마친 사람들의 어깨 위로
-      새벽의 찬 공기가 천천히 내려와
-      나는 종이컵의 온기를 두 손에 담고
-      오늘 하루의 무게를 잠시 내려놔
-      빌딩 사이 작은 창마다 다른 꿈들이
-      꺼지지 않은 별처럼 밤을 지키고 있어
-
-      [Pre-Chorus]
-      멀리서 첫 버스의 엔진 소리가 들려
-      아직 끝나지 않은 마음을 깨워
-
-      [Chorus]
-      서울의 자정 너머, 우리 아직 여기 있어
-      각자의 외로운 밤을 지나 같은 하늘 아래
-      이름 모를 창문마다 누군가의 노래가 켜져
-      작은 불빛 하나로도 길을 찾을 수 있어
-      오늘이 아무리 길고 희미하게 느껴져도
-      아침은 우리를 잊지 않고 찾아올 거야
-
-      [Verse 2]
-      횡단보도 앞에서 잠든 꽃을 파는 아저씨
-      마지막 전철을 놓친 학생의 웃음소리
-      병원 창가에 기대어 잠깐 눈을 붙인 간호사
-      모두 다른 이유로 이 밤을 건너고 있어
-      나는 휴대전화 속 오래된 사진을 열어
-      바닷가에서 함께 웃던 얼굴을 바라봐
-      보고 싶다는 말은 아직 보내지 못했지만
-      마음은 먼저 그곳의 파도에 닿아 있어
-
-      [Verse 3]
-      빵집 문이 열리고 고소한 냄새가 번져
-      청소차가 지나간 자리에 물기가 반짝여
-      어제의 실수도 아직 나를 따라오지만
-      한 걸음 더 걸으면 조금 멀어질 거야
-      누군가 먼저 건넨 따뜻한 캔커피 하나
-      말없이 내민 친절이 긴 밤을 바꿔
-      낯선 사람들 사이에 작은 다리가 놓여
-      우리는 서로 모른 채 서로를 살게 해
-
-      [Bridge]
-      창문을 열어 봐, 같은 바람이 불어와
-      혼자라고 느낀 마음도 잠시 쉬어 가
-      불을 켜 둔 누군가가 저기에도 있다면
-      이 밤의 끝에서 우리 다시 만날 거야
-
-      [Final Chorus]
-      서울의 자정 너머, 우리 여전히 여기 있어
-      각자의 긴 하루를 지나 새 아침을 맞이해
-      이름 모를 창문마다 작은 노래가 번져
-      서로의 불빛을 따라 집으로 돌아가
-      오늘이 아무리 길고 희미하게 느껴져도
-      아침은 우리를 잊지 않고 찾아올 거야
-    cover_prompt: "Korean indie-pop album art, a quiet Seoul side street after midnight, a night-shift worker holding a warm paper cup beneath a convenience-store awning, apartment windows glowing above rain-polished pavement, first hint of dawn between buildings, intimate cinematic blue and amber light, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Baramui Jip
-    style: "Korean acoustic folk, delicate guitar, gayageum accents, soft janggu pulse, expressive vocal and a spacious communal chorus"
-    lyrics: |
-      [Verse 1]
-      바람이 집을 찾아오는 섬의 아침
-      파도는 돌담 아래 낮은 말을 건네
-      어머니는 물질복을 챙겨 문을 나서고
-      아버지는 오래된 그물을 살펴보네
-      젖은 장갑 사이로 세월이 스며들고
-      해녀들의 숨비소리가 물 위에 번져
-      나는 마루 끝에 앉아 그 소릴 들으며
-      바다가 오늘도 무사하기를 빌어
-
-      [Pre-Chorus]
-      바람은 방향을 바꾸어도
-      돌아갈 집은 여기 있다고
-
-      [Chorus]
-      바람의 집, 파도의 집, 우리들의 작은 섬
-      검은 돌과 푸른 물이 서로를 품은 곳
-      멀리 떠난 마음도 물길을 따라 돌아와
-      부엌의 불빛 아래 다시 이름을 부르네
-      바다가 거칠어도 손을 놓지 않으면
-      우리는 서로의 집이 되어 줄 거야
-
-      [Verse 2]
-      해 질 무렵 어머니가 바구니를 내려놓고
-      젖은 머리칼을 수건으로 감싸네
-      오늘은 성게보다 조개가 많았다며
-      작은 웃음으로 저녁상을 준비해
-      이웃집 할머니는 갓 잡은 생선을 나누고
-      아이들은 마당에서 고무줄을 뛰어넘어
-      멀리서 들려오는 배의 엔진 소리 위로
-      오래된 민요가 저녁 공기를 채워
-
-      [Verse 3]
-      몇 해 뒤 나는 큰 도시로 길을 떠났고
-      네온과 빌딩 숲에서 바다를 잊은 듯했어
-      하지만 비 오는 밤 창가에 서면
-      파도처럼 밀려오는 섬의 냄새가 있어
-      어머니의 짧은 안부, 아버지의 기침 소리
-      편지 속에 눌러 담은 귤꽃 향기
-      그 모든 것이 먼 곳의 하루를 감싸
-      낯선 방 한구석에 작은 섬을 놓아
-
-      [Bridge]
-      바다는 떠나는 길이기도 하고
-      돌아오는 길이기도 해
-      수평선 너머를 오래 바라본 뒤에
-      우리는 서로의 목소리를 따라와
-
-      [Final Chorus]
-      바람의 집, 파도의 집, 우리들의 작은 섬
-      검은 돌과 푸른 물이 서로를 품은 곳
-      멀리 떠난 마음도 물길을 따라 돌아와
-      부엌의 불빛 아래 함께 저녁을 나누네
-      바다가 거칠어도 손을 놓지 않으면
-      우리는 서로의 집이 되어 줄 거야
-    cover_prompt: "Korean folk album artwork on Jeju Island, an older haenyeo diver returning to a black-stone shore at dusk with a woven seafood basket, family waiting beside a modest stone-walled home, wind moving silver grass, deep blue sea and a warm kitchen window, respectful and poetic, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Gwaenchanha Neoui Gyejeol
-    style: "Korean piano ballad, gentle piano and acoustic guitar, restrained strings, emotionally rich lead vocal growing into a reassuring final chorus"
-    lyrics: |
-      [Verse 1]
-      네가 처음 혼자 살던 작은 방에는
-      풀지 못한 상자들이 벽을 따라 쌓였지
-      창문 밖 공사장의 망치 소리 사이로
-      너는 괜찮다는 말을 매일 연습했어
-      새벽까지 켜 둔 책상 위의 스탠드
-      식어 버린 국과 접어 둔 시험지
-      누구에게도 말하지 못한 마음들이
-      조용히 네 베개 아래로 흘러내렸어
-
-      [Pre-Chorus]
-      잘해 내지 못한 하루도
-      네가 살아 낸 하루야
-
-      [Chorus]
-      괜찮아, 너의 계절은 아직 끝나지 않았어
-      꽃이 늦게 피는 나무도 봄을 만나
-      잠시 멈춘 발걸음은 길을 잃은 게 아니야
-      숨을 고르고 다시 바라보는 시간이야
-      세상이 너무 빠르게 앞서가는 것 같아도
-      너의 속도로 걸어도 괜찮아
-
-      [Verse 2]
-      오랜만에 찾아온 친구는 문 앞에 앉아
-      무슨 일이 있었는지 묻지 않고 기다렸어
-      함께 끓인 라면의 김이 방 안에 차오르고
-      오래 참았던 웃음이 조금씩 돌아왔지
-      너는 지난달의 실패를 천천히 말했고
-      친구는 자기 이야기도 꺼내 놓았어
-      완벽한 답 대신 따뜻한 물 한 잔이
-      두 사람 사이의 밤을 견디게 했어
-
-      [Verse 3]
-      겨울이 물러난 뒤 골목에 목련이 피고
-      이삿짐 상자는 하나씩 책장으로 바뀌었어
-      너는 좋아하는 노래를 다시 틀어 놓고
-      아침마다 작은 화분에 물을 주었지
-      어느 날 면접에서 좋은 소식을 듣고
-      다른 날에는 또 마음이 무너지기도 해
-      그래도 이제는 넘어지는 순간마다
-      스스로의 손을 잡아 일으킬 수 있어
-
-      [Bridge]
-      빠른 대답을 찾지 않아도 돼
-      모든 상처가 오늘 낫지 않아도 돼
-      네가 여기 있다는 그 한 가지로
-      내일을 시작하기엔 충분해
-
-      [Final Chorus]
-      괜찮아, 너의 계절은 계속 이어지고 있어
-      작은 잎이 돋는 소리도 봄의 시작
-      잠시 멈춘 발걸음도 너의 길 한가운데
-      돌아보고 쉬어 가는 소중한 시간이야
-      세상이 아무리 멀리 앞서가는 것 같아도
-      너의 속도로 걸으면 너에게 닿을 거야
-    cover_prompt: "Korean piano-ballad cover, a young person sitting by a small apartment window at early spring, exam papers and moving boxes slowly replaced by a bookcase and a thriving potted magnolia, a close friend sharing a simple late-night meal, tender hopeful natural light, no text"
-    cover_with: 1280
-    cover_height: 768
-
-  - name: Uriui Jageun Byeol
-    style: "Korean upbeat pop-rock, bright electric guitars, punchy live drums, youthful group harmonies and a triumphant singalong chorus"
-    lyrics: |
-      [Verse 1]
-      운동장 끝 오래된 골대 아래
-      우리는 졸업 사진을 찍고 흩어졌어
-      커다란 꿈은 서로 다른 모양이었고
-      가진 용기보다 걱정이 더 많았지
-      첫 출근 날 길을 잘못 들어 헤매고
-      첫 공연에선 박자를 놓쳐 웃었어
-      잘될 거라고 믿었던 일들이 틀어져도
-      너는 다음 곡을 만들자고 했지
-
-      [Pre-Chorus]
-      넘어져도 무릎의 먼지를 털고
-      아직 남은 목소리로 세어 봐
-
-      [Chorus]
-      우리는 작은 별, 서로를 비추는 별
-      가장 어두운 밤에 더 잘 보이는 빛
-      혼자서는 몰랐던 길을 함께 그리며
-      한 걸음씩 우리의 내일을 켜
-      높은 곳에 닿지 않아도 충분히 빛나
-      네가 여기 있고 내가 여기 있으니까
-
-      [Verse 2]
-      한 친구는 바다 건너 도시로 떠났고
-      한 친구는 오래 바라던 가게를 열었어
-      누군가는 잠시 모든 걸 내려놓았고
-      누군가는 다시 학교 문을 두드렸지
-      우리는 달라진 시간표를 맞춰 보며
-      늦은 저녁 작은 식탁에 둘러앉아
-      지난달의 눈물과 이번 주의 농담을
-      접시 사이에 나누어 놓았어
-
-      [Verse 3]
-      오래된 동네엔 새 건물이 들어서고
-      그 아래 골목엔 여전히 분식집이 있어
-      사장님은 우리의 이름을 기억하고
-      익숙한 노래를 라디오에서 틀어 주네
-      세상은 자꾸 우리를 비교하려 하지만
-      각자의 길에는 각자의 계절이 있어
-      우리가 함께 버틴 수많은 밤이
-      내일을 향한 든든한 합창이 돼
-
-      [Bridge]
-      누가 먼저 도착하는지는 중요하지 않아
-      뒤처진 친구를 기다리는 마음이
-      우리가 걸어온 길을 빛나게 해
-      오늘도 서로의 이름을 크게 불러
-
-      [Final Chorus]
-      우리는 작은 별, 서로를 비추는 별
-      가장 어두운 밤에 더 선명해지는 빛
-      넘어지고 다시 일어선 모든 순간이
-      한 줄씩 모여 우리의 노래가 돼
-      높은 곳에 닿지 않아도 충분히 빛나
-      네가 여기 있고 우리가 함께 있으니까
-    cover_prompt: "Korean pop-rock album artwork, four longtime friends meeting on a rooftop at twilight, city skyline and distant school athletic field visible behind them, hands raised together beneath the first stars, energetic youthful camaraderie, vivid cobalt and warm coral colors, no text"
-    cover_with: 1280
-    cover_height: 768
+- name: The Orchard Keeps Time
+  style: "English indie folk, fingerpicked acoustic guitar, warm cello, steady percussion, intimate lead vocal with a wide final chorus"
+  lyrics: |
+    [Verse 1]
+    At the edge of town the orchard leans toward morning,
+    Old branches comb the mist from the fields.
+    My grandfather taught me the names of every tree,
+    And how a patient hand can coax a branch to yield.
+    We carried tin pails through the rows in September,
+    With cider-sweet air settling into our clothes.
+    He said the years were rings beneath the bark,
+    Each one a quiet record of what grows.
+
+    [Pre-Chorus]
+    Some seasons give and some seasons take,
+    Some roots hold fast while the high limbs shake.
+
+    [Chorus]
+    The orchard keeps time when the clocks run late,
+    In blossom and frost, in the fallen fruit.
+    We are only passing through its open gate,
+    But the ground remembers every careful root.
+    If I lose my way, let the old trees show
+    How to bend with the weather and still grow.
+
+    [Verse 2]
+    Now the ladder rests where the tall grass gathers,
+    And his empty chair looks west at the hill.
+    I came back alone with a box of pruning shears,
+    Unsure if I could learn the work he taught me still.
+    A little green leaf opened under my fingers,
+    Though the branch had been broken by the winter wind.
+    I heard his laugh in the crows above the barn,
+    And felt the long work of beginning again.
+
+    [Verse 3]
+    The neighbors came with jars and borrowed baskets,
+    Their children raced the rows at the end of the day.
+    We pressed the apples while the sunset turned copper,
+    And saved the smallest seeds to give away.
+    One day these trees will shade a different family,
+    Who'll learn that care is more than what we own.
+    The orchard will keep making room for the future,
+    Long after our footsteps have gone home.
+
+    [Bridge]
+    Nothing we love stays still forever;
+    The hand lets go, the roots hold together.
+    A life can end and still leave a way
+    For another green morning to find the day.
+
+    [Final Chorus]
+    The orchard keeps time when the clocks run late,
+    In blossom and frost, in the fallen fruit.
+    We are only passing through its open gate,
+    Yet the ground remembers every careful root.
+    If I lose my way, let the old trees show
+    How to bend with the weather and still grow.
+  cover_prompt: "Reflective indie-folk album art, an old apple orchard at dawn in early autumn, one weathered wooden ladder beneath a broad tree, a young person gathering apples as neighbors arrive with baskets, mist over distant fields, soft copper and moss-green colors, natural cinematic light, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Shan Hai Zhi Jian
+  style: "Mandarin Chinese cinematic folk pop, guzheng accents, piano, warm strings, restrained verses and an expansive hopeful chorus"
+  lyrics: |
+    [Verse 1]
+    我把旧地图折进背包，沿着清晨出发，
+    山影落在肩上，像一句没说完的话。
+    车窗外的村庄慢慢退成远处的灯，
+    妈妈在门前挥手，风替我回答。
+    我曾以为远方会把迷惘全部带走，
+    直到夜色降临，才听见心里的潮声。
+    原来每一段路都藏着熟悉的回音，
+    把走散的勇气，一点一点唤醒。
+
+    [Pre-Chorus]
+    山很高，海很宽，脚步也会疲倦，
+    可天亮以前，星光一直没有走远。
+
+    [Chorus]
+    在山海之间，我寻找自己的方向，
+    让风吹过脸庞，让河流记住愿望。
+    不必赶在谁的前面，不必假装坚强，
+    一步一步走过黑夜，也能走到有光的地方。
+    若故乡在身后，若明天仍漫长，
+    心里那盏灯，会陪我越过山海的回响。
+
+    [Verse 2]
+    我遇见修桥的老人，听他讲洪水与春天，
+    他把一颗小石子放进我的掌心里面。
+    他说河水绕过岩石，从来不是认输，
+    是找到另一条路，仍然奔向平原。
+    我把这句话带进拥挤陌生的城市，
+    在窗边种下一盆从家乡带来的花。
+    雨落在屋檐，像远方寄来的信，
+    写着不管走多远，总有人等我回家。
+
+    [Verse 3]
+    后来我学会停下，看看路旁的云，
+    学会把没完成的梦，放进明天继续。
+    那些曾经害怕失去的名字和声音，
+    成了我穿过风雨时，最温柔的地图。
+    山那边仍有山，海的尽头还有潮汐，
+    可我不再要求答案一次说清。
+    当脚下这一寸土地终于变得熟悉，
+    我知道远行也能让人回到自己。
+
+    [Bridge]
+    若你也在夜路上，别急着追赶太阳，
+    每颗星都用自己的速度发亮。
+    把疲惫交给风，把希望留在胸膛，
+    明天会从你愿意再迈步的地方开始。
+
+    [Final Chorus]
+    在山海之间，我找到了自己的方向，
+    让风吹过脸庞，让河流带走忧伤。
+    不必赶在谁的前面，我们并肩歌唱，
+    一步一步走过黑夜，就能走到有光的地方。
+    无论故乡多远，无论明天多漫长，
+    心里那盏灯，会陪我们越过山海的回响。
+  cover_prompt: "Mandarin folk-pop album cover, a lone traveler on a mountain pass looking toward a distant silver sea at sunrise, a small hometown map tucked into a backpack, winding river below, layered blue mountains and pale gold clouds, poetic cinematic landscape, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Yoake No Eki
+  style: "Japanese alternative pop, piano-led verses, understated drums, shimmering guitar, emotional strings opening into a bright chorus"
+  lyrics: |
+    [Verse 1]
+    夜明け前の駅に　白い息が浮かぶ
+    古いベンチの端で　切符を握りしめた
+    改札の向こうには　眠った町の灯り
+    君が笑った坂道も　窓の外へ消える
+    何度も書き直した　短い手紙の言葉
+    伝えられないまま　鞄の底にしまう
+    発車を告げる声が　静けさをほどいて
+    まだ知らない明日へ　列車が走り出す
+
+    [Pre-Chorus]
+    離れることだけが　別れじゃないと
+    風の音がそっと　教えてくれた
+
+    [Chorus]
+    夜明けの駅から　僕らは旅立つ
+    それぞれの夢を　胸に抱きながら
+    遠く離れても　同じ空を見上げ
+    迷った夜には　あの日の歌を思い出す
+    さよならの先に　続いている道を
+    小さな勇気で　歩いていこう
+
+    [Verse 2]
+    窓に映る顔は　少し大人びていて
+    知らない町の名前が　ひとつずつ近づく
+    雨の日のホームで　傘を寄せた人や
+    眠れない夜に読んだ　本のページの匂い
+    出会った人の声が　心に積もるたび
+    帰る場所の形も　少しずつ変わった
+    それでも夕暮れに　遠い汽笛を聞けば
+    あの町の川辺まで　想いは戻っていく
+
+    [Verse 3]
+    いつか同じ駅で　また会える日が来たら
+    あの日言えなかった　言葉を渡したい
+    大きな夢の話も　失敗した話も
+    笑いながら話せる　自分でいたいんだ
+    旅は終わるために　始まるのではなく
+    新しい景色の中　自分を知るため
+    発車ベルの余韻が　胸の奥で鳴る
+    その音を道しるべに　今日も歩いていく
+
+    [Bridge]
+    さよならは扉を閉じる音じゃない
+    次のページを開く　合図になる
+    遠くの君にも　この歌が届くなら
+    同じ朝を生きていると伝えたい
+
+    [Final Chorus]
+    夜明けの駅から　僕らは旅立つ
+    それぞれの夢を　今も抱きながら
+    遠く離れても　同じ空の下で
+    迷った夜には　あの日の歌を口ずさむ
+    さよならの先に　続いている道を
+    確かな足音で　歩いていこう
+  cover_prompt: "Japanese alternative-pop artwork, a quiet rural train platform just before sunrise, one young traveler holding a paper ticket, the departing train reflecting a pale peach sky, distant town lights and misty hills, wistful yet hopeful, cinematic composition, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Mua Nuoc Noi
+  style: "Vietnamese contemporary folk, dan tranh and acoustic guitar, gentle river percussion, expressive warm vocal and communal chorus"
+  lyrics: |
+    [Verse 1]
+    Nước từ thượng nguồn về qua bờ tre trước ngõ,
+    Con đường quen bỗng hóa thành một nhánh sông.
+    Má xắn quần, chèo xuồng qua vườn đầy bông súng,
+    Ba kê cao chiếc radio tránh mưa dông.
+    Lũ trẻ cười vang khi cá linh về theo nước,
+    Khói bếp thơm bay quấn lấy mái nhà tranh.
+    Mùa nước nổi mang phù sa về bồi đắp,
+    Dẫu mênh mông, quê mình vẫn xanh lành.
+
+    [Pre-Chorus]
+    Nước lên thì mình kê thêm chiếc sàn,
+    Gió đổi chiều thì nắm lấy tay nhau.
+
+    [Chorus]
+    Ơi con nước, đưa mùa qua đồng rộng,
+    Chở tiếng hò đi khắp những bờ xa.
+    Nhà mình nhỏ mà tình người thì rộng,
+    Có nhau rồi, sóng lớn cũng hóa hiền hòa.
+    Khi con nước ròng, bùn non còn ở lại,
+    Mai lúa lên xanh từ những tháng ngày qua.
+
+    [Verse 2]
+    Ngoại kể ngày xưa qua sông không có bến,
+    Người gọi đò bằng ngọn đèn dầu leo lét đêm.
+    Ngoại giữ trong chum vài hạt giống tốt,
+    Chờ đất khô rồi gieo xuống cạnh thềm.
+    Năm nay con về khi mùa mưa vừa chạm ngõ,
+    Thấy tóc ngoại bạc thêm dưới mái hiên nhà.
+    Ngoại hỏi thành phố có còn nhiều khói bụi,
+    Con chỉ cười: ở đâu cũng nhớ phù sa.
+
+    [Verse 3]
+    Mấy đứa bạn xưa giờ đi làm xa xứ,
+    Đứa gửi tiền về, đứa gửi tiếng cười qua điện thoại.
+    Tụi mình hẹn nhau bên bờ đê đầu xóm,
+    Chia nồi canh chua, kể chuyện những ngày dài.
+    Trăng rải bạc lên mặt nước đang lặng,
+    Một chiếc xuồng chở tiếng hát về ngang.
+    Con hiểu quê nhà đâu chỉ là nơi trở lại,
+    Mà là cách người ta đợi nhau sang.
+
+    [Bridge]
+    Nước có lúc dâng cao, có khi lùi xa,
+    Đời người cũng qua bao mùa nắng mưa.
+    Cứ gieo điều tử tế vào lòng đất,
+    Rồi ngày mai sẽ nở những bông mùa.
+
+    [Final Chorus]
+    Ơi con nước, đưa mùa qua đồng rộng,
+    Chở tiếng hò đi khắp những bờ xa.
+    Nhà mình nhỏ mà tình người thì rộng,
+    Có nhau rồi, sóng lớn cũng hóa hiền hòa.
+    Khi con nước ròng, phù sa còn ở lại,
+    Mai lúa lên xanh trên đất mẹ bao la.
+  cover_prompt: "Vietnamese folk album cover during the Mekong flood season, a family rowing a small wooden boat past a stilted riverside home, water lilies and floating hyacinths, children laughing as fishers bring in their nets, warm cooking smoke and soft monsoon light, vivid but natural, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Letters To The Deep
+  style: "English atmospheric rock, rolling toms, electric guitar swells, piano, earnest vocal, dramatic ocean-sized final chorus"
+  lyrics: |
+    [Verse 1]
+    We wrote our questions on a paper boat,
+    And let it drift beyond the harbor wall.
+    The tide took every careless word we spoke,
+    Then brought back shells too small to hold it all.
+    My sister kept a jar of beach glass,
+    Green as the sea beneath a cloudy sky.
+    She said the shore remembers every footstep,
+    Even when the names and footprints dry.
+
+    [Pre-Chorus]
+    Beneath the waves, the dark is full of sound;
+    The world is breathing where we cannot see.
+
+    [Chorus]
+    Send our letters to the deep blue water,
+    Ask the turning tide to carry them through.
+    We were born beside this restless border,
+    We belong to the wide and changing blue.
+    If we take more than the earth can give us,
+    Let us learn to mend what we undo.
+    Leave a cleaner coast for those who follow;
+    Let the sea keep singing something true.
+
+    [Verse 2]
+    At dawn we walked the cove with canvas sacks,
+    While gulls drew circles over broken foam.
+    We found a net tangled around the rocks,
+    And pulled it free before the boats came home.
+    A child held up a bottle cap like treasure,
+    Then asked who had forgotten it behind.
+    We had no easy answer for the question,
+    So we began with what we could remove.
+
+    [Verse 3]
+    The harbor lights came on across the water,
+    Each window like a promise on the shore.
+    The fishermen repaired their weathered ropes,
+    And neighbors shared the work from door to door.
+    No single hand can turn the tide alone,
+    But many hands can change what reaches land.
+    Tomorrow starts in ordinary choices,
+    In how we care for what we do not own.
+
+    [Bridge]
+    The ocean does not need our grand promises;
+    It needs the patient work we do each day.
+    A thousand small repairs can shape a future,
+    Where life has room to find another way.
+
+    [Final Chorus]
+    Send our letters to the deep blue water,
+    Let the turning tide carry our reply:
+    We will guard the fragile, living border,
+    Keep the shore and open sky in view.
+    If we take more than the earth can give us,
+    We can mend the harm and start anew.
+    Leave a cleaner coast for those who follow;
+    Let the sea keep singing something true.
+  cover_prompt: "Atmospheric rock album artwork, a small coastal community cleaning a rocky shore at dawn, reusable canvas sacks, glassy blue water and seabirds, harbor lights fading as the sun rises, environmental care shown with hope rather than disaster, cinematic sea blues and silver, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Zhi Yuan De Feng Zheng
+  style: "Mandarin Chinese acoustic pop, guzheng and piano, light hand percussion, tender father-child duet feeling, uplifting full-band chorus"
+  lyrics: |
+    [Verse 1]
+    父亲把竹条削成细细的骨架，
+    我在旧报纸上画了一只蓝色的鸟。
+    浆糊粘住指尖，窗外风吹过院墙，
+    他笑着说，别怕，风会帮你飞高。
+    我踮起脚尖，把线轴握得很紧，
+    小小的纸鸢摇摇晃晃离开屋檐。
+    那一刻天空像突然打开的门，
+    我追着它跑过田埂和金色的麦田。
+
+    [Pre-Chorus]
+    线在手里，风在远方，
+    你说放开一点，它才看得见天光。
+
+    [Chorus]
+    飞吧，飞吧，飞向更远的地方，
+    穿过白云，越过山岗。
+    我会记得你掌心的温度，
+    和那句跌倒以后也要自己站起来的话。
+    飞吧，飞吧，风再大也别慌张，
+    只要心里有家，远方就不再遥远。
+
+    [Verse 2]
+    后来我背上行囊，离开熟悉的小城，
+    车站的钟声把夏天敲得很长。
+    父亲没有多说，只把一把旧伞递给我，
+    叮嘱我遇见暴雨，先找地方躲藏。
+    城市的霓虹很亮，夜晚却有些空，
+    我在加班的窗边想起那只纸鸢。
+    电话那头他说院里的桂花开了，
+    风吹过的时候，香气越过了山。
+
+    [Verse 3]
+    多年以后我带着自己的孩子回家，
+    父亲的头发已经像冬天一样白。
+    我们重新削竹条，重新糊好纸面，
+    他握住孩子的手，让她学着放线。
+    纸鸢飞过屋顶，飞过老树的影子，
+    三个人的笑声落在晚霞之间。
+    我突然明白离开不是忘记故乡，
+    是把它的温柔带到每一个明天。
+
+    [Bridge]
+    线会松，也会紧，风会变换方向，
+    爱不是把谁留在身旁。
+    是你敢去看更远的天，
+    我仍在这里，为你留一盏灯光。
+
+    [Final Chorus]
+    飞吧，飞吧，飞向更远的地方，
+    穿过白云，越过山岗。
+    我会记得你掌心的温度，
+    也把这份温柔交到下一双手上。
+    飞吧，飞吧，风再大也别慌张，
+    只要心里有家，我们就不会走散。
+  cover_prompt: "Mandarin acoustic-pop album art, a father teaching his young child to fly a handmade blue paper kite in a golden wheat field, an older grandparent watching from a farmhouse doorway, warm late-summer breeze, affectionate multigenerational scene, soft cinematic sunlight, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Hoshikuzu No Toshokan
+  style: "Japanese dream pop, soft piano, brushed drums, ambient guitar, delicate vocal that grows into a luminous orchestral refrain"
+  lyrics: |
+    [Verse 1]
+    閉館時間を過ぎた図書館で
+    雨の匂いが本の背表紙に残る
+    返し忘れた一冊を抱えたまま
+    窓辺の椅子に静かに座った
+    誰かの旅を描いた古い物語
+    ページの間から銀杏の葉が落ちる
+    何年も前の秋を閉じ込めた色が
+    今夜の私に小さく話しかける
+
+    [Pre-Chorus]
+    読み終えた言葉も消えはしない
+    心の奥で星のように光る
+
+    [Chorus]
+    星屑の図書館で　夢を借りていこう
+    まだ知らない世界の扉を開こう
+    誰かが残した一行の願いが
+    暗い夜道を照らす灯りになる
+    いつか返すその日まで　大切に抱いて
+    私だけの物語を続けていこう
+
+    [Verse 2]
+    窓の外では終電が走り去り
+    街の明かりが水たまりに揺れる
+    机に並んだ名も知らない人たちも
+    それぞれの明日を胸に帰っていく
+    司書さんは鍵をかける前に
+    「またおいで」と柔らかく笑った
+    その短い言葉の余白の中に
+    帰る場所を見つけた気がした
+
+    [Verse 3]
+    春になればこの本を返しに来よう
+    新しい誰かがページを開くように
+    私が書きためた小さな詩も
+    いつか誰かの夜に届くだろうか
+    完璧な答えを見つけなくてもいい
+    読み進めるたび景色は変わる
+    しおりの位置を明日に置いて
+    朝の光へ歩き出していく
+
+    [Bridge]
+    物語は終わるたび　次の声を呼ぶ
+    ひとりで読んだ夜も　誰かにつながる
+    静かな頁の奥で　未来が息をする
+    その小さな音を忘れないで
+
+    [Final Chorus]
+    星屑の図書館で　夢を借りていこう
+    まだ知らない世界の扉を開こう
+    誰かが残した一行の願いを
+    今度は私が誰かへ手渡そう
+    いつか返すその日まで　大切に抱いて
+    私だけの物語を歌っていこう
+  cover_prompt: "Japanese dream-pop album cover, a solitary reader in a warm old library after closing time, tall shelves and rain-streaked windows, tiny star-like reflections hovering among the books, a pressed yellow ginkgo leaf on an open page, midnight indigo with soft amber lamps, magical realism, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Qua Mien Gio Cat
+  style: "Vietnamese cinematic folk rock, acoustic guitar, dan bau lines, hand drums, resilient vocal and a broad communal final chorus"
+  lyrics: |
+    [Verse 1]
+    Gió từ miền cát thổi qua hàng phi lao,
+    Mang vị mặn của biển và màu nắng trên vai.
+    Mẹ gánh nước về khi trời chưa sáng,
+    Bóng mẹ dài qua những vệt cát khô rang.
+    Cha vá lại mái nhà sau mùa bão cũ,
+    Buộc từng tàu lá dừa vào khung tre cong.
+    Trong sân nhỏ, em gieo mấy hạt đậu,
+    Tin một ngày xanh sẽ trở lại trên đồng.
+
+    [Pre-Chorus]
+    Đường xa thì đi chậm, trời cao cứ ngước nhìn,
+    Mỗi bàn tay góp lại, cát cũng thành đất lành.
+
+    [Chorus]
+    Qua miền gió cát, ta đi cùng nhau,
+    Dẫu chân trần bỏng rát dưới trời cao.
+    Giữ một giọt mưa trong lòng bàn tay,
+    Giữ tiếng ru nhà mình qua tháng ngày.
+    Khi biển nổi giông, khi đồng khô nứt nẻ,
+    Tình người còn xanh như lá sau mưa.
+    Qua miền gió cát, ta đi cùng nhau,
+    Bình minh sẽ tìm về trên mái nhà.
+
+    [Verse 2]
+    Xóm trên góp tre, xóm dưới góp công,
+    Đào một con mương dẫn nước qua vườn.
+    Bà mang nồi chè ra ngồi bên ngõ,
+    Trẻ con chuyền tay những trái sim thơm.
+    Có người đi xa gửi về chiếc máy bơm,
+    Có người giữ giống lúa chịu hạn trong chum.
+    Mùa đầu tiên nước về ngang bờ ruộng,
+    Cả xóm đứng nhìn, mắt sáng như trăng.
+
+    [Verse 3]
+    Năm tháng cuốn người đi nhiều ngả,
+    Có đứa vào Nam, có đứa lên thành phố xa.
+    Nhưng mỗi lần nghe câu hò trên radio,
+    Lại nhớ bờ cát nơi mình đã lớn lên.
+    Con trở về khi tóc cha thêm bạc,
+    Thấy mẹ vẫn chừa một chỗ cạnh hiên.
+    Mâm cơm quê không nhiều món lạ,
+    Mà đủ làm ấm cả một hành trình dài.
+
+    [Bridge]
+    Ta không chọn được trời mưa hay nắng,
+    Nhưng chọn cách mình đứng cạnh bên nhau.
+    Từ hạt giống nhỏ, từ lời thăm hỏi,
+    Mình dựng ngày mai trên mảnh đất này.
+
+    [Final Chorus]
+    Qua miền gió cát, ta đi cùng nhau,
+    Dẫu chân trần bỏng rát dưới trời cao.
+    Giữ một giọt mưa trong lòng bàn tay,
+    Giữ tiếng ru nhà mình qua tháng ngày.
+    Khi biển nổi giông, khi đồng khô nứt nẻ,
+    Tình người còn xanh như lá sau mưa.
+    Qua miền gió cát, ta đi cùng nhau,
+    Bình minh ở đây, trên mái nhà mình.
+  cover_prompt: "Vietnamese folk-rock cover in a central coastal village, family and neighbors repairing a wind-bent thatched roof and digging a small irrigation channel through sandy fields, rows of casuarina trees and distant sea, first rain clouds gathering after drought, hopeful earthy cinematic palette, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: After The Last Bell
+  style: "English piano-driven alternative pop, nostalgic electric guitar, live drums, layered youthful harmonies and an anthemic final refrain"
+  lyrics: |
+    [Verse 1]
+    The last bell rang through the old brick hallway,
+    And every locker swallowed one more year.
+    We signed our names on the back of a yearbook,
+    Made promises too large to fit in there.
+    The gym was empty but the floor still glittered
+    With paper stars from last night's dance.
+    We stood beneath the scoreboard after midnight,
+    Afraid to call this ending a beginning.
+
+    [Pre-Chorus]
+    We had no map and hardly any money,
+    But every road looked possible that night.
+
+    [Chorus]
+    After the last bell, the world opens wide,
+    With a thousand wrong turns and a thousand new skies.
+    We will lose our way, we will change our minds,
+    We will find each other in the passing lights.
+    Keep the song we sang on the football field;
+    Keep the names we wrote where the paint wore thin.
+    After the last bell, whatever comes next,
+    We are more than the place where we began.
+
+    [Verse 2]
+    Years later, we met in a crowded station,
+    With tired eyes and stories we had earned.
+    Someone had a baby, someone changed their name,
+    Someone came back after every bridge had burned.
+    We laughed about the band that missed its entrance,
+    The science fair volcano made of clay.
+    For a little while the years became a hallway,
+    And we were young enough to stay all day.
+
+    [Verse 3]
+    Some of us stayed near the old river,
+    Some crossed oceans, some never settled down.
+    The empty lot is now a corner market,
+    The library still keeps the windows facing town.
+    I pass the school when evening paints it gold,
+    And hear the distant practice of a song.
+    The bell may ring for someone else tomorrow;
+    The things we learned still travel with us on.
+
+    [Bridge]
+    Growing up is not a door that closes;
+    It is a road that bends beyond our sight.
+    We carry every borrowed bit of courage,
+    And lend it when a friend can't find the light.
+
+    [Final Chorus]
+    After the last bell, the world opens wide,
+    With a thousand wrong turns and a thousand new skies.
+    We have lost our way, we have changed our minds,
+    We have found each other in the passing lights.
+    Keep the song we sang on the football field;
+    Keep the names we wrote where the paint wore thin.
+    After the last bell, whatever comes next,
+    We are more than the place where we began.
+  cover_prompt: "Nostalgic alternative-pop artwork, an empty high-school hallway at golden hour after graduation, scattered paper stars and handwritten yearbook pages, a few friends seen through open gym doors beneath a glowing scoreboard, bittersweet but hopeful, cinematic warm light, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Yue Liang Zhao Hui Lai
+  style: "Mandarin Chinese modern folk ballad, acoustic guitar, bamboo flute, soft percussion, sincere vocal with a warm singalong chorus"
+  lyrics: |
+    [Verse 1]
+    月亮照回来，照亮窗边的旧书桌，
+    照亮母亲种下的薄荷和栀子花。
+    我离开那天，行李装得太满，
+    却忘了带走门口那句慢慢回家。
+    城市的夜很深，灯火挤在玻璃上，
+    每个人都像赶路，却说不清要去哪。
+    我把疲惫藏进没有寄出的信里，
+    直到一阵晚风，把故乡的味道吹来。
+
+    [Pre-Chorus]
+    走过多少街巷，越过多少人海，
+    总有一扇窗，为我留着等待。
+
+    [Chorus]
+    月亮照回来，照在回家的路上，
+    照过旧桥流水，也照过新的远方。
+    若我走得太久，请替我把灯点亮，
+    我会带着风霜，也带着梦回到你身旁。
+    月亮照回来，照见脸上的时光，
+    原来最深的牵挂，从来不需要说谎。
+
+    [Verse 2]
+    父亲把院门修好，换上新的木闩，
+    他说老屋漏雨的地方已经补上。
+    邻居家的孩子长高了许多，
+    追着一只纸飞机跑过晒谷场。
+    我坐在门槛边听他们说近况，
+    也说起这些年跌跌撞撞的愿望。
+    没有人笑我绕了很远的弯路，
+    只把热茶推近，说先吃饭再讲。
+
+    [Verse 3]
+    清晨我陪母亲走到河边，
+    她认出每一棵树，也记得每一道弯。
+    河水带走落叶，却留下岸边的青苔，
+    像日子带走许多，却把温柔留下来。
+    离开时我没有再说永远不走，
+    也不再害怕远方会把自己改变。
+    因为家的方向不是一条固定的线，
+    是有人知道我的名字，等我回来。
+
+    [Bridge]
+    若你也在陌生城市醒来，
+    看一看今晚的月亮吧。
+    它照过每一扇亮着的窗，
+    也照着你走过的路和想念的人。
+
+    [Final Chorus]
+    月亮照回来，照在回家的路上，
+    照过旧桥流水，也照过新的远方。
+    若你走得太久，请记得把灯点亮，
+    总有一份牵挂，会陪你走过漫长。
+    月亮照回来，照见我们脸上的时光，
+    原来最深的牵挂，不会被距离遗忘。
+  cover_prompt: "Mandarin folk-ballad cover, a traveler returning to a modest family courtyard at night, mother tending jasmine and mint beside a warmly lit window, full moon above an old stone bridge and quiet river, reunion expressed through small gestures, gentle blue and amber palette, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Seoul After Midnight
+  style: "Korean indie pop, mellow electric piano, city-pop bass, soft synth textures, intimate Korean vocal building to a warm ensemble chorus"
+  lyrics: |
+    [Verse 1]
+    막차가 떠난 뒤의 골목은 조용해지고
+    편의점 불빛만 젖은 도로를 비춰
+    야간 근무를 마친 사람들의 어깨 위로
+    새벽의 찬 공기가 천천히 내려와
+    나는 종이컵의 온기를 두 손에 담고
+    오늘 하루의 무게를 잠시 내려놔
+    빌딩 사이 작은 창마다 다른 꿈들이
+    꺼지지 않은 별처럼 밤을 지키고 있어
+
+    [Pre-Chorus]
+    멀리서 첫 버스의 엔진 소리가 들려
+    아직 끝나지 않은 마음을 깨워
+
+    [Chorus]
+    서울의 자정 너머, 우리 아직 여기 있어
+    각자의 외로운 밤을 지나 같은 하늘 아래
+    이름 모를 창문마다 누군가의 노래가 켜져
+    작은 불빛 하나로도 길을 찾을 수 있어
+    오늘이 아무리 길고 희미하게 느껴져도
+    아침은 우리를 잊지 않고 찾아올 거야
+
+    [Verse 2]
+    횡단보도 앞에서 잠든 꽃을 파는 아저씨
+    마지막 전철을 놓친 학생의 웃음소리
+    병원 창가에 기대어 잠깐 눈을 붙인 간호사
+    모두 다른 이유로 이 밤을 건너고 있어
+    나는 휴대전화 속 오래된 사진을 열어
+    바닷가에서 함께 웃던 얼굴을 바라봐
+    보고 싶다는 말은 아직 보내지 못했지만
+    마음은 먼저 그곳의 파도에 닿아 있어
+
+    [Verse 3]
+    빵집 문이 열리고 고소한 냄새가 번져
+    청소차가 지나간 자리에 물기가 반짝여
+    어제의 실수도 아직 나를 따라오지만
+    한 걸음 더 걸으면 조금 멀어질 거야
+    누군가 먼저 건넨 따뜻한 캔커피 하나
+    말없이 내민 친절이 긴 밤을 바꿔
+    낯선 사람들 사이에 작은 다리가 놓여
+    우리는 서로 모른 채 서로를 살게 해
+
+    [Bridge]
+    창문을 열어 봐, 같은 바람이 불어와
+    혼자라고 느낀 마음도 잠시 쉬어 가
+    불을 켜 둔 누군가가 저기에도 있다면
+    이 밤의 끝에서 우리 다시 만날 거야
+
+    [Final Chorus]
+    서울의 자정 너머, 우리 여전히 여기 있어
+    각자의 긴 하루를 지나 새 아침을 맞이해
+    이름 모를 창문마다 작은 노래가 번져
+    서로의 불빛을 따라 집으로 돌아가
+    오늘이 아무리 길고 희미하게 느껴져도
+    아침은 우리를 잊지 않고 찾아올 거야
+  cover_prompt: "Korean indie-pop album art, a quiet Seoul side street after midnight, a night-shift worker holding a warm paper cup beneath a convenience-store awning, apartment windows glowing above rain-polished pavement, first hint of dawn between buildings, intimate cinematic blue and amber light, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Baramui Jip
+  style: "Korean acoustic folk, delicate guitar, gayageum accents, soft janggu pulse, expressive vocal and a spacious communal chorus"
+  lyrics: |
+    [Verse 1]
+    바람이 집을 찾아오는 섬의 아침
+    파도는 돌담 아래 낮은 말을 건네
+    어머니는 물질복을 챙겨 문을 나서고
+    아버지는 오래된 그물을 살펴보네
+    젖은 장갑 사이로 세월이 스며들고
+    해녀들의 숨비소리가 물 위에 번져
+    나는 마루 끝에 앉아 그 소릴 들으며
+    바다가 오늘도 무사하기를 빌어
+
+    [Pre-Chorus]
+    바람은 방향을 바꾸어도
+    돌아갈 집은 여기 있다고
+
+    [Chorus]
+    바람의 집, 파도의 집, 우리들의 작은 섬
+    검은 돌과 푸른 물이 서로를 품은 곳
+    멀리 떠난 마음도 물길을 따라 돌아와
+    부엌의 불빛 아래 다시 이름을 부르네
+    바다가 거칠어도 손을 놓지 않으면
+    우리는 서로의 집이 되어 줄 거야
+
+    [Verse 2]
+    해 질 무렵 어머니가 바구니를 내려놓고
+    젖은 머리칼을 수건으로 감싸네
+    오늘은 성게보다 조개가 많았다며
+    작은 웃음으로 저녁상을 준비해
+    이웃집 할머니는 갓 잡은 생선을 나누고
+    아이들은 마당에서 고무줄을 뛰어넘어
+    멀리서 들려오는 배의 엔진 소리 위로
+    오래된 민요가 저녁 공기를 채워
+
+    [Verse 3]
+    몇 해 뒤 나는 큰 도시로 길을 떠났고
+    네온과 빌딩 숲에서 바다를 잊은 듯했어
+    하지만 비 오는 밤 창가에 서면
+    파도처럼 밀려오는 섬의 냄새가 있어
+    어머니의 짧은 안부, 아버지의 기침 소리
+    편지 속에 눌러 담은 귤꽃 향기
+    그 모든 것이 먼 곳의 하루를 감싸
+    낯선 방 한구석에 작은 섬을 놓아
+
+    [Bridge]
+    바다는 떠나는 길이기도 하고
+    돌아오는 길이기도 해
+    수평선 너머를 오래 바라본 뒤에
+    우리는 서로의 목소리를 따라와
+
+    [Final Chorus]
+    바람의 집, 파도의 집, 우리들의 작은 섬
+    검은 돌과 푸른 물이 서로를 품은 곳
+    멀리 떠난 마음도 물길을 따라 돌아와
+    부엌의 불빛 아래 함께 저녁을 나누네
+    바다가 거칠어도 손을 놓지 않으면
+    우리는 서로의 집이 되어 줄 거야
+  cover_prompt: "Korean folk album artwork on Jeju Island, an older haenyeo diver returning to a black-stone shore at dusk with a woven seafood basket, family waiting beside a modest stone-walled home, wind moving silver grass, deep blue sea and a warm kitchen window, respectful and poetic, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Gwaenchanha Neoui Gyejeol
+  style: "Korean piano ballad, gentle piano and acoustic guitar, restrained strings, emotionally rich lead vocal growing into a reassuring final chorus"
+  lyrics: |
+    [Verse 1]
+    네가 처음 혼자 살던 작은 방에는
+    풀지 못한 상자들이 벽을 따라 쌓였지
+    창문 밖 공사장의 망치 소리 사이로
+    너는 괜찮다는 말을 매일 연습했어
+    새벽까지 켜 둔 책상 위의 스탠드
+    식어 버린 국과 접어 둔 시험지
+    누구에게도 말하지 못한 마음들이
+    조용히 네 베개 아래로 흘러내렸어
+
+    [Pre-Chorus]
+    잘해 내지 못한 하루도
+    네가 살아 낸 하루야
+
+    [Chorus]
+    괜찮아, 너의 계절은 아직 끝나지 않았어
+    꽃이 늦게 피는 나무도 봄을 만나
+    잠시 멈춘 발걸음은 길을 잃은 게 아니야
+    숨을 고르고 다시 바라보는 시간이야
+    세상이 너무 빠르게 앞서가는 것 같아도
+    너의 속도로 걸어도 괜찮아
+
+    [Verse 2]
+    오랜만에 찾아온 친구는 문 앞에 앉아
+    무슨 일이 있었는지 묻지 않고 기다렸어
+    함께 끓인 라면의 김이 방 안에 차오르고
+    오래 참았던 웃음이 조금씩 돌아왔지
+    너는 지난달의 실패를 천천히 말했고
+    친구는 자기 이야기도 꺼내 놓았어
+    완벽한 답 대신 따뜻한 물 한 잔이
+    두 사람 사이의 밤을 견디게 했어
+
+    [Verse 3]
+    겨울이 물러난 뒤 골목에 목련이 피고
+    이삿짐 상자는 하나씩 책장으로 바뀌었어
+    너는 좋아하는 노래를 다시 틀어 놓고
+    아침마다 작은 화분에 물을 주었지
+    어느 날 면접에서 좋은 소식을 듣고
+    다른 날에는 또 마음이 무너지기도 해
+    그래도 이제는 넘어지는 순간마다
+    스스로의 손을 잡아 일으킬 수 있어
+
+    [Bridge]
+    빠른 대답을 찾지 않아도 돼
+    모든 상처가 오늘 낫지 않아도 돼
+    네가 여기 있다는 그 한 가지로
+    내일을 시작하기엔 충분해
+
+    [Final Chorus]
+    괜찮아, 너의 계절은 계속 이어지고 있어
+    작은 잎이 돋는 소리도 봄의 시작
+    잠시 멈춘 발걸음도 너의 길 한가운데
+    돌아보고 쉬어 가는 소중한 시간이야
+    세상이 아무리 멀리 앞서가는 것 같아도
+    너의 속도로 걸으면 너에게 닿을 거야
+  cover_prompt: "Korean piano-ballad cover, a young person sitting by a small apartment window at early spring, exam papers and moving boxes slowly replaced by a bookcase and a thriving potted magnolia, a close friend sharing a simple late-night meal, tender hopeful natural light, no text"
+  cover_with: 1280
+  cover_height: 768
+
+- name: Uriui Jageun Byeol
+  style: "Korean upbeat pop-rock, bright electric guitars, punchy live drums, youthful group harmonies and a triumphant singalong chorus"
+  lyrics: |
+    [Verse 1]
+    운동장 끝 오래된 골대 아래
+    우리는 졸업 사진을 찍고 흩어졌어
+    커다란 꿈은 서로 다른 모양이었고
+    가진 용기보다 걱정이 더 많았지
+    첫 출근 날 길을 잘못 들어 헤매고
+    첫 공연에선 박자를 놓쳐 웃었어
+    잘될 거라고 믿었던 일들이 틀어져도
+    너는 다음 곡을 만들자고 했지
+
+    [Pre-Chorus]
+    넘어져도 무릎의 먼지를 털고
+    아직 남은 목소리로 세어 봐
+
+    [Chorus]
+    우리는 작은 별, 서로를 비추는 별
+    가장 어두운 밤에 더 잘 보이는 빛
+    혼자서는 몰랐던 길을 함께 그리며
+    한 걸음씩 우리의 내일을 켜
+    높은 곳에 닿지 않아도 충분히 빛나
+    네가 여기 있고 내가 여기 있으니까
+
+    [Verse 2]
+    한 친구는 바다 건너 도시로 떠났고
+    한 친구는 오래 바라던 가게를 열었어
+    누군가는 잠시 모든 걸 내려놓았고
+    누군가는 다시 학교 문을 두드렸지
+    우리는 달라진 시간표를 맞춰 보며
+    늦은 저녁 작은 식탁에 둘러앉아
+    지난달의 눈물과 이번 주의 농담을
+    접시 사이에 나누어 놓았어
+
+    [Verse 3]
+    오래된 동네엔 새 건물이 들어서고
+    그 아래 골목엔 여전히 분식집이 있어
+    사장님은 우리의 이름을 기억하고
+    익숙한 노래를 라디오에서 틀어 주네
+    세상은 자꾸 우리를 비교하려 하지만
+    각자의 길에는 각자의 계절이 있어
+    우리가 함께 버틴 수많은 밤이
+    내일을 향한 든든한 합창이 돼
+
+    [Bridge]
+    누가 먼저 도착하는지는 중요하지 않아
+    뒤처진 친구를 기다리는 마음이
+    우리가 걸어온 길을 빛나게 해
+    오늘도 서로의 이름을 크게 불러
+
+    [Final Chorus]
+    우리는 작은 별, 서로를 비추는 별
+    가장 어두운 밤에 더 선명해지는 빛
+    넘어지고 다시 일어선 모든 순간이
+    한 줄씩 모여 우리의 노래가 돼
+    높은 곳에 닿지 않아도 충분히 빛나
+    네가 여기 있고 우리가 함께 있으니까
+  cover_prompt: "Korean pop-rock album artwork, four longtime friends meeting on a rooftop at twilight, city skyline and distant school athletic field visible behind them, hands raised together beneath the first stars, energetic youthful camaraderie, vivid cobalt and warm coral colors, no text"
+  cover_with: 1280
+  cover_height: 768

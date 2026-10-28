@@ -1,83 +1,68 @@
 # Mu
 
-Mu is a command-line tool for validating setup requirements and planning or running configurable media-processing pipelines. A spec describes repair actions, processors, and pipeline steps; an input file provides the context and collections used to expand pipeline runs.
-
-## Requirements
-
-- Python 3.13 or newer
-- [uv](https://docs.astral.sh/uv/)
-- The external programs and models declared by the spec you use
-
-Run Mu from this checkout with `uv run mu ...`. To install the project into the current environment, use `uv sync`.
+Mu is a Python 3.13+ CLI for executing parameterized pipelines described by YAML or JSON specs. Specs define reusable workloads (subprocesses), pipeline parameters and nodes, actions, and conditions.
 
 ## Commands
 
 ```sh
-# Check the validation conditions in a spec without running repair actions.
-uv run mu spec validate examples/song-with-cover/spec.yaml --cache_dir /tmp
+# Run one or more input objects (YAML or JSON files)
+uv run mu run --spec ./spec.yaml --working_dir ./work \
+  --request song-with-cover,./song.yaml
 
-# Run repair actions declared in the spec.
-uv run mu spec repair examples/song-with-cover/spec.yaml --cache_dir /tmp
+# Repeat --request to run multiple pipeline inputs
+uv run mu run --request song-with-cover,./song-a.yaml \
+  --request song-with-cover,./song-b.json
 
-# List cached GGUF and safetensors models.
-uv run mu models --cache_dir /tmp
+# Fetch a remote spec.json/YAML and run its master-flow requests
+uv run mu master-flow run https://example.invalid/spec.json \
+  --working_dir ./work --unit_name worker-1
 
-# Expand input context into processor tasks and preview repair checks and scheduling.
-uv run mu plan song-with-cover examples/song-with-cover/input.yaml \
-  --spec examples/song-with-cover/spec.yaml --cache_dir /tmp
+# Specify available devices as family,index,max-units; repeat as needed
+uv run mu run --device cuda,0,4 --device cuda,1,2 \
+  --request song-with-cover,./song.yaml
 
-# Repair prerequisites, prepare the input, and execute the pipeline.
-uv run mu run song-with-cover examples/song-with-cover/input.yaml \
-  --spec examples/song-with-cover/spec.yaml --cache_dir /tmp \
-  --output_dir ./output
-
-# Re-run every processor even when its step outputs already pass validation.
-uv run mu run song-with-cover examples/song-with-cover/input.yaml \
-  --spec examples/song-with-cover/spec.yaml --cache_dir /tmp \
-  --output_dir ./output --force-validate
+uv run mu --help
 ```
 
-`plan` is a preview: it checks repair validations and builds the task list without running repair actions or processors. `run` validates the spec first, runs repair actions if checks need repair, prepares the input's `before` actions, validates each step's declared outputs, then schedules remaining processor tasks. Steps whose outputs already pass are skipped; `--force-validate` makes `run` execute them again. Tasks with failed dependencies are skipped. Processor output is kept quiet; Mu prints task progress and failure details.
+`--working_dir` defaults to the current directory. Mu creates `output/` and `cache/` there. `--sys_cache_dir` defaults to `~/.cache`. Unless `--device` is supplied, Mu detects supported NVIDIA/AMD GPUs. Workload `units` defaults to zero (CPU-only); each unit represents 4 GiB of VRAM.
 
-The spec and input paths default to `./spec.yaml` and the input path must be supplied. Cache defaults to `~/.cache`; output defaults to `./output`. CLI options use underscores, for example `--cache_dir` and `--output_dir`.
+## Spec format
 
-## Specs and inputs
-
-See [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml) and [`examples/song-with-cover/input.yaml`](examples/song-with-cover/input.yaml) for a complete example with twelve English song requests.
-
-A spec declares:
-
-- `repair`: setup actions and their validation checks.
-- `processors`: executable targets, arguments, optional `device_args`, and VRAM `units`.
-- `pipelines`: ordered processor steps and `waiting-for` dependencies.
-- Per-step `validate`: output checks such as `file-existed`; a passing step is not run again unless `--force-validate` is set.
-- Per-step `before`: actions run immediately before that processor, such as `create-dir` to prepare output folders.
-
-An input is a context space: it can define any values or collections, such as `songs`, `packages`, or `requests`. A pipeline can select a collection with `for-each` and name the current item with `as`; for example, `for-each: songs` and `as: song` makes each song its own pipeline run. If `as` is omitted, the selected item is available as `{item[...]}`; selecting the conventional `requests` collection also keeps the legacy `{request[...]}` alias. Without `for-each`, Mu expands `input.requests` for older specs, or runs once against the input context if there is no `requests` collection. Templates can reference input values directly or through `{input[key]}`, built-in values such as `{cache_dir}` or `{models[key]}`, and built-ins through `{global[key]}`.
-
-Template contexts have three useful scopes: global values (`cache_dir`, `output_dir`, `working_dir`, and `models`), the selected item (`{item[...]}` or its alias such as `{song[...]}`), and the current pipeline step (`{step[...]}`). Processor arguments can use `{step[...]}` to read step-specific values such as `input`, `output`, or `request`, while the step itself can use the selected item. This keeps reusable processor definitions separate from per-pipeline paths and options.
-
-`mu models --cache_dir PATH` prints each extensionless relative model key and its resolved filesystem path, for example `vae/encoder -> /cache/models/vae/encoder.safetensors`. Those keys can be used directly in `{models[key]}` templates.
-
-Repair actions and validations are extensible registries. Current action types include `command`, `create-dir`, `write-jsons-from-context`, and `write-json-from-context`; current validation conditions include `file-existed`, `exit-zero`, and `exit-one`. The exit checks accept a command argument list and pass only when the process returns the named status. `write-json-from-context` writes one JSON file from the current item context and is useful as a pipeline step's `before` action when a processor needs an input file. See the corresponding modules under `src/mu/` for their schemas.
-
-For example, a processor step can create its destination folder before execution:
+A spec can contain `master-flow`, `prepare`, `workloads`, and `pipeline` sections. Workloads declare their parameter schema, environment, executable target, argument vector, optional device arguments, and scheduler units. Pipelines define their parameter schema, context, and named nodes. Nodes can define conditions, actions, a workload call, and dependencies.
 
 ```yaml
-before:
-  - action: create-dir
-    path: "{output_dir}/{request[name]}"
+workloads:
+  transcode:
+    params:
+      source: {type: string}
+      destination: {type: string}
+    target: ffmpeg
+    args: [-i, "{params[source]}", "{params[destination]}"]
+    units: 0
+
+pipeline:
+  convert:
+    params:
+      source: {type: string}
+      destination: {type: string}
+    nodes:
+      - name: convert
+        run:
+          workload: transcode
+          args:
+            source: "{params[source]}"
+            destination: "{params[destination]}"
 ```
 
-## Scheduling
+Input files can be a mapping or a list of mappings containing pipeline parameter values. YAML and JSON are accepted. Each `--request` pairs a pipeline name with one such file; a list runs one pipeline instance per object. Unknown or missing parameters are reported before execution.
 
-Each processor's `units` value is the number of scheduler units it requests. One unit represents about 4 GiB, so `units: 2` requests 2 units (about 8 GiB) and `units: 3` requests 3 units (about 12 GiB); `units: 0` is CPU-only. GPU VRAM is rounded up into 4 GiB bands to determine its unit capacity: 1–4 GiB → 1 unit, 5–8 → 2, 9–12 → 3, and over 12 through 16 → 4. Thus a 15 GiB GPU is treated as 4 units. A task is assigned to one GPU when its requested units fit that GPU's capacity. When a processor needs a GPU, Mu detects available NVIDIA or AMD compute devices and passes the selected device index through that processor's `device_args` template. Plan and run reports show unit demand and an approximate GiB value. For example:
+Templates use bracket paths such as `{params[name]}`, `{session[output_dir]}`, `{sys[cache_dir]}`, `{node[status]}`, and `{schedule[device_index]}`. `session` includes `working_dir`, `unit_name`, `output_dir`, and `cache_dir`; `sys` includes the system cache and discovered model index. Pipeline and node `context` mappings are merged into the runtime context.
 
-```yaml
-device_args: ["--device", "cuda:{device_index}"]
-```
+Actions use `type` and support `execute-command`, `execute-commands`, `send_http_request`, `write-json`, and `create-dir`. Conditions use an `operator`, including `and`, `or`, `file-exists`, `folder-exists`, `path-exists`, and `node_status`. `depends_on` entries name a node and may include a condition. A node's `finally` actions run after success, skip, or failure.
 
-If no supported GPU is detected, or no GPU has enough VRAM for a task, `run` asks before falling back to CPU. `plan` displays detected hardware and possible placements without executing tasks.
+`master-flow.requests` contains `{url, pipeline, refresh_after_done}` entries. Mu downloads each resource as JSON or YAML and uses it as that pipeline's params. It runs `prepare` once, processes the fetched requests, and polls entries with `refresh_after_done: true` until their endpoint returns HTTP 404 or no request data. The remote spec itself may be JSON or YAML.
+
+See [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml) and [`examples/song-with-cover/input.yaml`](examples/song-with-cover/input.yaml) for the new structure.
 
 ## Development
 
@@ -85,5 +70,3 @@ If no supported GPU is detected, or no GPU has enough VRAM for a task, `run` ask
 uv sync
 uv run mu --help
 ```
-
-The source is organized by responsibility: CLI commands in `cli.py`, spec parsing and repair in `spec.py`, action handlers in `actions.py`, validation handlers in `validators.py`, input expansion in `pipelines.py`, dependency graph construction and scheduling in `tasks.py`, execution in `executor.py`, and hardware detection in `hardware.py`.

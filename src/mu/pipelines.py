@@ -94,16 +94,17 @@ def run_input_before(
 
 
 def _lookup(expression: str, context: dict[str, Any]) -> tuple[bool, Any]:
-    match = re.fullmatch(r"([A-Za-z_][\w]*)(?:\[([^\]]+)\])?", expression)
+    match = re.fullmatch(r"([A-Za-z_][\w]*)(?:\[([^\]]+)\])*", expression)
     if not match:
         return False, None
-    value: Any = context.get(match.group(1))
-    if match.group(2) is not None:
-        if not isinstance(value, dict) or match.group(2) not in value:
-            return False, None
-        value = value[match.group(2)]
-    elif match.group(1) not in context:
+    root = match.group(1)
+    if root not in context:
         return False, None
+    value: Any = context[root]
+    for key in re.findall(r"\[([^\]]+)\]", expression):
+        if not isinstance(value, dict) or key not in value:
+            return False, None
+        value = value[key]
     return True, value
 
 
