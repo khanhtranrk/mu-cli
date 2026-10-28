@@ -72,9 +72,9 @@ def condition(spec: Any, context: dict[str, Any], states: dict[str, str]) -> boo
             raise RuntimeError("exit-code.expected must be an integer")
         try:
             result = subprocess.run(list(map(str, target)), cwd=context["session"]["working_dir"], capture_output=True, text=True)
-            value = result.returncode == expected
+            value = result.returncode
         except OSError:
-            value = False
+            value = None
     elif op == "node_status":
         value = states.get(str(spec.get("node", context.get("node", {}).get("name", ""))))
         expected = spec.get("expected", "success")
@@ -135,7 +135,8 @@ def execute_workload(spec: dict[str, Any], name: str, supplied: dict[str, Any], 
     if not isinstance(args, list): raise RuntimeError(f"workload {name!r}.args must be a list")
     command = [str(target), *map(str, args)]
     if device:
-        context["schedule"] = {"device_family": device.backend, "device_index": device.index}
+        family = {"nvidia": "cuda", "rocm": "rocm"}.get(device.backend, device.backend)
+        context["schedule"] = {"device_family": family, "device_index": device.index}
         command += list(map(str, _render(declaration.get("device_args", []), context)))
     env = {**os.environ, **_render(declaration.get("env", {}), context)}
     result = subprocess.run(command, cwd=workdir, env=env, check=False, capture_output=True, text=True)
@@ -183,7 +184,7 @@ def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str
                         config = spec.get("workloads", {}).get(workload, {})
                         units = config.get("units", 0); node_context["node"]["total_units"] = units
                         device = next((d for d in devices if d.capacity_units >= units), None) if units else None
-                        execute_workload(spec, workload, run.get("args", {}), node_context, device, workdir)
+                        execute_workload(spec, workload, _render(run.get("args", {}), node_context), node_context, device, workdir)
                     for action in node.get("after_run", []): run_action(action, node_context, states, workdir)
                     if node.get("postcondition") and not condition(node["postcondition"], node_context, states): raise RuntimeError(f"node {name!r} postcondition failed")
             except Exception as exc:
