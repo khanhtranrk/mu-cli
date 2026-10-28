@@ -1,102 +1,118 @@
 master-flow:
   requests: []
 prepare:
-- type: execute-commands
+- type: execute-command
   skip_if:
-    operator: and
-    props:
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
-  commands:
-  - target: hf
-    args:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
+  target: hf
+  args:
     - download
     - Serveurperso/YuE2-GGUF
     - YuE2-Vae-F32.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
+  target: hf
+  args:
     - download
     - Serveurperso/YuE2-GGUF
     - YuE2-3B-BF16.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
+  target: hf
+  args:
     - download
     - Serveurperso/YuE2-GGUF
     - MERT-v2-FullSong-Q8_0.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
+  target: hf
+  args:
     - download
     - Serveurperso/YuE2-GGUF
     - SheetSage2-Q8_0.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
+  target: hf
+  args:
     - download
     - Serveurperso/YuE2-GGUF
     - yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
+  target: hf
+  args:
     - download
     - unsloth/Qwen-Image-2.1-GGUF
     - qwen-image-2.1-Q4_K_M.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
+  target: hf
+  args:
     - download
     - unsloth/Qwen-Image-2.1-FP8
     - vae/qwen_image_2.1_vae_bf16.safetensors
     - --local-dir
     - '{sys[cache_dir]}/models'
-  - target: hf
-    args:
+  postcondition:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
+- type: execute-command
+  skip_if:
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
+  target: hf
+  args:
     - download
     - unsloth/Qwen3-VL-8B-Instruct-GGUF
     - Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: and
-    props:
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
-    - operator: file-exists
-      path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
+    operator: file-exists
+    path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
 - type: execute-command
   skip_if:
     operator: exit-code
