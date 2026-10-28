@@ -376,6 +376,16 @@ def _load_runtime_spec(path: Path) -> dict:
     return value
 
 
+def _run_prepare_actions(spec_data: dict, context: dict, workdir: Path, *, label: str) -> None:
+    from mu.runtime import run_action
+    actions = spec_data.get("prepare", [])
+    typer.echo(f"[PREPARE] {label}: {len(actions)} action(s)", color=None)
+    for index, action in enumerate(actions, start=1):
+        action_type = action.get("type", "unknown") if isinstance(action, dict) else "invalid"
+        run_action(action, context, {}, workdir, label=f"{label} prepare[{index}] {action_type}")
+    typer.echo(f"[PREPARE] {label}: complete")
+
+
 @app.command("run")
 def run_requests(
     request: list[str] = typer.Option([], "--request", help="PIPELINE,REQUEST.yaml (repeatable)."),
@@ -386,11 +396,14 @@ def run_requests(
     device: list[str] = typer.Option([], "--device", help="family,index,max-units (repeatable)."),
 ) -> None:
     """Execute pipeline requests described by YAML or JSON parameter files."""
-    from mu.runtime import RuntimeError, execute_pipeline, read_data, run_action
+    from mu.runtime import RuntimeError, execute_pipeline, read_data
     if not request: typer.echo("At least one --request PIPELINE,FILE is required", err=True); raise typer.Exit(2)
     try:
         definition = _load_runtime_spec(spec)
         base = _runtime_base(working_dir, sys_cache_dir, unit_name)
+        typer.echo(f"[RUN] Spec loaded: {spec.expanduser().resolve()}")
+        typer.echo(f"[RUN] Working directory: {base['session']['working_dir']}")
+        typer.echo(f"[RUN] System cache: {base['sys']['cache_dir']} ({len(base['sys']['models'])} model key(s) found)")
         devices = detect_devices()
         if device:
             from mu.hardware import ComputeDevice
@@ -405,11 +418,12 @@ def run_requests(
             if isinstance(params, dict): params = [params]
             if not isinstance(params, list) or not all(isinstance(entry, dict) for entry in params):
                 raise RuntimeError(f"request {filename} must contain a mapping or a list of mappings")
+            typer.echo(f"[REQUEST] {pipeline_name}: loaded {len(params)} item(s) from {Path(filename).expanduser().resolve()}")
             parsed.extend((pipeline_name, entry) for entry in params)
         prepare_context = dict(base)
-        for action in definition.get("prepare", []):
-            run_action(action, prepare_context, {}, Path(base["session"]["working_dir"]))
-        for pipeline_name, params in parsed:
+        _run_prepare_actions(definition, prepare_context, Path(base["session"]["working_dir"]), label="run")
+        for index, (pipeline_name, params) in enumerate(parsed, start=1):
+            typer.echo(f"[REQUEST] Starting {index}/{len(parsed)}: pipeline {pipeline_name}")
             states = execute_pipeline(definition, pipeline_name, params, base, devices, Path(base["session"]["working_dir"]))
             if any(value == "failed" for value in states.values()): raise RuntimeError(f"pipeline {pipeline_name!r} failed")
     except Exception as exc:
@@ -439,10 +453,12 @@ def master_flow_run(
     device: list[str] = typer.Option([], "--device"),
 ) -> None:
     """Fetch and execute a remote master-flow spec."""
-    from mu.runtime import RuntimeError, execute_pipeline, read_data, run_action
+    from mu.runtime import RuntimeError, execute_pipeline
     try:
         spec = _fetch_url(spec_url)
+        typer.echo("[MASTER-FLOW] Spec fetched")
         base = _runtime_base(working_dir, sys_cache_dir, unit_name)
+        typer.echo(f"[MASTER-FLOW] Working directory: {base['session']['working_dir']}")
         devices = detect_devices()
         if device:
             from mu.hardware import ComputeDevice
@@ -451,13 +467,13 @@ def master_flow_run(
                 family, index, capacity = value.split(",", 2)
                 devices.append(ComputeDevice(index, family, float(capacity)*4, family))
         prepare_context = dict(base)
-        for action in spec.get("prepare", []):
-            run_action(action, prepare_context, {}, Path(base["session"]["working_dir"]))
+        _run_prepare_actions(spec, prepare_context, Path(base["session"]["working_dir"]), label="master-flow")
         flow = spec.get("master-flow", {})
         requests = flow.get("requests", [])
         while True:
             queued = []
-            for item in requests:
+            for index, item in enumerate(requests, start=1):
+                typer.echo(f"[MASTER-FLOW] Fetching request {index}/{len(requests)} for pipeline {item['pipeline']}")
                 payload = _fetch_url(item["url"], item.get("header", {}))
                 if isinstance(payload, dict): payload = [payload]
                 if payload:
@@ -465,6 +481,7 @@ def master_flow_run(
                         raise RuntimeError(f"resource {item['url']} must return a mapping or list of mappings")
                     queued.extend((item, entry) for entry in payload)
             if not queued: break
+            typer.echo(f"[MASTER-FLOW] Fetched {len(queued)} request object(s); executing")
             for item, payload in queued:
                 states = execute_pipeline(spec, item["pipeline"], payload, base, devices, Path(base["session"]["working_dir"]))
                 if any(value == "failed" for value in states.values()): raise RuntimeError(f"pipeline {item['pipeline']!r} failed")

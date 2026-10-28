@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -90,19 +91,29 @@ def _apply_context(target: dict[str, Any], values: Any) -> None:
         target.update(values)
 
 
-def run_action(action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path) -> None:
+def run_action(
+    action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path,
+    *, label: str = "action",
+) -> None:
     _apply_context(context, _render(action.get("context", {}), context))
-    if action.get("skip_if") and condition(action["skip_if"], context, states): return
-    if not condition(action.get("precondition"), context, states): return
     typ = action.get("type", action.get("action"))
+    if action.get("skip_if") and condition(action["skip_if"], context, states):
+        print(f"[SKIP] {label} ({typ}): skip_if matched", flush=True)
+        return
+    if not condition(action.get("precondition"), context, states):
+        print(f"[SKIP] {label} ({typ}): precondition did not match", flush=True)
+        return
     values = _render(action, context)
+    started = time.perf_counter()
+    print(f"[ACTION] {label}: {typ} started", flush=True)
     try:
         if typ in {"execute-command", "execute-commands"}:
             commands = values.get("commands", []) if typ == "execute-commands" else [values]
-            for item in commands:
+            for index, item in enumerate(commands, start=1):
                 target = item.get("target")
                 args = item.get("args", [])
                 if not target or not isinstance(args, list): raise RuntimeError("execute-command requires target and args")
+                print(f"[ACTION] {label}: command {index}/{len(commands)} ({target})", flush=True)
                 subprocess.run([str(target), *map(str, args)], cwd=workdir, env={**os.environ, **item.get("env", {})}, check=True, capture_output=True, text=True)
         elif typ == "create-dir":
             Path(values["path"]).expanduser().mkdir(parents=True, exist_ok=True)
@@ -120,29 +131,43 @@ def run_action(action: dict[str, Any], context: dict[str, Any], states: dict[str
         else:
             raise RuntimeError(f"unknown action type {typ!r}")
     except Exception as exc:
-        if action.get("ignore_error"): return
-        raise RuntimeError(f"action {typ!r} failed: {exc}") from exc
-    if action.get("postcondition") and not condition(action["postcondition"], context, states):
-        if not action.get("ignore_error"): raise RuntimeError(f"action {typ!r} postcondition failed")
+        if action.get("ignore_error"):
+            print(f"[WARN] {label}: ignored action error: {exc}", flush=True)
+            return
+        raise RuntimeError(f"{label} ({typ}) failed: {exc}") from exc
+    if action.get("postcondition"):
+        if not condition(action["postcondition"], context, states):
+            if not action.get("ignore_error"): raise RuntimeError(f"{label} ({typ}) postcondition failed")
+            print(f"[WARN] {label}: postcondition failed; ignored", flush=True)
+        else:
+            print(f"[CHECK] {label}: postcondition passed", flush=True)
+    elapsed = time.perf_counter() - started
+    print(f"[ACTION] {label}: {typ} completed in {elapsed:.1f}s", flush=True)
 
 
 def execute_workload(spec: dict[str, Any], name: str, supplied: dict[str, Any], context: dict[str, Any], device: ComputeDevice | None, workdir: Path) -> None:
     declaration = spec.get("workloads", {}).get(name)
     if not isinstance(declaration, dict): raise RuntimeError(f"workload {name!r} is not defined")
-    context["params"] = params_for(declaration.get("params", {}), supplied, context, f"workload {name}")
-    target = _render(declaration.get("target", ""), context)
-    args = _render(declaration.get("args", []), context)
+    workload_context = dict(context)
+    workload_context["params"] = params_for(declaration.get("params", {}), supplied, context, f"workload {name}")
+    target = _render(declaration.get("target", ""), workload_context)
+    args = _render(declaration.get("args", []), workload_context)
     if not isinstance(args, list): raise RuntimeError(f"workload {name!r}.args must be a list")
     command = [str(target), *map(str, args)]
     if device:
         family = {"nvidia": "cuda", "rocm": "rocm"}.get(device.backend, device.backend)
-        context["schedule"] = {"device_family": family, "device_index": device.index}
-        command += list(map(str, _render(declaration.get("device_args", []), context)))
-    env = {**os.environ, **_render(declaration.get("env", {}), context)}
+        workload_context["schedule"] = {"device_family": family, "device_index": device.index}
+        command += list(map(str, _render(declaration.get("device_args", []), workload_context)))
+    env = {**os.environ, **_render(declaration.get("env", {}), workload_context)}
+    units = declaration.get("units", 0)
+    placement = f"{device.backend}:{device.index}" if device else "cpu"
+    print(f"[WORKLOAD] {name}: starting {target} ({units} units; device {placement})", flush=True)
+    started = time.perf_counter()
     result = subprocess.run(command, cwd=workdir, env=env, check=False, capture_output=True, text=True)
     if result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"{target} exited with status {result.returncode}" + (f": {detail}" if detail else ""))
+    print(f"[WORKLOAD] {name}: completed in {time.perf_counter() - started:.1f}s", flush=True)
 
 
 def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str, Any], base: dict[str, Any], devices: list[ComputeDevice], workdir: Path) -> dict[str, str]:
@@ -155,6 +180,7 @@ def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str
     if not isinstance(nodes, list): raise RuntimeError("pipeline.nodes must be a list")
     by_name = {node.get("name"): node for node in nodes}
     if len(by_name) != len(nodes) or None in by_name: raise RuntimeError("node names must be unique")
+    print(f"[PIPELINE] {pipeline_name}: started ({len(nodes)} nodes)", flush=True)
     states: dict[str, str] = {}; pending = list(nodes)
     while pending:
         progressed = False
@@ -162,6 +188,7 @@ def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str
             deps = node.get("depends_on", [])
             if any(d.get("node", d.get("name")) not in states for d in deps): continue
             if any(not condition(d.get("condition"), {**context, "node": {"name": d.get("node", d.get("name"))}}, states) for d in deps):
+                print(f"[BLOCKED] {pipeline_name}/{node.get('name')}: dependency condition failed", flush=True)
                 states[node.get("name")] = "failed"
                 pending.remove(node); progressed = True
                 continue
@@ -169,15 +196,22 @@ def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str
             node_context["node"] = {"name": name, "status": "running", "total_units": 0}
             _apply_context(node_context, _render(node.get("context", {}), node_context))
             state = "success"
+            started = time.perf_counter()
+            print(f"[NODE] {pipeline_name}/{name}: starting", flush=True)
             try:
                 if node.get("skip_if") and condition(node["skip_if"], node_context, states):
                     state = "success"
+                    print(f"[SKIP] {pipeline_name}/{name}: skip_if matched", flush=True)
                     if node.get("postcondition") and not condition(node["postcondition"], node_context, states):
                         raise RuntimeError(f"node {name!r} postcondition failed after skip")
-                elif not condition(node.get("precondition"), node_context, states):
-                    raise RuntimeError(f"node {name!r} precondition failed")
                 else:
-                    for action in node.get("before_run", []): run_action(action, node_context, states, workdir)
+                    if node.get("precondition"):
+                        if not condition(node["precondition"], node_context, states):
+                            print(f"[CHECK] {pipeline_name}/{name}: precondition failed", flush=True)
+                            raise RuntimeError(f"node {name!r} precondition failed")
+                        print(f"[CHECK] {pipeline_name}/{name}: precondition passed", flush=True)
+                    for index, action in enumerate(node.get("before_run", []), start=1):
+                        run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} before_run[{index}]")
                     run = node.get("run")
                     if isinstance(run, dict):
                         workload = run.get("workload")
@@ -185,18 +219,25 @@ def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str
                         units = config.get("units", 0); node_context["node"]["total_units"] = units
                         device = next((d for d in devices if d.capacity_units >= units), None) if units else None
                         execute_workload(spec, workload, _render(run.get("args", {}), node_context), node_context, device, workdir)
-                    for action in node.get("after_run", []): run_action(action, node_context, states, workdir)
-                    if node.get("postcondition") and not condition(node["postcondition"], node_context, states): raise RuntimeError(f"node {name!r} postcondition failed")
+                    for index, action in enumerate(node.get("after_run", []), start=1):
+                        run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} after_run[{index}]")
+                    if node.get("postcondition"):
+                        if not condition(node["postcondition"], node_context, states): raise RuntimeError(f"node {name!r} postcondition failed")
+                        print(f"[CHECK] {pipeline_name}/{name}: postcondition passed", flush=True)
             except Exception as exc:
                 state = "failed"; error = str(exc)
             states[name] = state
-            for action in node.get("finally", []):
+            for index, action in enumerate(node.get("finally", []), start=1):
                 node_context["node"]["status"] = state
-                try: run_action(action, node_context, states, workdir)
+                try: run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} finally[{index}]")
                 except Exception as exc: state = "failed"; error = str(exc)
             states[name] = state
-            if state == "failed": print(f"[FAIL] {pipeline_name}/{name}: {error}")
-            else: print(f"[OK] {pipeline_name}/{name} {state}")
+            elapsed = time.perf_counter() - started
+            if state == "failed": print(f"[FAIL] {pipeline_name}/{name} after {elapsed:.1f}s: {error}", flush=True)
+            else: print(f"[OK] {pipeline_name}/{name} {state} in {elapsed:.1f}s", flush=True)
             pending.remove(node); progressed = True
         if not progressed: raise RuntimeError("pipeline dependencies are cyclic or reference unknown nodes")
+    succeeded = sum(value == "success" for value in states.values())
+    failed = sum(value == "failed" for value in states.values())
+    print(f"[PIPELINE] {pipeline_name}: finished ({succeeded} succeeded, {failed} failed)", flush=True)
     return states
