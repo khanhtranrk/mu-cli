@@ -1,36 +1,66 @@
 # Mu
 
-Mu is a Python 3.13+ CLI for executing parameterized pipelines described by YAML or JSON specs. Specs define reusable workloads (subprocesses), pipeline parameters and nodes, actions, and conditions.
+Mu is a Python 3.13+ CLI that executes declarative, GPU-aware pipelines from YAML or JSON specs. It combines reusable subprocess workloads, per-request parameters, dependency-aware nodes, context templates, pre/post conditions, actions, and remote master flows.
 
-## Commands
+## Features
+
+- **Reusable workloads:** declare executables, environment variables, arguments, GPU arguments, and VRAM units once.
+- **Dependency-aware execution:** schedule nodes across every request, with readiness determined by `depends_on` conditions.
+- **GPU placement:** detect NVIDIA and AMD devices or declare them manually; reserve 4 GiB units without embedding a device CLI convention.
+- **Context templates:** reference system, session, pipeline parameters, node state, and scheduled device values in spec fields.
+- **Actions and conditions:** prepare directories, write JSON, call HTTP endpoints, run commands, and verify files or process exit codes.
+- **Master flows:** fetch remote specs and request resources, then run and optionally refresh them to completion.
+- **YAML or JSON:** use the same spec structure with either format.
+
+## Requirements
+
+- Python 3.13 or newer
+- [uv](https://docs.astral.sh/uv/) for dependency and command management
+- Optional NVIDIA or AMD tools for GPU detection: `nvidia-smi` or `rocm-smi`
+
+## Install
 
 ```sh
-# Run one or more input objects (YAML or JSON files)
-uv run mu run --spec ./spec.yaml --working_dir ./work \
-  --request song-with-cover,./song.yaml
-
-# Repeat --request to run multiple pipeline inputs
-uv run mu run --request song-with-cover,./song-a.yaml \
-  --request song-with-cover,./song-b.json
-
-# Fetch a remote spec.json/YAML and run its master-flow requests
-uv run mu master-flow run https://example.invalid/spec.json \
-  --working_dir ./work --unit_name worker-1
-
-# Specify available devices as family,index,max-units; repeat as needed
-uv run mu run --device cuda,0,4 --device cuda,1,2 \
-  --request song-with-cover,./song.yaml
-
+git clone https://github.com/khanhtranrk/mu.git
+cd mu
+uv sync
 uv run mu --help
 ```
 
-`--working_dir` defaults to the current directory. Mu creates `output/` and `cache/` there. `--sys_cache_dir` defaults to `~/.cache`. Unless `--device` is supplied, Mu detects supported NVIDIA/AMD GPUs. Workload `units` defaults to zero (CPU-only); each unit represents 4 GiB of VRAM.
+## Quick start
 
-Mu schedules nodes from all supplied requests together. Nodes whose dependencies have completed can run concurrently; a node starts only when one GPU has enough free units for its workload. A node releases its allocation after its actions and workload finish, so newly ready nodes can use that capacity.
+The repository includes a complete media workflow in [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml). Its input is [`examples/song-with-cover/input.yaml`](examples/song-with-cover/input.yaml).
 
-## Spec format
+Run a local spec with a pipeline and request file:
 
-A spec can contain `master-flow`, `prepare`, `workloads`, and `pipeline` sections. Workloads declare their parameter schema, environment, executable target, argument vector, optional device arguments, and scheduler units. Pipelines define their parameter schema, context, and named nodes. Nodes can define conditions, actions, a workload call, and dependencies.
+```sh
+uv run mu run --spec ./spec.yaml --working_dir ./work \
+  --request song-with-cover,./examples/song-with-cover/input.yaml
+```
+
+Run more than one request by repeating `--request`. Each file may contain one mapping or a list of mappings:
+
+```sh
+uv run mu run \
+  --request song-with-cover,./request-a.yaml \
+  --request song-with-cover,./request-b.json
+```
+
+Run a remote spec through a master flow:
+
+```sh
+uv run mu master-flow run https://example.invalid/spec.yaml \
+  --working_dir ./work --unit_name worker-1
+```
+
+Override hardware detection with an explicit family, index, and maximum-unit capacity:
+
+```sh
+uv run mu run --device cuda,0,4 --device cuda,1,2 \
+  --request song-with-cover,./request.yaml
+```
+
+## Minimal spec
 
 ```yaml
 workloads:
@@ -56,15 +86,91 @@ pipeline:
             destination: "{params[destination]}"
 ```
 
-Input files can be a mapping or a list of mappings containing pipeline parameter values. YAML and JSON are accepted. Each `--request` pairs a pipeline name with one such file; a list runs one pipeline instance per object. Unknown or missing parameters are reported before execution.
+A request file supplies pipeline parameters:
 
-Templates use bracket paths such as `{params[name]}`, `{session[output_dir]}`, `{sys[cache_dir]}`, `{node[status]}`, and `{schedule[device_index]}`. `session` includes `working_dir`, `unit_name`, `output_dir`, and `cache_dir`; `sys` includes the system cache and discovered model index. Pipeline and node `context` mappings are merged into the runtime context.
+```yaml
+source: input.mp4
+destination: output.mp4
+```
 
-Actions use `type` and support `execute-command`, `execute-commands`, `send_http_request`, `write-json`, and `create-dir`. Conditions use an `operator`, including `and`, `or`, `file-exists`, `folder-exists`, `path-exists`, and `node_status`. `depends_on` entries name a node and may include a condition. A node's `finally` actions run after success, skip, or failure.
+Mu validates declared parameters before execution. A list of mappings creates multiple independent pipeline requests, while nodes across those requests share the global scheduler.
 
-`master-flow.requests` contains `{url, pipeline, refresh_after_done}` entries. Mu downloads each resource as JSON or YAML and uses it as that pipeline's params. It runs `prepare` once, processes the fetched requests, and polls entries with `refresh_after_done: true` until their endpoint returns HTTP 404 or no request data. The remote spec itself may be JSON or YAML.
+## How execution works
 
-See [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml) and [`examples/song-with-cover/input.yaml`](examples/song-with-cover/input.yaml) for the new structure.
+1. Load and validate the spec.
+2. Create the working, cache, output, system-cache, and model contexts.
+3. Run `prepare` actions once for local runs and master flows.
+4. Merge each request's parameters into an isolated pipeline context.
+5. Build named nodes and resolve `depends_on` dependencies.
+6. Schedule ready nodes concurrently and assign GPU units where required.
+7. Run `before_run`, the workload, `after_run`, and output conditions for each node.
+8. Always run `finally` actions after success, skip, or failure.
+
+Nodes that depend on failed nodes are blocked and do not execute. A workload with `units: 0` runs on the CPU. GPU workloads do not run on an undersized device.
+
+## Spec structure
+
+A spec can contain:
+
+- `prepare`: one-time setup actions.
+- `workloads`: reusable subprocess declarations.
+- `pipeline`: parameter schemas, shared context, and dependency graphs.
+- `master-flow`: remote request resources and refresh behavior.
+
+Workloads declare `params`, `target`, `args`, optional `env`, `device_args`, and `units`. Nodes declare `context`, conditions, actions, `run`, and `depends_on`.
+
+Templates use bracket lookup syntax such as `{params[name]}`, `{session[output_dir]}`, `{sys[cache_dir]}`, `{node[status]}`, and `{schedule[device_index]}`. The full model is documented in the [spec format guide](docs/spec-format/README.md), including a quick reference and a complete working example:
+
+- [Overview](docs/spec-format/01-overview.md)
+- [Context and templates](docs/spec-format/02-context-and-templates.md)
+- [Workloads](docs/spec-format/03-workloads.md)
+- [Actions](docs/spec-format/04-actions.md)
+- [Conditions](docs/spec-format/05-conditions.md)
+- [Pipelines and nodes](docs/spec-format/06-pipelines-and-nodes.md)
+- [Master flow and CLI](docs/spec-format/07-master-flow-and-cli.md)
+- [Complete example](docs/spec-format/08-complete-example.md)
+- [Quick reference](docs/spec-format/quick-reference.md)
+
+## CLI reference
+
+```sh
+uv run mu run --help
+uv run mu master-flow run --help
+```
+
+### `mu run`
+
+| Option | Default | Description |
+|---|---|---|
+| `--request PIPELINE,FILE` | required, repeatable | Pipeline name plus a YAML or JSON request file |
+| `--spec PATH` | `./spec.yaml` | Local spec path |
+| `--working_dir PATH` | current directory | Creates `output/` and `cache/` |
+| `--sys_cache_dir PATH` | `~/.cache` | System cache and `models/` lookup |
+| `--unit_name TEXT` | `unknown` | Session and reporting label |
+| `--device FAMILY,INDEX,MAX_UNITS` | detected | Explicit GPU capacity; repeatable |
+
+### `mu master-flow run`
+
+| Option | Default | Description |
+|---|---|---|
+| `spec_url` | required | Remote JSON or YAML spec |
+| `--working_dir PATH` | current directory | Session working directory |
+| `--sys_cache_dir PATH` | `~/.cache` | System cache and model directory |
+| `--unit_name TEXT` | `unknown` | Session and reporting label |
+| `--device FAMILY,INDEX,MAX_UNITS` | detected | Explicit GPU capacity; repeatable |
+
+## Scheduling units
+
+Mu counts GPU capacity in bands of 4 GiB:
+
+| Device VRAM | Capacity units |
+|---:|---:|
+| 1–4 GiB | 1 |
+| 5–8 GiB | 2 |
+| 9–12 GiB | 3 |
+| 13–16 GiB | 4 |
+
+A workload declares exactly how many units it requires. `units: 0` means CPU-only and does not receive `device_args` or a `schedule` context.
 
 ## Development
 
@@ -72,3 +178,7 @@ See [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml) a
 uv sync
 uv run mu --help
 ```
+
+Before submitting changes, run the narrowest relevant tests or a small temporary spec. There is currently no committed test suite or configured linter, so report exactly which smoke checks or focused validations you used.
+
+Run a narrow test selection while changing runtime behavior. Full tests are appropriate after a broad or cross-module change. Do not run the media example's heavy workload during routine development: it can download large models and use GPUs or substantial disk space.

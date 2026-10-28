@@ -2,41 +2,73 @@
 
 ## Project overview
 
-Mu is a Python 3.13+ CLI for validating setup prerequisites, expanding YAML inputs into pipeline tasks, planning resource placement, and running processor commands. Use `uv` for project commands and dependency management.
+Mu is a Python 3.13+ CLI that loads YAML or JSON specs and executes parameterized, dependency-aware subprocess pipelines. Use `uv` for project commands and dependency management. The runtime is the source of truth for spec behavior; the maintained format guide is under [`docs/spec-format/`](docs/spec-format/README.md).
 
 ## Architecture
 
-- `src/mu/cli.py`: Typer CLI (`spec validate`, `spec repair`, `models`, `plan`, `run`) and human-readable reports.
-- `src/mu/spec.py`: spec loading, repair orchestration, and spec errors.
-- `src/mu/validators.py`: validation condition registry and validation handlers.
-- `src/mu/actions.py`: action registry and action handlers. Action types have their own schemas and behavior; do not assume every action shares the same arguments.
-- `src/mu/pipelines.py`: input/spec expansion, template context, model discovery, and input `before` actions.
-- `src/mu/tasks.py`: pipeline-to-task conversion, `waiting-for` dependency validation, and scheduler readiness.
-- `src/mu/executor.py`: processor execution and dependency failure propagation.
-- `src/mu/hardware.py`: best-effort NVIDIA/AMD compute device and VRAM detection.
+The current runtime and legacy compatibility paths serve different spec formats. Read the relevant module before changing behavior:
 
-Keep new validation and action types behind their registries so adding a type does not require a large conditional block in the CLI. Keep YAML parsing and schema errors actionable for users.
+- `src/mu/runtime.py`: workload/pipeline spec execution, context rendering, conditions, actions, node lifecycle, request scheduling, and remote master-flow support.
+- `src/mu/cli.py`: Typer commands, local and remote request loading, GPU option parsing, and user-facing reports.
+- `src/mu/hardware.py`: NVIDIA/AMD detection and 4 GiB scheduling-unit capacity.
+- `src/mu/pipelines.py`: legacy processor/pipeline expansion, input preparation, model discovery, and template rendering.
+- `src/mu/tasks.py`: legacy processor task graph and scheduler.
+- `src/mu/executor.py`: legacy processor execution and dependency failure propagation.
+- `src/mu/spec.py`: legacy spec loading and repair validation.
+- `src/mu/actions.py`: legacy pluggable action registry.
+- `src/mu/validators.py`: legacy pluggable validation registry.
 
-## Behavior to preserve
+Do not assume that fields in the legacy `processors`/`pipelines`/`steps` format match fields in the workload/pipeline/node format. Add format behavior to the owning module rather than introducing CLI-only branches.
 
-- `mu spec validate` evaluates declared checks without running repair actions.
-- `mu spec repair` runs repair actions; `--force-validates` requests a validation pass afterward.
-- `mu plan` is a preview. It may inspect validations and hardware, but must not run repair actions, input `before` actions, or processors.
-- `mu run` validates the spec first, runs repair actions when checks need repair, prepares input `before` actions, validates step outputs, then executes remaining pipeline tasks.
-- A step's `before` actions run immediately before its processor command. Keep action dispatch in the shared registry and provide each handler its declared context.
-- A step with declared output validations whose checks all pass is already complete and must be skipped unless `--force-validate` was requested. Mark it successful in the task graph so dependent steps can proceed.
-- Keep successful child process stdout/stderr out of normal CLI output. Emit task progress and show captured process details only on failure.
-- `mu models` lists supported model files under the selected cache directory's `models` folder.
-- Each request creates its own pipeline context. Preserve request-specific values while expanding templates.
-- A `waiting-for` dependency blocks a task until its prerequisites succeed; a failed prerequisite must prevent dependent tasks from running.
-- A processor's `units` field is a direct scheduling-unit count (one unit is about 4 GiB; `units: 0` means CPU-only). Do not round processor requests. Round GPU VRAM up to 4 GiB bands for capacity (1–4→1 unit, 5–8→2, 9–12→3, 13–16→4). Device command syntax belongs to each processor's `device_args` template; the scheduler provides `device_index` rather than imposing one CLI convention.
-- Keep reports understandable at both request and task level, including failures and blocked work.
+## Runtime behavior to preserve
 
-## Safe development workflow
+- The workload/pipeline format uses `workloads`, singular `pipeline`, and node `run.workload`; the media example uses this format.
+- `prepare` runs once in the current process context and contains actions only.
+- Every request gets an isolated pipeline context. Pipeline context is merged once, parameter values are validated, and node contexts are copied before node-local additions.
+- The base context contains `sys` and `session`. Pipelines add `params`; nodes add `node`; scheduled GPU workloads add `schedule`.
+- Workload `params` are a declared schema. Missing required values and unknown supplied values are errors; string and number types are not implicitly coerced.
+- Workload args are an argv list. Target and arguments are rendered and passed directly to subprocesses; Mu does not invoke an undocumented shell command.
+- Node state is canonical `running`, `success`, or `failed`. `node_status` also accepts `succeeded` as an alias for `success`.
+- Node execution order is: merge context, `skip_if`, `precondition`, `before_run`, workload, `after_run`, `postcondition`, then `finally`.
+- `skip_if` is a successful skip. A failed `precondition` fails the node. A required action or postcondition failure fails the node unless `ignore_error` is true.
+- `finally` runs after success, skip, or failure and is the correct place for failure notifications or cleanup.
+- Dependency condition failures block dependent nodes. Failed nodes prevent their dependents from running.
+- The scheduler runs ready nodes together, with at most 32 concurrent nodes. GPU units are reserved for the full node lifetime and released afterward.
+- `units: 0` is CPU-only. GPU units are direct workload requests in 4 GiB bands; device argument syntax belongs in `device_args`.
+- A node with no postcondition succeeds based on process/action success. Declared postconditions take precedence over the implicit result.
+- Successful subprocess output is kept out of normal CLI output. Progress and error detail should remain concise and actionable.
+- `mu master-flow run` fetches remote JSON/YAML specs and resources, runs prepare once, executes all queued requests, and polls refreshable requests until 404 or absent data.
 
-- Read the relevant module and example YAML before changing schemas or runtime behavior.
-- Use `uv run ...` for project commands. `uv run mu --help` is a safe CLI smoke check.
-- Do not invoke `mu run` or `mu spec repair` against the media example as a routine check: it may download large models, install tools, use GPUs, and write generated media. Prefer small temporary specs and inputs when exercising side effects.
+## Development workflow
+
+- Use the repository skill [`.github/skills/create-mu-spec/SKILL.md`](.github/skills/create-mu-spec/SKILL.md) when creating or modifying a Mu spec. It provides the required format workflow and safe validation checklist.
+- Read [`README.md`](README.md), the relevant module, and [`examples/song-with-cover/spec.yaml`](examples/song-with-cover/spec.yaml) before schema or runtime changes.
+- Use `uv run ...` for project commands and `uv run mu --help` for a safe CLI smoke test.
+- Prefer the smallest relevant test selection. Run broad tests only for cross-module changes or when explicitly requested.
+- Do not execute the media example through `mu run` or `mu master-flow run` as a routine check. It may download models, install tools, use GPU resources, or write substantial generated media.
+- Avoid network, GPU, and large-file operations unless the task explicitly requires them. Use a temporary minimal spec for side-effect validation.
 - Keep generated output, caches, virtual environments, downloaded models, credentials, and machine-specific paths out of commits.
-- Do not add tests or run a broad test suite unless the user asks for verification; when asked, describe exactly what was run and its result.
-- Update `README.md` and the example YAML when user-facing commands or schemas change.
+- Update [`README.md`](README.md), [`docs/spec-format/`](docs/spec-format/README.md), and the example YAML together when user-facing commands or schemas change.
+- Link to existing documentation instead of duplicating it into agent instructions.
+
+## Adding spec features
+
+- New condition operators belong in the condition registry or the node runtime condition dispatcher, depending on the format being changed.
+- New action types belong in `run_action`/the action registry, with explicit validation and action-specific context handling.
+- Keep schema errors actionable: report the declaration, field, expected type or value, and offending key.
+- Preserve context isolation. Render from a copy, merge declared context deliberately, and never mutate a sibling request or node context.
+- Preserve ordering when the spec promises it. Independent nodes may run concurrently, but `finally` always remains at the end of the node lifecycle.
+- Update both the technical guide and at least one executable example when introducing a public field.
+
+## Validation and testing
+
+Use the smallest command that covers the change:
+
+```sh
+uv sync
+uv run mu --help
+```
+
+There is currently no committed test suite or configured linter. For runtime behavior, prefer focused temporary specs and targeted Python checks rather than inventing a broad default suite. If tests are necessary, add a focused test beside the relevant existing coverage and state exactly what was run.
+
+Do not add tests or run a broad test suite unless the user asks for verification or the change needs protection through a non-obvious regression test.

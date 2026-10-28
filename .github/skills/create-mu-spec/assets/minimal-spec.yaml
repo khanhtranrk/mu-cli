@@ -1,0 +1,38 @@
+prepare: []
+
+workloads:
+  example-workload:
+    params:
+      input:
+        type: string
+      output:
+        type: string
+    target: python
+    args:
+      - example.py
+      - "{params[input]}"
+      - "{params[output]}"
+    units: 0
+
+pipeline:
+  example-pipeline:
+    params:
+      input:
+        type: string
+      output:
+        type: string
+    context: {}
+    nodes:
+      - name: execute
+        before_run: []
+        run:
+          workload: example-workload
+          args:
+            input: "{params[input]}"
+            output: "{params[output]}"
+        after_run: []
+        postcondition:
+          operator: file-exists
+          path: "{params[output]}"
+        finally: []
+        depends_on: []
