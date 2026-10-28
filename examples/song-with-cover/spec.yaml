@@ -196,7 +196,7 @@ workloads:
     - '{params[output]}'
     device_args:
     - --backend
-    - 'clip=cpu,vae={schedule[device_family]}{schedule[device_index]},diffusion={schedule[device_family]}{schedule[device_index]}'
+    - 'diffusion=cuda0,te=cuda1,vae=cuda0'
     units: 3
   demucs:
     params:
