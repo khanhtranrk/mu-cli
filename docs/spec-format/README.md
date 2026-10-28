@@ -1,0 +1,115 @@
+# Mu Spec Creation Guide
+
+This directory explains the YAML/JSON structure understood by Mu, using the spec in [`examples/song-with-cover`](../../examples/song-with-cover/spec.yaml). It is designed so you can read an existing spec and create a new one without having to guess the meaning of every field.
+
+> This documentation describes the **format that the runtime currently executes**. Names shown in references and examples, such as `id`, condition `target`, or `send http request`, are not always the exact names in the source. Where the documentation conflicts with a keyword, the “Exact names” section is the authority.
+
+## Read in this order
+
+1. [01 – Overall structure and spec lifecycle](01-overview.md)
+2. [02 – Context, templates, and parameters](02-context-and-templates.md)
+3. [03 – Workloads](03-workloads.md)
+4. [04 – Actions](04-actions.md)
+5. [05 – Conditions](05-conditions.md)
+6. [06 – Pipelines and nodes](06-pipelines-and-nodes.md)
+7. [07 – Master-flow, CLI, and scheduling](07-master-flow-and-cli.md)
+8. [08 – Complete examples, from small to large](08-complete-example.md)
+9. [Quick-reference table](quick-reference.md)
+
+## A complete spec at a glance
+
+```yaml
+master-flow:
+  requests: []
+
+prepare:
+  - type: execute-command
+    target: python
+    args: [--version]
+
+workloads:
+  make-copy:
+    params:
+      source:
+        type: string
+      destination:
+        type: string
+    target: cp
+    args:
+      - "{params[source]}"
+      - "{params[destination]}"
+    units: 0
+
+pipeline:
+  copy-file:
+    params:
+      source:
+        type: string
+      destination:
+        type: string
+    nodes:
+      - name: copy
+        before_run:
+          - type: create-dir
+            path: "{session[working_dir]}/output"
+        run:
+          workload: make-copy
+          args:
+            source: "{params[source]}"
+            destination: "{params[destination]}"
+        postcondition:
+          operator: file-exists
+          path: "{params[destination]}"
+```
+
+The data tree above means:
+
+- `prepare`: actions that run once before every request.
+- `workloads`: reusable subprocess templates.
+- `pipeline`: workflows made up of tasks.
+- `pipeline.<name>.nodes`: the steps in a workflow.
+- `node.run`: invokes a workload.
+- `node.before_run`, `after_run`, and `finally`: actions that run around the workload.
+- `skip_if`, `precondition`, and `postcondition`: conditions that control nodes and actions.
+- `depends_on`: dependencies and ordering between nodes.
+
+## Important rules
+
+### 1. A spec is data, not a shell script
+
+The `target` and `args` properties create a subprocess argv. Mu does not join command components into a string and then execute the result through a shell. Arguments must be declared as a list. This avoids errors caused by embedded spaces and shell characters.
+
+### 2. JSON is the equivalent format
+
+The spec root is a mapping/object. YAML can be read as JSON when `safe_load` produces the corresponding string, number, boolean, list, and mapping values. The keys shown below are valid in JSON as well.
+
+### 3. Templates use structured-context `format` syntax
+
+For example:
+
+```yaml
+args:
+  - "{params[input]}"
+  - "{session[output_dir]}"
+```
+
+Mu resolves values using `context[root][key]`. A string can contain multiple placeholders, but a placeholder that constitutes the entire string can return a number or boolean during rendering; the system does not convert it to a string first. See [Context and templates](02-context-and-templates.md).
+
+### 4. Missing parameters are configuration errors
+
+The workload or pipeline schema identifies required parameters, optional parameters, and default values. Unexpected values not present in the schema are rejected.
+
+### 5. Nodes participate in scheduling
+
+Mu schedules all nodes from every supplied request. A node runs only after its dependencies succeed and sufficient GPU resources (`units`) are available. A failed node prevents its dependent nodes from running. `units: 0` means CPU-only and consumes no GPU units.
+
+### 6. Canonical status values
+
+A runtime node uses only three execution states: `running`, `success`, and `failed`. When using `node_status` in dependencies or `finally`, use `success` or `failed`. The runtime accepts the alias `succeeded` and converts it to `success`, but the canonical name `success` should be used.
+
+## The two CLI forms
+
+- `mu run --request PIPELINE,REQUEST.yaml ...`: runs a local spec and local requests.
+- `mu master-flow run SPEC_URL`: loads a spec, retrieves requests over HTTP, runs `prepare` and the pipeline, and then retrieves requests again if they have `refresh_after_done: true`.
+
+See [Master-flow and CLI](07-master-flow-and-cli.md) for details.
