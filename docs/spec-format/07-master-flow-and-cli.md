@@ -124,3 +124,11 @@ the worker automatically reports overall request status only.
 Nodes across the batch share the existing scheduler, capped at 32 concurrent
 nodes. Dependencies remain local to each request. GPU units are reserved for the
 full node lifecycle; `units: 0` is CPU-only. Successful subprocess output is hidden.
+
+
+HTTP requests identify themselves with `User-Agent: mu/<version>`, including
+HTTP actions. An action can override this through its `header` mapping. This
+avoids tunnel/proxy rules that reject urllib's default library user agent.
+An empty claim prints `No matching requests` and exits successfully; the default
+status filter is `waiting`. A successful public health check alone does not
+verify token authentication, the spec slug, or the availability of waiting work.

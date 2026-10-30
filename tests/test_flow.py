@@ -139,6 +139,7 @@ class FlowTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
             def do_GET(self):
+                self.assert_auth()
                 events.append(self.path)
                 self.send_response(200); self.end_headers(); self.wfile.write(yaml.safe_dump(spec).encode())
             def do_POST(self):
@@ -154,6 +155,7 @@ class FlowTests(unittest.TestCase):
                 self.send_response(200); self.end_headers(); self.wfile.write(json.dumps(response).encode())
             def assert_auth(self):
                 assert self.headers["Authorization"] == "Bearer test-token"
+                assert self.headers["User-Agent"].startswith("mu/")
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
@@ -169,6 +171,8 @@ class FlowTests(unittest.TestCase):
             result = CliRunner().invoke(app, args, env=environment)
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertEqual(len(selections), 3)
+        self.assertIn("No matching requests", result.output)
+        self.assertIn("Unit worker: offline", result.output)
         self.assertTrue(all(s["byStatus"] == ["waiting"] and s["byPipeline"] == ["demo", "other"] for s in selections))
         self.assertEqual([r["status"] for r in reports], ["processing", "succeeded"] * 2)
         self.assertEqual(json.loads((root / "2.json").read_text()), "2")

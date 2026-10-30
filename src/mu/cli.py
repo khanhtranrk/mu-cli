@@ -500,9 +500,11 @@ def master_flow_run(
         heartbeat = {"unitId": unit_id, "unitType": unit_type,
                      "workingDir": base["session"]["working_dir"],
                      "devices": [{"family": d.backend, "index": int(d.index)} for d in devices]}
+        typer.echo(f"[MASTER-FLOW] Registering unit {unit_id}")
         client.post("/api/units/heartbeat", {**heartbeat, "status": "online"})
         try:
             definition = client.spec("/api/specs/" + quote(spec_slug, safe=""))
+            typer.echo(f"[MASTER-FLOW] Spec loaded: {spec_slug}")
             flow = Flow(definition, "master_flow", base, devices, Path(base["session"]["working_dir"]))
             selection = {"unitId": unit_id, "specSlug": spec_slug, "maxCount": batch_size,
                          "byStatus": by_status or ["waiting"]}
@@ -515,11 +517,14 @@ def master_flow_run(
             def batches():
                 seen = set()
                 while True:
+                    typer.echo(f"[MASTER-FLOW] Claiming up to {batch_size} request(s) for {spec_slug}")
                     batch = client.post("/api/requests/claim", selection)
                     if not isinstance(batch, list) or len(batch) > batch_size:
                         raise ValueError("claim response must be an array within batch-size")
                     if not batch:
+                        typer.echo("[MASTER-FLOW] No matching requests; exiting (status filter: " + ", ".join(selection["byStatus"]) + ")")
                         return False
+                    typer.echo(f"[MASTER-FLOW] Claimed {len(batch)} request(s)")
                     parsed = []
                     for item in batch:
                         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) and item[k] for k in ("requestId", "specSlug", "pipelineName")) or "payload" not in item:
@@ -541,6 +546,7 @@ def master_flow_run(
             original = sys.exc_info()[1]
             try:
                 client.post("/api/units/heartbeat", {**heartbeat, "status": "offline"})
+                typer.echo(f"[MASTER-FLOW] Unit {unit_id}: offline")
             except Exception as exc:
                 if original is None:
                     raise

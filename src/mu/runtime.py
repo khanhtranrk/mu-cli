@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from mu.http_headers import request_headers
 from mu.hardware import ComputeDevice
 from mu.pipelines import _render
 
@@ -210,7 +211,7 @@ def run_action(
         elif typ == "send_http_request":
             data = values.get("body")
             payload = json.dumps(data).encode() if data is not None else None
-            req = Request(values["url"], data=payload, headers=values.get("header", {}), method=str(values.get("method", "get")).upper())
+            req = Request(values["url"], data=payload, headers=request_headers(values.get("header", {})), method=str(values.get("method", "get")).upper())
             http_error = None
             try:
                 response = urlopen(req, timeout=30)

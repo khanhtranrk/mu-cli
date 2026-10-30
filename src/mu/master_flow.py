@@ -6,6 +6,8 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from mu.http_headers import request_headers
+
 
 class MasterFlowClient:
     def __init__(self, server: str, token: str):
@@ -22,7 +24,7 @@ class MasterFlowClient:
         if body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps(body).encode()
-        request = Request(self.server + path, data=data, headers=headers)
+        request = Request(self.server + path, data=data, headers=request_headers(headers))
         try:
             with urlopen(request, timeout=30) as response:
                 return response.read().decode("utf-8")
