@@ -13,9 +13,10 @@ pipeline:
     nodes:
       - name: prepare
         run:
-          workload: mkdir
-          args:
-            path: "{params[output]}"
+          - type: execute_workload
+            workload: mkdir
+            args:
+              path: "{params[output]}"
 ```
 
 ### `prepare`
@@ -46,8 +47,9 @@ A list of nodes. Every node in a pipeline request must have a unique, non-empty 
   precondition: {...}
   before_run: [...]
   run:
-    workload: yue2
-    args: {...}
+    - type: execute_workload
+      workload: yue2
+      args: {...}
   after_run: [...]
   postcondition: {...}
   finally: [...]
@@ -104,7 +106,7 @@ This is an important distinction from `skip_if`: a failed precondition is a node
 
 ### `before_run`
 
-A list of actions that run immediately before the workload:
+A sequential list of actions that runs before `run`:
 
 ```yaml
 before_run:
@@ -124,27 +126,29 @@ If an action fails and its error is not ignored:
 
 ### `run`
 
-The node invokes a workload through a mapping:
+A sequential action list, using `execute_workload` to invoke a workload:
 
 ```yaml
 run:
-  workload: transcribe
-  args:
-    input: "{params[input]}"
-    output: "{params[output]}"
+  - type: execute_workload
+    workload: transcribe
+    args:
+      input: "{params[input]}"
+      output: "{params[output]}"
 ```
 
 Rules:
 
-- `run.workload` is the key name in `workloads`.
-- `run.args` is a mapping that supplies workload params.
+- An `execute_workload` action uses `workload` to name a declaration in `workloads`.
+- Its `args` is a mapping that supplies workload params.
 - Args are rendered using the node context.
-- Omitting `run` makes the node an action-only node.
-- `run` cannot be a list of actions in the current runtime.
+- Omitting `run` or using `[]` is allowed.
+- All three phases accept ordinary actions and `execute_workload`.
+- The old `run: {workload, args}` mapping is rejected; migrate it to a list with `type: execute_workload`.
 
 ### `after_run`
 
-A list of actions that runs after the workload succeeds:
+A sequential list of actions that runs after every `run` action succeeds:
 
 ```yaml
 after_run:
@@ -267,9 +271,10 @@ pipeline:
     nodes:
       - name: output-dir
         run:
-          workload: mkdir
-          args:
-            path: "{session[output_dir]}/{params[name]}"
+          - type: execute_workload
+            workload: mkdir
+            args:
+              path: "{session[output_dir]}/{params[name]}"
 
       - name: render
         depends_on:
@@ -283,12 +288,13 @@ pipeline:
             content:
               prompt: "{params[prompt]}"
         run:
-          workload: render-image
-          args:
-            request: "{session[cache_dir]}/{params[name]}.json"
-            output: "{session[output_dir]}/{params[name]}/cover.png"
-            width: "{params[width]}"
-            height: "{params[height]}"
+          - type: execute_workload
+            workload: render-image
+            args:
+              request: "{session[cache_dir]}/{params[name]}.json"
+              output: "{session[output_dir]}/{params[name]}/cover.png"
+              width: "{params[width]}"
+              height: "{params[height]}"
         postcondition:
           operator: file_exists
           path: "{session[output_dir]}/{params[name]}/cover.png"
@@ -332,3 +338,8 @@ declarations remain errors, rather than ignored execution outcomes.
   depends_on:
     - optional_step
 ```
+
+Node GPU reservations use the maximum workload `units` across the sequential
+action lists `before_run`, `run`, and `after_run`. Mu reserves this capacity
+before starting any node actions and releases it after `finally`. Conditional
+workload actions are included in this maximum. See [actions](04-actions.md) for `execute_workload`.

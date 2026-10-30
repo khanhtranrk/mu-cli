@@ -4,10 +4,11 @@ A workload is a reusable subprocess declaration. It does not run when it is defi
 
 ```yaml
 run:
-  workload: transcribe
-  args:
-    input: "{params[input]}"
-    output: "{session[output_dir]}/transcript"
+  - type: execute_workload
+    workload: transcribe
+    args:
+      input: "{params[input]}"
+      output: "{session[output_dir]}/transcript"
 ```
 
 ## Minimum schema
@@ -54,7 +55,7 @@ params:
 
 Before the process starts:
 
-1. Mu renders `run.args` using the node context.
+1. Mu renders `execute_workload.args` using the node context.
 2. Mu validates the workload schema.
 3. Mu renders the resulting parameter values again.
 4. Mu creates `workload_context.params`.
@@ -232,9 +233,10 @@ Node invocation:
 ```yaml
 - name: generate-song
   run:
-    workload: yue2
-    args:
-      request: "{session[cache_dir]}/requests/song.json"
-      output: "{session[output_dir]}/song/song.mp3"
-      score: "{session[output_dir]}/song/song.abc"
+    - type: execute_workload
+      workload: yue2
+      args:
+        request: "{session[cache_dir]}/requests/song.json"
+        output: "{session[output_dir]}/song/song.mp3"
+        score: "{session[output_dir]}/song/song.abc"
 ```

@@ -53,10 +53,11 @@ pipeline:
           - type: create_dir
             path: "{session[working_dir]}/output"
         run:
-          workload: make-copy
-          args:
-            source: "{params[source]}"
-            destination: "{params[destination]}"
+          - type: execute_workload
+            workload: make-copy
+            args:
+              source: "{params[source]}"
+              destination: "{params[destination]}"
         postcondition:
           operator: file_exists
           path: "{params[destination]}"
@@ -69,8 +70,8 @@ The data tree above means:
 - `workloads`: reusable subprocess templates.
 - `pipeline`: workflows made up of tasks.
 - `pipeline.<name>.nodes`: the steps in a workflow.
-- `node.run`: invokes a workload.
-- `node.before_run`, `after_run`, and `finally`: actions that run around the workload.
+- `node.run`: a sequential list of actions, including `execute_workload`.
+- `node.before_run`, `after_run`, and `finally`: separate action lists around `run`.
 - `skip_if`, `precondition`, and `postcondition`: conditions that control nodes and actions.
 - `depends_on`: dependencies and ordering between nodes.
 

@@ -80,10 +80,11 @@ pipeline:
     nodes:
       - name: convert
         run:
-          workload: transcode
-          args:
-            source: "{params[source]}"
-            destination: "{params[destination]}"
+          - type: execute_workload
+            workload: transcode
+            args:
+              source: "{params[source]}"
+              destination: "{params[destination]}"
 ```
 
 A request file supplies pipeline parameters:
@@ -103,7 +104,7 @@ Mu validates declared parameters before execution. A list of mappings creates mu
 4. Merge each request's parameters into an isolated pipeline context.
 5. Build named nodes and resolve `depends_on` dependencies.
 6. Schedule ready nodes concurrently and assign GPU units where required.
-7. Run `before_run`, the workload, `after_run`, and output conditions for each node.
+7. Run the sequential action lists `before_run`, `run`, `after_run`, then output conditions for each node.
 8. Run node `finally` actions, then entry finalization when the flow exits.
 
 Nodes use `depends_on: [node_a, node_b]` and run only after every prerequisite reports `success`. Failed prerequisites block dependent execution, including `finally`. A node with `ignore_error: true` reports success so dependents can continue. A workload with `units: 0` runs on the CPU. GPU workloads do not run on an undersized device.
@@ -133,6 +134,10 @@ Templates use bracket lookup syntax such as `{params[name]}`, `{session[output_d
 - [Master flow and CLI](docs/spec-format/07-master-flow-and-cli.md)
 - [Complete example](docs/spec-format/08-complete-example.md)
 - [Quick reference](docs/spec-format/quick-reference.md)
+
+Node actions can read the assigned device through `{node[device][family]}` and
+`{node[device][index]}`. CPU placement uses `family: cpu` and `index: null`.
+See [node context](docs/spec-format/02-context-and-templates.md#node-context).
 
 Action names use `snake_case` and the `type` key, without aliases.
 `execute_command` and `send_http_request` support `save_state: name`, saving
@@ -197,3 +202,8 @@ uv run mu --help
 Before submitting changes, run the narrowest relevant tests or a small temporary spec. There is currently no committed test suite or configured linter, so report exactly which smoke checks or focused validations you used.
 
 Run a narrow test selection while changing runtime behavior. Full tests are appropriate after a broad or cross-module change. Do not run the media example's heavy workload during routine development: it can download large models and use GPUs or substantial disk space.
+
+Node GPU reservations use the maximum workload `units` across the sequential
+action lists `before_run`, `run`, and `after_run`. Mu reserves this capacity
+before starting any node actions and releases it after `finally`. Conditional
+workload actions are included in this maximum. See [actions](docs/spec-format/04-actions.md) for `execute_workload`.

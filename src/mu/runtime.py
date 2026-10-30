@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -157,13 +158,16 @@ def _apply_context(target: dict[str, Any], values: Any) -> None:
 
 def run_action(
     action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path,
-    *, label: str = "action",
+    *, label: str = "action", spec: dict[str, Any] | None = None,
+    device: ComputeDevice | None = None,
 ) -> None:
     typ = action.get("type")
     if "action" in action:
         raise RuntimeError(f"{label}: use type, not action")
-    if not isinstance(typ, str) or typ not in {"execute_command", "create_dir", "write_json", "send_http_request"}:
+    if not isinstance(typ, str) or typ not in {"execute_command", "execute_workload", "create_dir", "write_json", "send_http_request"}:
         raise RuntimeError(f"{label}: unknown action type {typ!r}; use snake_case names")
+    if typ == "execute_workload" and spec is None:
+        raise RuntimeError(f"{label}: execute_workload is only supported in node before_run, run and after_run")
     if "save_response_to_context" in action:
         raise RuntimeError(f"{label}: save_response_to_context was removed; use save_state")
     if "save_state" in action and typ not in {"execute_command", "send_http_request"}:
@@ -203,6 +207,10 @@ def run_action(
             result.update(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
             if completed.returncode:
                 raise subprocess.CalledProcessError(completed.returncode, completed.args, completed.stdout, completed.stderr)
+        elif typ == "execute_workload":
+            declaration = spec["workloads"][action["workload"]]
+            execute_workload(spec, action["workload"], values.get("args", {}), context,
+                             device if declaration.get("units", 0) > 0 else None, workdir)
         elif typ == "create_dir":
             Path(values["path"]).expanduser().mkdir(parents=True, exist_ok=True)
         elif typ == "write_json":
@@ -286,7 +294,13 @@ def _execute_node(
 ) -> tuple[str, str | None]:
     name = node["name"]
     node_context = deepcopy(context)
-    node_context["node"] = {"name": name, "status": "running", "total_units": 0}
+    node_context["node"] = {
+        "name": name, "status": "running", "total_units": node_units(spec, node),
+        "device": {
+            "family": {"nvidia": "cuda", "rocm": "rocm"}.get(device.backend, device.backend) if device else "cpu",
+            "index": device.index if device else None,
+        },
+    }
     _apply_context(node_context, _render(node.get("context", {}), node_context))
     state, error = "success", None
     started = time.perf_counter()
@@ -302,16 +316,10 @@ def _execute_node(
                     print(f"[CHECK] {pipeline_name}/{name}: precondition failed", flush=True)
                     raise RuntimeError(f"node {name!r} precondition failed")
                 print(f"[CHECK] {pipeline_name}/{name}: precondition passed", flush=True)
-            for index, action in enumerate(node.get("before_run", []), start=1):
-                run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} before_run[{index}]")
-            run = node.get("run")
-            if isinstance(run, dict):
-                workload = run.get("workload")
-                config = spec.get("workloads", {}).get(workload, {})
-                node_context["node"]["total_units"] = config.get("units", 0)
-                execute_workload(spec, workload, _render(run.get("args", {}), node_context), node_context, device, workdir)
-            for index, action in enumerate(node.get("after_run", []), start=1):
-                run_action(action, node_context, states, workdir, label=f"{pipeline_name}/{name} after_run[{index}]")
+            for phase in ("before_run", "run", "after_run"):
+                for index, action in enumerate(node.get(phase, []), start=1):
+                    run_action(action, node_context, states, workdir,
+                               label=f"{pipeline_name}/{name} {phase}[{index}]", spec=spec, device=device)
             if node.get("postcondition"):
                 if not condition(node["postcondition"], node_context, states):
                     raise RuntimeError(f"node {name!r} postcondition failed")
@@ -333,12 +341,39 @@ def _execute_node(
     return state, error
 
 
+def node_units(spec: dict[str, Any], node: dict[str, Any]) -> float:
+    """Reserve the peak sequential workload demand before any node action starts."""
+    peak = 0.0
+    for phase in ("before_run", "run", "after_run"):
+        for index, action in enumerate(node.get(phase, []), start=1):
+            if action.get("type") != "execute_workload":
+                continue
+            label = f"node {node['name']!r}.{phase}[{index}]"
+            name = action.get("workload")
+            if not isinstance(name, str) or not name or "{" in name or "}" in name:
+                raise RuntimeError(f"{label}.workload must be a literal non-empty workload name")
+            declaration = spec.get("workloads", {}).get(name)
+            if not isinstance(declaration, dict):
+                raise RuntimeError(f"{label}.workload references undefined workload {name!r}")
+            if not isinstance(action.get("args", {}), dict):
+                raise RuntimeError(f"{label}.args must be a mapping of workload parameters")
+            units = declaration.get("units", 0)
+            if isinstance(units, bool) or not isinstance(units, (int, float)) or not math.isfinite(units) or units < 0:
+                raise RuntimeError(f"workloads.{name}.units must be a finite non-negative number; got {units!r}")
+            peak = max(peak, units)
+    return peak
+
+
 def validate_pipeline(definition: dict, pipeline_name: str) -> list[dict]:
     nodes = definition.get("nodes", [])
     if not isinstance(nodes, list): raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must be a list")
     for node in nodes:
         if not isinstance(node, dict):
             raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must contain mappings")
+        for phase in ("before_run", "run", "after_run", "finally"):
+            actions = node.get(phase, [])
+            if not isinstance(actions, list) or not all(isinstance(action, dict) for action in actions):
+                raise RuntimeError(f"node {node.get('name')!r}.{phase} must be a list of action mappings; use type: execute_workload to invoke a workload")
         if not isinstance(node.get("ignore_error", False), bool):
             raise RuntimeError(f"node {node.get('name')!r}.ignore_error must be a boolean")
     names = [node.get("name") for node in nodes]
@@ -394,7 +429,7 @@ def execute_pipelines(
             order.append(job_id)
             jobs[job_id] = {
                 "request_index": request_index, "pipeline": pipeline_name,
-                "context": context, "node": node, "status": "pending",
+                "context": context, "node": node, "status": "pending", "units": node_units(spec, node),
             }
 
     device_free = {device.index: float(device.capacity_units) for device in devices}
@@ -423,9 +458,7 @@ def execute_pipelines(
                     pipeline_states[node["name"]] = state
                     continue
 
-                run = node.get("run")
-                workload = run.get("workload") if isinstance(run, dict) else None
-                units = float(spec.get("workloads", {}).get(workload, {}).get("units", 0)) if workload else 0.0
+                units = job["units"]
                 device: ComputeDevice | None = None
                 if units > 0:
                     fitting = [candidate for candidate in devices if candidate.capacity_units >= units]
@@ -568,7 +601,8 @@ class Flow:
                     raise RuntimeError(f"pipeline {name!r} is not defined")
                 if not isinstance(payload, dict):
                     raise RuntimeError(f"pipeline {name!r}: request payload must be a mapping")
-                validate_pipeline(definition, name)
+                for node in validate_pipeline(definition, name):
+                    node_units(self.spec, node)
                 context = deepcopy(self.prepared.get(name, self.context))
                 if name not in self.prepared:
                     _apply_context(context, _render(definition.get("context", {}), context))

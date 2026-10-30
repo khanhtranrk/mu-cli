@@ -102,15 +102,17 @@ pipeline:
     nodes:
       - name: make-output-dir
         run:
-          workload: mkdir
-          args:
-            path: "{item_dir}"
+          - type: execute_workload
+            workload: mkdir
+            args:
+              path: "{item_dir}"
 
       - name: write-request
         depends_on:
           - make-output-dir
         run:
-          workload: noop
+          - type: execute_workload
+            workload: noop
         before_run:
           - type: write_json
             path: "{session[cache_dir]}/{params[name]}.json"
@@ -133,11 +135,12 @@ pipeline:
           operator: file_exists
           path: "{item_dir}/result.txt"
         run:
-          workload: render
-          args:
-            script: "{session[working_dir]}/render.py"
-            request: "{session[cache_dir]}/{params[name]}.json"
-            output: "{item_dir}/result.txt"
+          - type: execute_workload
+            workload: render
+            args:
+              script: "{session[working_dir]}/render.py"
+              request: "{session[cache_dir]}/{params[name]}.json"
+              output: "{item_dir}/result.txt"
         postcondition:
           operator: and
           props:
@@ -159,7 +162,7 @@ pipeline:
               name: "{params[name]}"
 ```
 
-This example contains one intentionally demonstrated error: the `write-request` node declares `run.workload: noop`, but `noop` is not defined in `workloads`. Remove `run` or add the workload to fix it.
+This example contains one intentionally demonstrated error: the `write-request` node declares `execute_workload.workload: noop`, but `noop` is not defined in `workloads`. Remove `run` or add the workload to fix it.
 
 An action-only node is valid:
 
@@ -228,9 +231,10 @@ pipeline:
     nodes:
       - name: make-output-dir
         run:
-          workload: mkdir
-          args:
-            path: "{item_dir}"
+          - type: execute_workload
+            workload: mkdir
+            args:
+              path: "{item_dir}"
 
       - name: write-request
         depends_on:
@@ -254,11 +258,12 @@ pipeline:
           operator: file_exists
           path: "{item_dir}/result.txt"
         run:
-          workload: render
-          args:
-            script: "{session[working_dir]}/render.py"
-            request: "{session[cache_dir]}/{params[name]}.json"
-            output: "{item_dir}/result.txt"
+          - type: execute_workload
+            workload: render
+            args:
+              script: "{session[working_dir]}/render.py"
+              request: "{session[cache_dir]}/{params[name]}.json"
+              output: "{item_dir}/result.txt"
         postcondition:
           operator: file_exists
           path: "{item_dir}/result.txt"

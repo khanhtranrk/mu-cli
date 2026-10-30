@@ -26,10 +26,11 @@ pipeline:
       - name: execute
         before_run: []
         run:
-          workload: example-workload
-          args:
-            input: "{params[input]}"
-            output: "{params[output]}"
+          - type: execute_workload
+            workload: example-workload
+            args:
+              input: "{params[input]}"
+              output: "{params[output]}"
         after_run: []
         postcondition:
           operator: file_exists

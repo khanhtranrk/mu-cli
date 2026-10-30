@@ -101,10 +101,11 @@ pipeline:
     nodes:
       - name: execute
         run:
-          workload: example
-          args:
-            input: "{params[input]}"
-            output: "{params[output]}"
+          - type: execute_workload
+            workload: example
+            args:
+              input: "{params[input]}"
+              output: "{params[output]}"
         postcondition:
           operator: file_exists
           path: "{params[output]}"

@@ -39,7 +39,7 @@ workloads:
     target: ...
 ```
 
-The outer key is the workload's unique name within the spec. A node references that name in `run.workload`. Its properties are described in [Workloads](03-workloads.md).
+The outer key is the workload's unique name within the spec. An `execute_workload` action references that name in its `workload` field. Its properties are described in [Workloads](03-workloads.md).
 
 ## `pipeline`
 
@@ -93,7 +93,7 @@ When dependencies have succeeded:
    - end with status success
 5. Check precondition, if present
 6. Run each action in before_run
-7. Run run.workload
+7. Run the actions in run sequentially
 8. Run each action in after_run
 9. Check postcondition, if present
 10. Run each action in finally
@@ -134,10 +134,11 @@ pipeline:
     nodes:
       - name: copy-file
         run:
-          workload: copy
-          args:
-            source: "{params[source]}"
-            destination: "{params[destination]}"
+          - type: execute_workload
+            workload: copy
+            args:
+              source: "{params[source]}"
+              destination: "{params[destination]}"
         finally:
           - type: execute_command
             target: python

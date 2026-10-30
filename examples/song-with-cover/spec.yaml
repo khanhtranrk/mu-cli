@@ -327,11 +327,18 @@ pipeline:
           style: '{params[style]}'
           lyrics: '{params[lyrics]}'
       run:
-        workload: yue2
-        args:
-          request: '{session[cache_dir]}/requests/{params[name]}/{params[name]}.json'
-          output: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-          score: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+        - type: execute_workload
+          workload: yue2
+          args:
+            request: '{session[cache_dir]}/requests/{params[name]}/{params[name]}.json'
+            output: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+            score: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+      finally:
+      - type: write_json
+        path: '{session[cache_dir]}/requests/{params[name]}/generate-song-state.json'
+        content:
+          status: '{node[status]}'
+          device_family: '{node[device][family]}'
     - name: generate-cover
       precondition:
         operator: exit_code
@@ -348,12 +355,13 @@ pipeline:
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
       run:
-        workload: qwen-image
-        args:
-          output: '{session[output_dir]}/{params[name]}/cover.png'
-          prompt: '{params[cover_prompt]}'
-          cover_with: '{params[cover_with]}'
-          cover_height: '{params[cover_height]}'
+        - type: execute_workload
+          workload: qwen-image
+          args:
+            output: '{session[output_dir]}/{params[name]}/cover.png'
+            prompt: '{params[cover_prompt]}'
+            cover_with: '{params[cover_with]}'
+            cover_height: '{params[cover_height]}'
     - name: separate-vocals
       skip_if:
         operator: file_exists
@@ -367,10 +375,11 @@ pipeline:
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}/separated'
       run:
-        workload: demucs
-        args:
-          output: '{session[output_dir]}/{params[name]}/separated'
-          input: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+        - type: execute_workload
+          workload: demucs
+          args:
+            output: '{session[output_dir]}/{params[name]}/separated'
+            input: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
     - name: transcribe-vocals
       skip_if:
         operator: file_exists
@@ -384,7 +393,8 @@ pipeline:
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}/transcript'
       run:
-        workload: whisperx
-        args:
-          output: '{session[output_dir]}/{params[name]}/transcript'
-          input: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
+        - type: execute_workload
+          workload: whisperx
+          args:
+            output: '{session[output_dir]}/{params[name]}/transcript'
+            input: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'

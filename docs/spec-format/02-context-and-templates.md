@@ -151,10 +151,11 @@ Nodes supply arguments:
 
 ```yaml
 run:
-  workload: resize
-  args:
-    input: "{params[input]}"
-    output: "{params[name]}.png"
+  - type: execute_workload
+    workload: resize
+    args:
+      input: "{params[input]}"
+      output: "{params[name]}.png"
 ```
 
 The workload defines the schema for these arguments:
@@ -187,13 +188,25 @@ node:
   name: render
   status: running
   total_units: 3
+  device:
+    family: cuda
+    index: "0"
 ```
 
 `node.status` is `running` throughout the main lifecycle and updated to
-`success` or `failed` before each finally action. `node.total_units` starts at
-zero and is assigned `workload.units` just before workload execution.
+`success` or `failed` before each finally action. `node.total_units` is the maximum workload units across `before_run`, `run`,
+and `after_run`, available from the start of node execution.
 Use [node_state](05-conditions.md#node_state) with `target: [status]`, `[name]`,
 or `[total_units]` and a required `expected` value to inspect these fields.
+
+`node.device` describes the scheduler-assigned workload device from the start
+of node execution, including context rendering, conditions, actions and `finally`.
+`family` is `cuda` for NVIDIA, `rocm` for AMD, or the backend name for other
+backends. GPU `index` is a string. CPU-only nodes and CPU fallback use
+`{family: cpu, index: null}`. Skipped nodes retain their assigned placement;
+this does not prove that a workload ran or that an action uses that GPU.
+Read `{node[device][family]}` / `{node[device][index]}`, or use `node_state`
+with `target: [device, family]` / `[device, index]` and an explicit `expected`.
 
 ## Action context
 

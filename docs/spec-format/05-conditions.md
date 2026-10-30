@@ -266,14 +266,16 @@ precondition:
   expected: failed
 ```
 
-Available runtime fields are `name`, `status`, and `total_units`.
+Available runtime fields are `name`, `status`, `total_units`, and `device`.
+Use `target: [device, family]` or `[device, index]` to inspect the assigned
+placement; CPU placement has family `cpu` and index `null`.
 Status is `running` during the main node lifecycle, including node
 preconditions, before/after actions and node postconditions. In `finally`,
 it is `success` or `failed`, updated before each action. A non-ignored
 finally error changes status to `failed` for subsequent finally actions.
 A successful skip enters finally as `success`, unless its postcondition fails.
-`total_units` starts at zero and is assigned the workload's declared units
-just before workload execution.
+`total_units` is the maximum workload units across `before_run`, `run`,
+and `after_run`, available before any node context or action is evaluated.
 
 Missing node context or a missing key returns false, including when
 `expected: null`. Malformed target or absent expected raises a declaration

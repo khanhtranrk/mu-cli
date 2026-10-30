@@ -22,7 +22,7 @@ Do not assume that fields in the legacy `processors`/`pipelines`/`steps` format 
 
 ## Runtime behavior to preserve
 
-- The workload/pipeline format uses `workloads`, singular `pipeline`, and node `run.workload`; the media example uses this format.
+- The workload/pipeline format uses `workloads`, singular `pipeline`, and node action lists with `type: execute_workload`; the media example uses this format.
 - Entry lifecycle and lazy pipeline preparation follow [the lifecycle guide](docs/spec-format/07-master-flow-and-cli.md).
 - Every request gets an isolated pipeline context. Pipeline context is merged once, parameter values are validated, and node contexts are copied before node-local additions.
 - The base context contains `sys` and `session`. Pipelines add `params`; nodes add `node`; scheduled GPU workloads add `schedule`.

@@ -30,6 +30,33 @@ An action is a side-effecting operation: running a process, creating a directory
 
 With `ignore_error: true`, a false postcondition still prints a warning and execution continues.
 
+## `execute_workload`
+
+Invokes a reusable workload inside node `before_run`, `run`, or `after_run`:
+
+```yaml
+run:
+  - type: execute_workload
+    workload: transcribe
+    args:
+      input: "{params[input]}"
+      output: "{params[output]}"
+```
+
+`workload` must be a literal name defined in `workloads`; templates are not
+supported in this name because scheduling happens before actions run. `args`
+is a mapping of workload parameters, rendered from the current node context.
+Common action context, conditions, postcondition and `ignore_error` apply.
+`save_state` is not supported. Workload parameters remain local to that call.
+
+The scheduler reserves the maximum `units` of all workload actions in the
+three phases before starting the node, even for conditional/skipped actions.
+All GPU workloads use that same assigned device. A `units: 0` workload always
+runs CPU-only, with no `device_args` or `schedule` context. The reservation is
+held through `finally`. With no workload actions, the node requires zero units.
+`execute_workload` is not supported in `finally`, pipeline `prepare`, or entry
+initialization/finalization; these phases do not add to the reservation.
+
 ## `execute_command`
 
 Runs one subprocess:
@@ -181,9 +208,10 @@ before_run:
       name: "{params[name]}"
       style: "{params[style]}"
 run:
-  workload: yue2
-  args:
-    request: "{session[cache_dir]}/requests/{params[name]}/request.json"
+  - type: execute_workload
+    workload: yue2
+    args:
+      request: "{session[cache_dir]}/requests/{params[name]}/request.json"
 after_run:
   - type: send_http_request
     url: "https://example.invalid/notify"

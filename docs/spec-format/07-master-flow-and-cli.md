@@ -132,3 +132,8 @@ avoids tunnel/proxy rules that reject urllib's default library user agent.
 An empty claim prints `No matching requests` and exits successfully; the default
 status filter is `waiting`. A successful public health check alone does not
 verify token authentication, the spec slug, or the availability of waiting work.
+
+Node GPU reservations use the maximum workload `units` across the sequential
+action lists `before_run`, `run`, and `after_run`. Mu reserves this capacity
+before starting any node actions and releases it after `finally`. Conditional
+workload actions are included in this maximum. See [actions](04-actions.md) for `execute_workload`.

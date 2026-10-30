@@ -60,9 +60,9 @@ Action names use snake_case and are declared with `type`. No action aliases are 
 | `ignore_error` | boolean | Default false; report node failure as scheduler success after finally |
 | `skip_if` | condition | Skip the node when true |
 | `precondition` | condition | Required precondition |
-| `before_run` | action list | Run before the workload |
-| `run` | mapping | `{workload, args}` |
-| `after_run` | action list | Run after the workload |
+| `before_run` | action list | Run before the run actions |
+| `run` | action list | Sequential actions, including `execute_workload` |
+| `after_run` | action list | Run after the run actions |
 | `postcondition` | condition | Check after the main section |
 | `finally` | action list | Always run last |
 | `depends_on` | list | List of prerequisite node names; all must succeed |
@@ -95,6 +95,7 @@ Operator names use snake_case without aliases.
 | `session.cache_dir` | `{session[cache_dir]}` | Base |
 | `params` | `{params[name]}` | Pipeline/workload |
 | `node.name/status/total_units` | `{node[status]}` | Node |
+| `node.device.family/index` | `{node[device][family]}` | Node; CPU uses `cpu` / `null` |
 | `schedule.device_family` | `{schedule[device_family]}` | GPU node |
 | `schedule.device_index` | `{schedule[device_index]}` | GPU node |
 
@@ -158,7 +159,7 @@ uv run mu master-flow run --help
 
 - The root spec is a mapping.
 - Every workload key has a target; args is a list.
-- Workload params match `run.args`.
+- Workload params match `execute_workload.args`.
 - Pipeline params match the request.
 - Node names are unique within the pipeline.
 - Dependency nodes exist within the same pipeline.
