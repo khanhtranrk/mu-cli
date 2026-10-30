@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from copy import deepcopy
@@ -20,6 +22,53 @@ from mu.pipelines import _render
 
 class RuntimeError(ValueError):
     pass
+
+
+_processes: set[subprocess.Popen] = set()
+_process_lock = threading.RLock()
+_cancelled = threading.Event()
+
+
+def terminate_processes() -> None:
+    _cancelled.set()
+    with _process_lock:
+        processes = list(_processes)
+    for process in processes:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def reset_interruption() -> None:
+    _cancelled.clear()
+
+
+def _run_process(command, **kwargs):
+    """Track process groups so interruption can stop worker-thread children too."""
+    check = kwargs.pop("check", False)
+    with _process_lock:
+        if _cancelled.is_set():
+            raise RuntimeError("flow interrupted")
+        process = subprocess.Popen(command, start_new_session=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, **kwargs)
+        _processes.add(process)
+    try:
+        stdout, stderr = process.communicate()
+        result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        if check and result.returncode:
+            raise subprocess.CalledProcessError(result.returncode, command, stdout, stderr)
+        return result
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        raise
+    finally:
+        with _process_lock:
+            _processes.discard(process)
 
 
 def read_data(path: Path) -> Any:
@@ -75,17 +124,17 @@ def condition(spec: Any, context: dict[str, Any], states: dict[str, str]) -> boo
         if not isinstance(expected, int) or isinstance(expected, bool):
             raise RuntimeError("exit_code.expected must be an integer")
         try:
-            result = subprocess.run(list(map(str, target)), cwd=context["session"]["working_dir"], capture_output=True, text=True)
+            result = _run_process(list(map(str, target)), cwd=context["session"]["working_dir"], text=True)
             value = result.returncode
         except OSError:
             value = None
-    elif op == "action_state":
+    elif op in {"action_state", "node_state"}:
         if "expected" not in spec:
-            raise RuntimeError("action_state.expected is required")
+            raise RuntimeError(f"{op}.expected is required")
         target = _render(spec.get("target"), context)
         if not isinstance(target, list) or not target or not all(isinstance(key, str) and key for key in target):
-            raise RuntimeError("action_state.target must be a non-empty list of non-empty string keys, starting with the save_state name")
-        value = context.get("actions", {})
+            raise RuntimeError(f"{op}.target must be a non-empty list of non-empty string keys")
+        value = context.get("actions" if op == "action_state" else "node", {})
         for key in target:
             if not isinstance(value, dict) or key not in value:
                 return False
@@ -145,10 +194,10 @@ def run_action(
             args = values.get("args", [])
             if not target or not isinstance(args, list):
                 raise RuntimeError("execute_command requires target and args")
-            completed = subprocess.run(
+            completed = _run_process(
                 [str(target), *map(str, args)], cwd=workdir,
                 env={**os.environ, **values.get("env", {})}, check=False,
-                capture_output=True, text=True, errors="replace",
+                text=True, errors="replace",
             )
             result.update(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
             if completed.returncode:
@@ -216,11 +265,18 @@ def execute_workload(spec: dict[str, Any], name: str, supplied: dict[str, Any], 
     placement = f"{device.backend}:{device.index}" if device else "cpu"
     print(f"[WORKLOAD] {name}: starting {target} ({units} units; device {placement})", flush=True)
     started = time.perf_counter()
-    result = subprocess.run(command, cwd=workdir, env=env, check=False, capture_output=True, text=True)
+    result = _run_process(command, cwd=workdir, env=env, text=True)
     if result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"{target} exited with status {result.returncode}" + (f": {detail}" if detail else ""))
     print(f"[WORKLOAD] {name}: completed in {time.perf_counter() - started:.1f}s", flush=True)
+
+
+def _node_result(node: dict[str, Any], state: str, error: str | None, label: str) -> tuple[str, str | None]:
+    if state == "failed" and node.get("ignore_error") is True:
+        print(f"[WARN] {label}: ignored node error: {error or 'node failed'}", flush=True)
+        return "success", None
+    return state, error
 
 
 def _execute_node(
@@ -269,15 +325,52 @@ def _execute_node(
         except Exception as exc:
             state, error = "failed", str(exc)
             final_states[name] = state
+    state, error = _node_result(node, state, error, f"{pipeline_name}/{name}")
     elapsed = time.perf_counter() - started
     if state == "failed": print(f"[FAIL] {pipeline_name}/{name} after {elapsed:.1f}s: {error}", flush=True)
     else: print(f"[OK] {pipeline_name}/{name} {state} in {elapsed:.1f}s", flush=True)
     return state, error
 
 
+def validate_pipeline(definition: dict, pipeline_name: str) -> list[dict]:
+    nodes = definition.get("nodes", [])
+    if not isinstance(nodes, list): raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must be a list")
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must contain mappings")
+        if not isinstance(node.get("ignore_error", False), bool):
+            raise RuntimeError(f"node {node.get('name')!r}.ignore_error must be a boolean")
+    names = [node.get("name") for node in nodes]
+    if any(not isinstance(name, str) or not name for name in names) or len(set(names)) != len(names):
+        raise RuntimeError(f"pipeline {pipeline_name!r} node names must be unique non-empty strings")
+    for node in nodes:
+        dependencies = node.get("depends_on", [])
+        if not isinstance(dependencies, list) or not all(isinstance(name, str) and name for name in dependencies):
+            raise RuntimeError(f"node {node['name']!r}.depends_on must be a list of non-empty node name strings")
+        for dependency in dependencies:
+            if dependency not in names:
+                raise RuntimeError(f"node {node['name']!r} depends on unknown node {dependency!r}")
+    edges = {node["name"]: node.get("depends_on", []) for node in nodes}
+    visiting, visited = set(), set()
+    def visit(name):
+        if name in visiting:
+            raise RuntimeError(f"pipeline {pipeline_name!r}: dependency cycle at {name!r}")
+        if name in visited:
+            return
+        visiting.add(name)
+        for dependency in edges[name]:
+            visit(dependency)
+        visiting.remove(name)
+        visited.add(name)
+    for name in edges:
+        visit(name)
+    return nodes
+
+
 def execute_pipelines(
     spec: dict[str, Any], requests: list[tuple[str, dict[str, Any]]], base: dict[str, Any],
     devices: list[ComputeDevice], workdir: Path,
+    *, request_contexts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
     """Schedule ready nodes across all requests, respecting dependencies and GPU units."""
     jobs: dict[str, dict[str, Any]] = {}
@@ -287,14 +380,11 @@ def execute_pipelines(
     for request_index, (pipeline_name, request) in enumerate(requests):
         definition = spec.get("pipeline", {}).get(pipeline_name)
         if not isinstance(definition, dict): raise RuntimeError(f"pipeline {pipeline_name!r} is not defined")
-        context = dict(base)
-        _apply_context(context, _render(definition.get("context", {}), context))
+        context = deepcopy(request_contexts[request_index] if request_contexts is not None else base)
+        if request_contexts is None:
+            _apply_context(context, _render(definition.get("context", {}), context))
         context["params"] = params_for(definition.get("params", {}), request, context, f"pipeline {pipeline_name}")
-        nodes = definition.get("nodes", [])
-        if not isinstance(nodes, list): raise RuntimeError(f"pipeline {pipeline_name!r}.nodes must be a list")
-        names = [node.get("name") for node in nodes]
-        if any(not isinstance(name, str) or not name for name in names) or len(set(names)) != len(names):
-            raise RuntimeError(f"pipeline {pipeline_name!r} node names must be unique non-empty strings")
+        nodes = validate_pipeline(definition, pipeline_name)
         print(f"[PIPELINE] {pipeline_name} request {request_index + 1}: queued ({len(nodes)} nodes)", flush=True)
         results.append({})
         for node in nodes:
@@ -318,27 +408,19 @@ def execute_pipelines(
                 request_index = job["request_index"]
                 node = job["node"]
                 dependencies = node.get("depends_on", [])
-                dependency_jobs = []
-                waiting = False
-                for dependency in dependencies:
-                    dependency_name = dependency.get("node", dependency.get("name"))
-                    dependency_id = job_by_request_name.get((request_index, dependency_name))
-                    if dependency_id is None: raise RuntimeError(f"node {node['name']!r} depends on unknown node {dependency_name!r}")
-                    dependency_jobs.append((dependency, dependency_id))
-                    if jobs[dependency_id]["status"] in {"pending", "running"}: waiting = True
-                if waiting: continue
+                dependency_jobs = [jobs[job_by_request_name[(request_index, name)]] for name in dependencies]
+                if any(dependency["status"] in {"pending", "running"} for dependency in dependency_jobs):
+                    continue
                 pipeline_states = results[request_index]
-                failed_dependency = False
-                for dependency, dependency_id in dependency_jobs:
-                    dependency_name = jobs[dependency_id]["node"]["name"]
-                    dep_context = {**job["context"], "node": {"name": dependency_name, "status": pipeline_states.get(dependency_name)}}
-                    if not condition(dependency.get("condition"), dep_context, pipeline_states):
-                        print(f"[BLOCKED] {job['pipeline']}/{node['name']}: dependency {dependency_name} condition failed", flush=True)
-                        job["status"] = "failed"
-                        pipeline_states[node["name"]] = "failed"
-                        failed_dependency = True
-                        break
-                if failed_dependency: continue
+                failed_dependency = next((dependency for dependency in dependency_jobs if dependency["status"] != "success"), None)
+                if failed_dependency is not None:
+                    dependency_name = failed_dependency["node"]["name"]
+                    detail = f"dependency {dependency_name} failed"
+                    print(f"[BLOCKED] {job['pipeline']}/{node['name']}: {detail}", flush=True)
+                    state, _ = _node_result(node, "failed", detail, f"{job['pipeline']}/{node['name']}")
+                    job["status"] = state
+                    pipeline_states[node["name"]] = state
+                    continue
 
                 run = node.get("run")
                 workload = run.get("workload") if isinstance(run, dict) else None
@@ -380,6 +462,7 @@ def execute_pipelines(
                 except Exception as exc:
                     state, error = "failed", f"unexpected node runner error: {exc}"
                 job = jobs[job_id]
+                state, error = _node_result(job["node"], state, error, f"{job['pipeline']}/{job['node']['name']}")
                 job["status"] = state
                 results[job["request_index"]][job["node"]["name"]] = state
                 if state == "failed" and error:
@@ -396,3 +479,137 @@ def execute_pipelines(
 def execute_pipeline(spec: dict[str, Any], pipeline_name: str, request: dict[str, Any], base: dict[str, Any], devices: list[ComputeDevice], workdir: Path) -> dict[str, str]:
     """Compatibility wrapper for scheduling one pipeline request."""
     return execute_pipelines(spec, [(pipeline_name, request)], base, devices, workdir)[0]
+
+
+class Flow:
+    """One entry invocation; preparation caches never survive into another flow."""
+
+    def __init__(self, spec: dict, entry: str, base: dict, devices: list[ComputeDevice], workdir: Path):
+        if "prepare" in spec:
+            raise RuntimeError("spec.prepare was removed; move actions to pipeline.<name>.prepare or entries.<entry>.initialization")
+        if "master-flow" in spec:
+            raise RuntimeError("spec.master-flow was removed; use entries.master_flow and server request claiming")
+        entries = spec.get("entries", {})
+        if not isinstance(entries, dict):
+            raise RuntimeError("entries must be a mapping")
+        for name, value in entries.items():
+            if name not in {"direct_flow", "master_flow"} or not isinstance(value, dict):
+                raise RuntimeError(f"entries.{name}: expected direct_flow/master_flow mapping")
+            for phase in ("initialization", "finalization"):
+                self.validate_actions(value.get(phase, []), f"entries.{name}.{phase}")
+        pipelines = spec.get("pipeline", {})
+        if not isinstance(pipelines, dict):
+            raise RuntimeError("pipeline must be a mapping")
+        for name, value in pipelines.items():
+            if not isinstance(value, dict):
+                raise RuntimeError(f"pipeline.{name} must be a mapping")
+            self.validate_actions(value.get("prepare", []), f"pipeline.{name}.prepare")
+        self.spec, self.devices, self.workdir = spec, devices, workdir
+        self.context = deepcopy(base)
+        self.context["entry"] = {"name": entry, "status": "running"}
+        self.lifecycle = entries.get(entry, {})
+        self.prepared: dict[str, dict] = {}
+        self.prepare_errors: dict[str, Exception] = {}
+
+    @staticmethod
+    def validate_actions(actions: Any, label: str) -> None:
+        if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+            raise RuntimeError(f"{label} must be a list of action mappings")
+
+    def initialize(self) -> None:
+        for index, action in enumerate(self.lifecycle.get("initialization", [])):
+            run_action(action, self.context, {}, self.workdir, label=f"entry initialization[{index}]")
+
+    def finalize(self, failed: bool) -> None:
+        self.context["entry"]["status"] = "failed" if failed else "success"
+        errors = []
+        for index, action in enumerate(self.lifecycle.get("finalization", [])):
+            try:
+                run_action(action, self.context, {}, self.workdir, label=f"entry finalization[{index}]")
+            except Exception as exc:
+                errors.append(str(exc))
+                self.context["entry"]["status"] = "failed"
+        if errors:
+            raise RuntimeError("entry finalization: " + "; ".join(errors))
+
+    def execute(self, requests: list[tuple[str, dict, dict]], report=None) -> bool:
+        terminal = set()
+        def tracked_report(request, status):
+            report(request, status)
+            if status in {"succeeded", "process_failed"}:
+                terminal.add(request.get("requestId"))
+        try:
+            return self._execute(requests, tracked_report if report else None)
+        except KeyboardInterrupt:
+            if report:
+                for _, _, request in requests:
+                    if request.get("requestId") not in terminal:
+                        try:
+                            tracked_report(request, "process_failed")
+                        except Exception as exc:
+                            print(f"[REPORT] interrupted request: {exc}", flush=True)
+            raise
+
+    def _execute(self, requests: list[tuple[str, dict, dict]], report=None) -> bool:
+        queued, contexts, metadata = [], [], []
+        report_errors = []
+        def send(request, status):
+            if report:
+                try:
+                    report(request, status)
+                except Exception as exc:
+                    report_errors.append(str(exc))
+        failed = False
+        for name, payload, request in requests:
+            try:
+                definition = self.spec.get("pipeline", {}).get(name)
+                if not isinstance(definition, dict):
+                    raise RuntimeError(f"pipeline {name!r} is not defined")
+                if not isinstance(payload, dict):
+                    raise RuntimeError(f"pipeline {name!r}: request payload must be a mapping")
+                validate_pipeline(definition, name)
+                context = deepcopy(self.prepared.get(name, self.context))
+                if name not in self.prepared:
+                    _apply_context(context, _render(definition.get("context", {}), context))
+                params_for(definition.get("params", {}), payload, context, f"pipeline {name}")
+                if name in self.prepare_errors:
+                    raise self.prepare_errors[name]
+                if name not in self.prepared:
+                    try:
+                        for index, action in enumerate(definition.get("prepare", [])):
+                            run_action(action, context, {}, self.workdir, label=f"pipeline {name} prepare[{index}]")
+                        from mu.pipelines import _discover_models
+                        context["sys"]["models"] = _discover_models(Path(context["sys"]["cache_dir"]))
+                        self.prepared[name] = context
+                    except Exception as exc:
+                        self.prepare_errors[name] = exc
+                        raise
+                context = deepcopy(self.prepared[name])
+                if request:
+                    context["request"] = deepcopy(request)
+                if report:
+                    send(request, "processing")
+                queued.append((name, payload))
+                contexts.append(context)
+                metadata.append(request)
+            except Exception as exc:
+                print(f"[REQUEST] {name}: failed: {exc}", flush=True)
+                failed = True
+                if report:
+                    send(request, "process_failed")
+        if queued:
+            try:
+                outcomes = execute_pipelines(self.spec, queued, self.context, self.devices, self.workdir, request_contexts=contexts)
+            except BaseException:
+                if report:
+                    for request in metadata:
+                        send(request, "process_failed")
+                raise
+            for request, states in zip(metadata, outcomes):
+                error = any(value == "failed" for value in states.values())
+                failed |= error
+                if report:
+                    send(request, "process_failed" if error else "succeeded")
+        if report_errors:
+            raise RuntimeError("request reporting failed: " + "; ".join(report_errors))
+        return failed

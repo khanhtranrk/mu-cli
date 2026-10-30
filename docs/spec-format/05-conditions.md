@@ -124,13 +124,16 @@ node: prepare
 expected: success
 ```
 
-`node` is the node name. If omitted, Mu uses the current node name:
+`node` selects a name in the scheduler state table for the same request.
+`depends_on` no longer accepts conditions; it is a list of names requiring
+success automatically. For checks inside a node, use `node_state`:
 
 ```yaml
 finally:
   - type: send_http_request
     precondition:
-      operator: node_status
+      operator: node_state
+      target: [status]
       expected: failed
 ```
 
@@ -247,5 +250,37 @@ already inherited into that node; it cannot see results of its own future
 actions or another node's actions. The stored process field is `returncode`.
 
 Operator names use snake_case only: `and`, `or`, `file_exists`,
-`folder_exists`, `path_exists`, `exit_code`, `node_status`, `action_state`.
+`folder_exists`, `path_exists`, `exit_code`, `node_status`, `node_state`, `action_state`.
 Hyphenated operator names are rejected.
+
+## `node_state`
+
+Reads the current node's `context["node"]` directly. Like `action_state`,
+`target` must be a non-empty list of non-empty string keys and `expected`
+is required. The path starts inside the node mapping, without a node name:
+
+```yaml
+precondition:
+  operator: node_state
+  target: [status]
+  expected: failed
+```
+
+Available runtime fields are `name`, `status`, and `total_units`.
+Status is `running` during the main node lifecycle, including node
+preconditions, before/after actions and node postconditions. In `finally`,
+it is `success` or `failed`, updated before each action. A non-ignored
+finally error changes status to `failed` for subsequent finally actions.
+A successful skip enters finally as `success`, unless its postcondition fails.
+`total_units` starts at zero and is assigned the workload's declared units
+just before workload execution.
+
+Missing node context or a missing key returns false, including when
+`expected: null`. Malformed target or absent expected raises a declaration
+error. Nested mappings are supported; list indexing is not. Expected values
+use normal condition equality without string/number coercion.
+
+Use `node_state` inside nodes. Dependencies require success automatically and
+do not evaluate condition operators.
+No new node state is stored by this operator, and it cannot select another
+node. See [the executable example](../../examples/node-state/spec.yaml).

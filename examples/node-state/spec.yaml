@@ -1,0 +1,37 @@
+# Run with: uv run mu run --spec examples/node-state/spec.yaml --request demo,examples/node-state/request.yaml
+pipeline:
+  demo:
+    nodes:
+      - name: inspect_state
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: running
+        finally:
+          - type: write_json
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: success
+            path: "{session[output_dir]}/node-state.json"
+            content:
+              name: "{node[name]}"
+              status: "{node[status]}"
+      - name: optional_step
+        ignore_error: true
+        before_run:
+          - type: execute_command
+            target: python
+            args: [-c, "raise SystemExit(1)"]
+        finally:
+          - type: write_json
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: failed
+            path: "{session[output_dir]}/ignored-node.json"
+            content:
+              status: "{node[status]}"
+      - name: continue_pipeline
+        depends_on:
+          - optional_step

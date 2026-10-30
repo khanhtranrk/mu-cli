@@ -40,11 +40,14 @@ height: 800
 ## `demo-spec.yaml`
 
 ```yaml
-prepare:
-  - type: execute_command
-    target: python
-    args: [--version]
+entries:
+  direct_flow:
+    initialization:
+      - type: execute_command
+        target: python
+        args: [--version]
 
+    finalization: []
 workloads:
   render:
     params:
@@ -105,10 +108,7 @@ pipeline:
 
       - name: write-request
         depends_on:
-          - node: make-output-dir
-            condition:
-              operator: node_status
-              expected: success
+          - make-output-dir
         run:
           workload: noop
         before_run:
@@ -125,10 +125,7 @@ pipeline:
 
       - name: render-text
         depends_on:
-          - node: write-request
-            condition:
-              operator: node_status
-              expected: success
+          - write-request
         precondition:
           operator: file_exists
           path: "{session[cache_dir]}/{params[name]}.json"
@@ -152,7 +149,8 @@ pipeline:
           - type: send_http_request
             ignore_error: true
             precondition:
-              operator: node_status
+              operator: node_state
+              target: [status]
               expected: failed
             url: https://example.invalid/status
             method: post
@@ -168,7 +166,7 @@ An action-only node is valid:
 ```yaml
 - name: write-request
   depends_on:
-    - node: make-output-dir
+    - make-output-dir
   before_run:
     - type: write_json
       path: "{session[cache_dir]}/{params[name]}.json"
@@ -182,11 +180,14 @@ An action-only node is valid:
 The complete corrected version:
 
 ```yaml
-prepare:
-  - type: execute_command
-    target: python
-    args: [--version]
+entries:
+  direct_flow:
+    initialization:
+      - type: execute_command
+        target: python
+        args: [--version]
 
+    finalization: []
 workloads:
   mkdir:
     params:
@@ -233,10 +234,7 @@ pipeline:
 
       - name: write-request
         depends_on:
-          - node: make-output-dir
-            condition:
-              operator: node_status
-              expected: success
+          - make-output-dir
         before_run:
           - type: write_json
             path: "{session[cache_dir]}/{params[name]}.json"
@@ -248,10 +246,7 @@ pipeline:
 
       - name: render-text
         depends_on:
-          - node: write-request
-            condition:
-              operator: node_status
-              expected: success
+          - write-request
         precondition:
           operator: file_exists
           path: "{session[cache_dir]}/{params[name]}.json"
@@ -274,7 +269,7 @@ pipeline:
 ```bash
 uv run mu run \
   --spec ./demo-spec.yaml \
-  --request demo,./request.yaml \
+  --pipeline demo,./request.yaml \
   --working_dir ./work
 ```
 

@@ -5,7 +5,7 @@ Mu is a Python 3.13+ CLI that executes declarative, GPU-aware pipelines from YAM
 ## Features
 
 - **Reusable workloads:** declare executables, environment variables, arguments, GPU arguments, and VRAM units once.
-- **Dependency-aware execution:** schedule nodes across every request, with readiness determined by `depends_on` conditions.
+- **Dependency-aware execution:** schedule nodes across every request, with prerequisites listed by name in `depends_on`.
 - **GPU placement:** detect NVIDIA and AMD devices or declare them manually; reserve 4 GiB units without embedding a device CLI convention.
 - **Context templates:** reference system, session, pipeline parameters, node state, and scheduled device values in spec fields.
 - **Actions and conditions:** prepare directories, write JSON, call HTTP endpoints, run commands, and verify files or process exit codes.
@@ -35,29 +35,29 @@ Run a local spec with a pipeline and request file:
 
 ```sh
 uv run mu run --spec ./spec.yaml --working_dir ./work \
-  --request song-with-cover,./examples/song-with-cover/input.yaml
+  --pipeline song-with-cover,./examples/song-with-cover/input.yaml
 ```
 
-Run more than one request by repeating `--request`. Each file may contain one mapping or a list of mappings:
+Run more than one request by repeating `--pipeline`. Each file may contain one mapping or a list of mappings:
 
 ```sh
 uv run mu run \
-  --request song-with-cover,./request-a.yaml \
-  --request song-with-cover,./request-b.json
+  --pipeline song-with-cover,./request-a.yaml \
+  --pipeline song-with-cover,./request-b.json
 ```
 
 Run a remote spec through a master flow:
 
 ```sh
-uv run mu master-flow run https://example.invalid/spec.yaml \
-  --working_dir ./work --unit_name worker-1
+uv run mu master-flow run song-generation \
+  --working_dir ./work --unit-id worker-1
 ```
 
 Override hardware detection with an explicit family, index, and maximum-unit capacity:
 
 ```sh
 uv run mu run --device cuda,0,4 --device cuda,1,2 \
-  --request song-with-cover,./request.yaml
+  --pipeline song-with-cover,./request.yaml
 ```
 
 ## Minimal spec
@@ -99,23 +99,26 @@ Mu validates declared parameters before execution. A list of mappings creates mu
 
 1. Load and validate the spec.
 2. Create the working, cache, output, system-cache, and model contexts.
-3. Run `prepare` actions once for local runs and master flows.
+3. Run entry initialization, then prepare each selected pipeline once on demand.
 4. Merge each request's parameters into an isolated pipeline context.
 5. Build named nodes and resolve `depends_on` dependencies.
 6. Schedule ready nodes concurrently and assign GPU units where required.
 7. Run `before_run`, the workload, `after_run`, and output conditions for each node.
-8. Always run `finally` actions after success, skip, or failure.
+8. Run node `finally` actions, then entry finalization when the flow exits.
 
-Nodes that depend on failed nodes are blocked and do not execute. A workload with `units: 0` runs on the CPU. GPU workloads do not run on an undersized device.
+Nodes use `depends_on: [node_a, node_b]` and run only after every prerequisite reports `success`. Failed prerequisites block dependent execution, including `finally`. A node with `ignore_error: true` reports success so dependents can continue. A workload with `units: 0` runs on the CPU. GPU workloads do not run on an undersized device.
 
 ## Spec structure
 
 A spec can contain:
 
-- `prepare`: one-time setup actions.
+- `entries`: direct/master flow initialization and finalization actions.
 - `workloads`: reusable subprocess declarations.
 - `pipeline`: parameter schemas, shared context, and dependency graphs.
-- `master-flow`: remote request resources and refresh behavior.
+- `pipeline.<name>.prepare`: lazy preparation shared by that pipeline’s requests.
+
+Nodes may set `ignore_error: true` to report failure as success after `finally`,
+allowing the pipeline to continue. See [node error handling](docs/spec-format/06-pipelines-and-nodes.md#node-ignore_error).
 
 Workloads declare `params`, `target`, `args`, optional `env`, `device_args`, and `units`. Nodes declare `context`, conditions, actions, `run`, and `depends_on`.
 
@@ -138,7 +141,9 @@ success or failure details at `actions[name]` in the containing context. See
 
 Conditions also use `snake_case` operator names. Use `action_state` with
 `target: [name, returncode]` and a required `expected` value to check saved
-action results; see [Conditions](docs/spec-format/05-conditions.md#action_state).
+action results. Use `node_state` with `target: [status]` to check the current
+node, including in `finally`. Dependencies require success automatically. See
+[Conditions](docs/spec-format/05-conditions.md).
 
 ## CLI reference
 
@@ -151,7 +156,7 @@ uv run mu master-flow run --help
 
 | Option | Default | Description |
 |---|---|---|
-| `--request PIPELINE,FILE` | required, repeatable | Pipeline name plus a YAML or JSON request file |
+| `--pipeline PIPELINE,FILE` | required, repeatable | Pipeline name plus a YAML or JSON request file |
 | `--spec PATH` | `./spec.yaml` | Local spec path |
 | `--working_dir PATH` | current directory | Creates `output/` and `cache/` |
 | `--sys_cache_dir PATH` | `~/.cache` | System cache and `models/` lookup |
@@ -160,13 +165,12 @@ uv run mu master-flow run --help
 
 ### `mu master-flow run`
 
-| Option | Default | Description |
-|---|---|---|
-| `spec_url` | required | Remote JSON or YAML spec |
-| `--working_dir PATH` | current directory | Session working directory |
-| `--sys_cache_dir PATH` | `~/.cache` | System cache and model directory |
-| `--unit_name TEXT` | `unknown` | Session and reporting label |
-| `--device FAMILY,INDEX,MAX_UNITS` | detected | Explicit GPU capacity; repeatable |
+Use `mu master-flow run SPEC_SLUG --unit-id WORKER` with
+`MU_MASTER_FLOW_SERVER` (Convex HTTP site URL) and `MU_MASTER_FLOW_TOKEN`.
+`--server` and `--token` override these values. `--batch-size` defaults to 1
+(maximum 100). Repeat `--by-pipeline` / `--by-status` to filter; status defaults
+to `waiting`. `--by-unit-id` filters previous assignment. `--refresh-loop` drains
+batches until none remain. See [full lifecycle and CLI](docs/spec-format/07-master-flow-and-cli.md).
 
 ## Scheduling units
 

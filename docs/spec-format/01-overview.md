@@ -1,69 +1,31 @@
 # 01. Overall structure and spec lifecycle
 
-## Root template
+## Root structure and lifecycle
+
+A spec contains `entries`, `workloads`, and singular `pipeline`.
+See [entry lifecycle and lazy pipeline prepare](07-master-flow-and-cli.md) for
+complete rules and migration from root `prepare` / `master-flow.requests`.
 
 ```yaml
-master-flow:
-  requests: []
-
-prepare:
-  - type: execute_command
-    target: ...
-    args: []
-
-workloads:
-  <workload-name>:
-    params: {}
-    env: {}
-    target: ...
-    args: []
-    device_args: []
-    units: 0
-
+entries:
+  direct_flow:
+    initialization: []
+    finalization: []
+  master_flow:
+    initialization: []
+    finalization: []
+workloads: {}
 pipeline:
-  <pipeline-name>:
-    params: {}
+  demo:
     context: {}
+    prepare: []
+    params: {}
     nodes: []
 ```
 
-All sections are optional during parsing, but a spec that omits the section needed by a command cannot execute that command.
-
-| Section | Purpose | When it runs |
-|---|---|---|
-| `master-flow` | Describes request URLs and matching pipelines | Only with `mu master-flow run` |
-| `prepare` | Prepares shared resources | Once before the pipelines in a `run` invocation |
-| `workloads` | Declares reusable executables/subprocesses | When a node calls one with `run.workload` |
-| `pipeline` | Defines a node workflow | When selected by `--request` or master-flow |
-
-## `prepare`
-
-`prepare` is an action list:
-
-```yaml
-prepare:
-  - type: execute_command
-    target: python
-    args: [--version]
-  - type: execute_command
-    target: hf
-    args: [download, organization/model, file.gguf]
-    skip_if:
-      operator: file_exists
-      path: "{sys[cache_dir]}/models/file.gguf"
-    postcondition:
-      operator: file_exists
-      path: "{sys[cache_dir]}/models/file.gguf"
-```
-
-Prepare actions receive the base context:
-
-```text
-sys -> cache_dir, models
-session -> working_dir, unit_name, output_dir, cache_dir
-```
-
-There are no pipeline `params` or `node` values here.
+Entry initialization runs once, pipeline prepare runs once when its first valid
+request arrives, request nodes execute, then entry finalization runs on exit.
+Unused pipelines are not prepared. Pipeline prepare has no request params.
 
 ## `workloads`
 
@@ -98,8 +60,8 @@ A pipeline does not run directly. The CLI accepts a request and combines `(pipel
 For one request:
 
 ```text
-base context
-  + pipeline.context
+prepared entry context
+  + pipeline.context + pipeline.prepare results
   + parameters from pipeline.params
   -> shared pipeline context
 
@@ -149,10 +111,13 @@ immediately jump to finally
 ## Example with two prepare actions and a node
 
 ```yaml
-prepare:
-  - type: create_dir
-    path: "{session[working_dir]}/cache/models"
+entries:
+  direct_flow:
+    initialization:
+      - type: create_dir
+        path: "{session[working_dir]}/cache/models"
 
+    finalization: []
 workloads:
   copy:
     params:
@@ -192,6 +157,6 @@ args:
 - `prepare` has no `validate` schema in the current runtime.
 - `prepare` uses `skip_if` and `postcondition` in the same way as actions.
 - Nodes use `skip_if`, `precondition`, `postcondition`, and `finally`.
-- `node_status` evaluates the results of dependencies belonging to the same pipeline request.
+- `depends_on` lists prerequisite node names in the same request; all must report success.
 
 The repository can contain two formats in different code paths (the older processor format and the newer workload format). The primary format documented here is the `workloads` + `pipeline` + `nodes` structure in `runtime.py`.

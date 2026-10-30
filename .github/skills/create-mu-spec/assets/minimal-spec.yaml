@@ -1,4 +1,4 @@
-prepare: []
+entries: {}
 
 workloads:
   example-workload:

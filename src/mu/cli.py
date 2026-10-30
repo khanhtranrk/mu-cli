@@ -376,123 +376,176 @@ def _load_runtime_spec(path: Path) -> dict:
     return value
 
 
-def _run_prepare_actions(spec_data: dict, context: dict, workdir: Path, *, label: str) -> None:
-    from mu.runtime import run_action
-    actions = spec_data.get("prepare", [])
-    typer.echo(f"[PREPARE] {label}: {len(actions)} action(s)", color=None)
-    for index, action in enumerate(actions, start=1):
-        action_type = action.get("type", "unknown") if isinstance(action, dict) else "invalid"
-        run_action(action, context, {}, workdir, label=f"{label} prepare[{index}] {action_type}")
-    typer.echo(f"[PREPARE] {label}: complete")
+def _runtime_devices(values: list[str]):
+    if not values:
+        return detect_devices()
+    from mu.hardware import ComputeDevice
+    devices = []
+    for value in values:
+        family, index, capacity = value.split(",", 2)
+        devices.append(ComputeDevice(index, family, float(capacity) * 4, family))
+    return devices
+
+
+def _execute_flow(flow, body) -> None:
+    import signal
+    import threading
+    from mu.runtime import terminate_processes, reset_interruption
+    reset_interruption()
+    previous = None
+    def interrupt(signum, frame):
+        terminate_processes()
+        raise KeyboardInterrupt
+    if threading.current_thread() is threading.main_thread():
+        previous = signal.signal(signal.SIGINT, interrupt)
+    failed = True
+    try:
+        flow.initialize()
+        failed = body()
+        if failed:
+            raise ValueError("one or more pipeline requests failed")
+    finally:
+        import sys
+        original = sys.exc_info()[1]
+        reset_interruption()
+        try:
+            flow.finalize(failed)
+        except Exception as exc:
+            if original is None:
+                raise
+            typer.echo(f"Finalization failed: {exc}", err=True)
+        finally:
+            if previous is not None:
+                signal.signal(signal.SIGINT, previous)
 
 
 @app.command("run")
 def run_requests(
-    request: list[str] = typer.Option([], "--request", help="PIPELINE,REQUEST.yaml (repeatable)."),
+    pipeline: list[str] = typer.Option([], "--pipeline", help="PIPELINE,REQUEST.yaml (repeatable)."),
     working_dir: Path = typer.Option(Path.cwd(), "--working_dir"),
     sys_cache_dir: Path = typer.Option(Path.home() / ".cache", "--sys_cache_dir"),
     unit_name: str = typer.Option("unknown", "--unit_name"),
     spec: Path = typer.Option(Path.cwd() / "spec.yaml", "--spec"),
     device: list[str] = typer.Option([], "--device", help="family,index,max-units (repeatable)."),
+    request: list[str] = typer.Option([], "--request", hidden=True),
 ) -> None:
-    """Execute pipeline requests described by YAML or JSON parameter files."""
-    from mu.runtime import RuntimeError, execute_pipelines, read_data
-    if not request: typer.echo("At least one --request PIPELINE,FILE is required", err=True); raise typer.Exit(2)
+    """Execute local requests using entries.direct_flow."""
+    from mu.runtime import Flow, read_data
+    if request:
+        typer.echo("--request was removed; use --pipeline PIPELINE,FILE", err=True)
+        raise typer.Exit(2)
+    if not pipeline:
+        typer.echo("At least one --pipeline PIPELINE,FILE is required", err=True)
+        raise typer.Exit(2)
     try:
         definition = _load_runtime_spec(spec)
         base = _runtime_base(working_dir, sys_cache_dir, unit_name)
-        typer.echo(f"[RUN] Spec loaded: {spec.expanduser().resolve()}")
-        typer.echo(f"[RUN] Working directory: {base['session']['working_dir']}")
-        typer.echo(f"[RUN] System cache: {base['sys']['cache_dir']} ({len(base['sys']['models'])} model key(s) found)")
-        devices = detect_devices()
-        if device:
-            from mu.hardware import ComputeDevice
-            devices = []
-            for value in device:
-                family, index, capacity = value.split(",", 2)
-                devices.append(ComputeDevice(index, family, float(capacity) * 4, family))
         parsed = []
-        for item in request:
-            pipeline_name, filename = item.split(",", 1)
+        for item in pipeline:
+            name, filename = item.split(",", 1)
             params = read_data(Path(filename))
-            if isinstance(params, dict): params = [params]
-            if not isinstance(params, list) or not all(isinstance(entry, dict) for entry in params):
-                raise RuntimeError(f"request {filename} must contain a mapping or a list of mappings")
-            typer.echo(f"[REQUEST] {pipeline_name}: loaded {len(params)} item(s) from {Path(filename).expanduser().resolve()}")
-            parsed.extend((pipeline_name, entry) for entry in params)
-        prepare_context = dict(base)
-        _run_prepare_actions(definition, prepare_context, Path(base["session"]["working_dir"]), label="run")
-        for index, (pipeline_name, _) in enumerate(parsed, start=1):
-            typer.echo(f"[REQUEST] Starting {index}/{len(parsed)}: pipeline {pipeline_name}")
-        outcomes = execute_pipelines(definition, parsed, base, devices, Path(base["session"]["working_dir"]))
-        if any(value == "failed" for states in outcomes for value in states.values()):
-            raise RuntimeError("one or more pipeline requests failed")
+            if isinstance(params, dict):
+                params = [params]
+            if not isinstance(params, list) or not all(isinstance(value, dict) for value in params):
+                raise ValueError(f"request {filename} must contain a mapping or a list of mappings")
+            parsed.extend((name, value, {}) for value in params)
+        flow = Flow(definition, "direct_flow", base, _runtime_devices(device), Path(base["session"]["working_dir"]))
+        _execute_flow(flow, lambda: flow.execute(parsed))
     except Exception as exc:
-        typer.echo(f"Run failed: {exc}", err=True); raise typer.Exit(1) from exc
-
-
-def _fetch_url(url: str, headers: dict | None = None) -> dict | None:
-    import json, urllib.request, yaml
-    try:
-        req = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(req, timeout=30) as response: raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404: return None
-        raise
-    try: value = json.loads(raw)
-    except json.JSONDecodeError: value = yaml.safe_load(raw)
-    if not isinstance(value, dict): raise ValueError(f"resource {url} must return a mapping")
-    return value
+        typer.echo(f"Run failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
 
 @flow_app.command("run")
 def master_flow_run(
-    spec_url: str = typer.Argument(...),
+    spec_slug: str = typer.Argument(...),
+    server: str = typer.Option(None, "--server", envvar="MU_MASTER_FLOW_SERVER"),
+    token: str = typer.Option(None, "--token", envvar="MU_MASTER_FLOW_TOKEN"),
+    batch_size: int = typer.Option(1, "--batch-size", min=1, max=100),
+    by_pipeline: list[str] = typer.Option([], "--by-pipeline"),
+    by_status: list[str] = typer.Option([], "--by-status"),
+    by_unit_id: str = typer.Option(None, "--by-unit-id"),
+    unit_id: str = typer.Option(None, "--unit-id"),
+    unit_type: str = typer.Option("unknown", "--unit-type"),
+    refresh_loop: bool = typer.Option(False, "--refresh-loop"),
     working_dir: Path = typer.Option(Path.cwd(), "--working_dir"),
     sys_cache_dir: Path = typer.Option(Path.home() / ".cache", "--sys_cache_dir"),
-    unit_name: str = typer.Option("unknown", "--unit_name"),
     device: list[str] = typer.Option([], "--device"),
 ) -> None:
-    """Fetch and execute a remote master-flow spec."""
-    from mu.runtime import RuntimeError, execute_pipelines
+    """Claim and execute server requests using entries.master_flow."""
+    import socket
+    from urllib.parse import quote
+    from mu.runtime import Flow
+    from mu.master_flow import MasterFlowClient
+    if not server or not token:
+        typer.echo("Set --server/--token or MU_MASTER_FLOW_SERVER/MU_MASTER_FLOW_TOKEN", err=True)
+        raise typer.Exit(2)
     try:
-        spec = _fetch_url(spec_url)
-        typer.echo("[MASTER-FLOW] Spec fetched")
-        base = _runtime_base(working_dir, sys_cache_dir, unit_name)
-        typer.echo(f"[MASTER-FLOW] Working directory: {base['session']['working_dir']}")
-        devices = detect_devices()
-        if device:
-            from mu.hardware import ComputeDevice
-            devices = []
-            for value in device:
-                family, index, capacity = value.split(",", 2)
-                devices.append(ComputeDevice(index, family, float(capacity)*4, family))
-        prepare_context = dict(base)
-        _run_prepare_actions(spec, prepare_context, Path(base["session"]["working_dir"]), label="master-flow")
-        flow = spec.get("master-flow", {})
-        requests = flow.get("requests", [])
-        while True:
-            queued = []
-            for index, item in enumerate(requests, start=1):
-                typer.echo(f"[MASTER-FLOW] Fetching request {index}/{len(requests)} for pipeline {item['pipeline']}")
-                payload = _fetch_url(item["url"], item.get("header", {}))
-                if isinstance(payload, dict): payload = [payload]
-                if payload:
-                    if not isinstance(payload, list) or not all(isinstance(entry, dict) for entry in payload):
-                        raise RuntimeError(f"resource {item['url']} must return a mapping or list of mappings")
-                    queued.extend((item, entry) for entry in payload)
-            if not queued: break
-            typer.echo(f"[MASTER-FLOW] Fetched {len(queued)} request object(s); executing")
-            outcomes = execute_pipelines(
-                spec, [(item["pipeline"], payload) for item, payload in queued],
-                base, devices, Path(base["session"]["working_dir"]),
-            )
-            if any(value == "failed" for states in outcomes for value in states.values()):
-                raise RuntimeError("one or more master-flow pipeline requests failed")
-            requests = [item for item in requests if item.get("refresh_after_done")]
-            if not requests: break
+        unit_id = unit_id or socket.gethostname()
+        if not unit_id.strip():
+            raise ValueError("--unit-id must be non-empty")
+        for label, values in (("--by-pipeline", by_pipeline), ("--by-status", by_status)):
+            if any(not value.strip() for value in values) or len(set(values)) > 100:
+                raise ValueError(f"{label} requires at most 100 non-empty values")
+        if max(1, len(set(by_pipeline))) * max(1, len(set(by_status))) > 100:
+            raise ValueError("at most 100 pipeline/status filter combinations are supported")
+        if by_unit_id is not None and not by_unit_id.strip():
+            raise ValueError("--by-unit-id must be non-empty")
+        client = MasterFlowClient(server, token)
+        base = _runtime_base(working_dir, sys_cache_dir, unit_id)
+        base["session"].update(unit_id=unit_id, unit_type=unit_type)
+        devices = _runtime_devices(device)
+        heartbeat = {"unitId": unit_id, "unitType": unit_type,
+                     "workingDir": base["session"]["working_dir"],
+                     "devices": [{"family": d.backend, "index": int(d.index)} for d in devices]}
+        client.post("/api/units/heartbeat", {**heartbeat, "status": "online"})
+        try:
+            definition = client.spec("/api/specs/" + quote(spec_slug, safe=""))
+            flow = Flow(definition, "master_flow", base, devices, Path(base["session"]["working_dir"]))
+            selection = {"unitId": unit_id, "specSlug": spec_slug, "maxCount": batch_size,
+                         "byStatus": by_status or ["waiting"]}
+            if by_pipeline:
+                selection["byPipeline"] = by_pipeline
+            if by_unit_id is not None:
+                selection["byUnitId"] = by_unit_id
+            def report(request, status):
+                client.post("/api/requests/report", {"id": request["requestId"], "status": status})
+            def batches():
+                seen = set()
+                while True:
+                    batch = client.post("/api/requests/claim", selection)
+                    if not isinstance(batch, list) or len(batch) > batch_size:
+                        raise ValueError("claim response must be an array within batch-size")
+                    if not batch:
+                        return False
+                    parsed = []
+                    for item in batch:
+                        if not isinstance(item, dict) or not all(isinstance(item.get(k), str) and item[k] for k in ("requestId", "specSlug", "pipelineName")) or "payload" not in item:
+                            raise ValueError("invalid claim item: expected requestId, specSlug, pipelineName and payload")
+                        if item["requestId"] in seen:
+                            raise ValueError("server reclaimed a request already seen in this flow; narrow --by-status")
+                        seen.add(item["requestId"])
+                        metadata = {"requestId": item["requestId"], "specSlug": item["specSlug"]}
+                        if item["specSlug"] != spec_slug:
+                            report(metadata, "process_failed")
+                            raise ValueError("claim returned a different specSlug")
+                        parsed.append((item["pipelineName"], item["payload"], metadata))
+                    failed = flow.execute(parsed, report)
+                    if failed or not refresh_loop:
+                        return failed
+            _execute_flow(flow, batches)
+        finally:
+            import sys
+            original = sys.exc_info()[1]
+            try:
+                client.post("/api/units/heartbeat", {**heartbeat, "status": "offline"})
+            except Exception as exc:
+                if original is None:
+                    raise
+                typer.echo(f"Offline heartbeat failed: {exc}", err=True)
     except Exception as exc:
-        typer.echo(f"Master flow failed: {exc}", err=True); raise typer.Exit(1) from exc
+        typer.echo(f"Master flow failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
 
 if __name__ == "__main__":

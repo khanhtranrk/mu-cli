@@ -1,228 +1,120 @@
-# 07. Master flow and CLI
+# 07. Entries, CLI and master flow
 
-## `mu run`
-
-```bash
-uv run mu run \
-  --spec ./spec.yaml \
-  --request song-with-cover,./input.yaml \
-  --request copy-file,./copy.json \
-  --working_dir ./work \
-  --sys_cache_dir ~/.cache \
-  --unit_name worker-1
-```
-
-### Options
-
-| Option | Default | Meaning |
-|---|---|---|
-| `--request PIPELINE,FILE` | required; repeatable | Load one request file; the file contains a mapping or a list of mappings |
-| `--spec PATH` | `./spec.yaml` | Local spec |
-| `--working_dir PATH` | current directory | Create `output/` and `cache/` here |
-| `--sys_cache_dir PATH` | `~/.cache` | System cache; models are stored under `models/` |
-| `--unit_name TEXT` | `unknown` | Worker label shown in the session context |
-| `--device FAMILY,INDEX,CAPACITY` | auto-detect | Add a GPU with unit capacity; repeatable |
-
-Missing `--request` is an exit_code 2 error. A pipeline request that does not exist in the spec or a request file with the wrong root structure is an error.
-
-### Request file
-
-A mapping:
+## Entry lifecycle
 
 ```yaml
-name: demo
-prompt: hello
+entries:
+  direct_flow:
+    initialization: []
+    finalization: []
+  master_flow:
+    initialization: []
+    finalization: []
 ```
 
-Or a list of mappings:
+`mu run` selects `direct_flow`; `mu master-flow run` selects `master_flow`.
+Missing entries and action lists are empty. Initialization runs once before
+requests are executed (before claim in master flow). Finalization runs once
+on completion, failure, or interruption after initialization begins, including
+initialization failure. All finalization actions are attempted. Cleanup errors
+are reported without replacing the original error. Forced termination cannot
+run cleanup. Actions use the existing action fields and `ignore_error` rules.
+`entry.name` identifies the entry; `entry.status` is `running`, then `success`
+or `failed` during finalization. Entry actions do not receive request params.
+
+Root `prepare` and the old `master-flow.requests` section are rejected with a
+migration error. Move common setup to entry initialization and pipeline-specific
+setup to `pipeline.<name>.prepare`.
+
+## Lazy pipeline preparation
 
 ```yaml
-- name: demo-a
-  prompt: alpha
-- name: demo-b
-  prompt: beta
-```
-
-A list creates multiple instances of the same pipeline. Each item receives a separate params context.
-
-### Preparation
-
-Before execution:
-
-1. Mu loads the spec.
-2. It creates the session directory.
-3. It runs `prepare` once.
-4. It loads the request params.
-5. It schedules all nodes.
-
-`prepare` does not receive request params. Use the session/system context, or pipeline/node actions for work that depends on params.
-
-### Manual GPU configuration
-
-```bash
---device cuda,0,4 --device cuda,1,2
-```
-
-Syntax:
-
-```text
-family,index,max-units
-```
-
-Whether the user supplies `cuda`, `rocm`, or another family, the scheduler uses only capacity and index. The workload's `device_args` determines the CLI syntax.
-
-## `mu master-flow run`
-
-```bash
-uv run mu master-flow run https://example.invalid/spec.yaml \
-  --working_dir ./work \
-  --sys_cache_dir ~/.cache \
-  --unit_name worker-1
-```
-
-### Options
-
-| Option | Default | Meaning |
-|---|---|---|
-| `spec_url` | required | JSON or YAML URL |
-| `--working_dir` | current directory | Same as `mu run` |
-| `--sys_cache_dir` | `~/.cache` | System cache |
-| `--unit_name` | `unknown` | Worker label |
-| `--device FAMILY,INDEX,CAPACITY` | auto-detect | Add a manual GPU |
-
-Master flow loads a remote JSON/YAML spec. It does not invoke local `mu run`.
-
-## `master-flow.requests`
-
-```yaml
-master-flow:
-  requests:
-    - url: https://api.example.invalid/jobs/1
-      header:
-        Authorization: ******
-      pipeline: song-with-cover
-      refresh_after_done: false
-    - url: https://api.example.invalid/jobs/2
-      pipeline: song-with-cover
-      refresh_after_done: true
-```
-
-The master-flow runtime reads these keys:
-
-- `url`: required; loads a JSON/YAML mapping;
-- `pipeline`: pipeline name;
-- `header`: runtime loads the headers (note that the actual key is singular, `header`, not `headers`);
-- `refresh_after_done`: boolean; default is false.
-
-The response must be a mapping. If the mapping represents a single request item, it is passed directly to the pipeline.
-
-Master flow does not support a list-of-mappings response URL in the current loop.
-
-## Master-flow lifecycle
-
-```text
-fetch remote spec
-create base context
-run prepare once
-for each master-flow request:
-  fetch request URL
-  queue (pipeline, response mapping)
-execute all queued pipelines
-for requests refresh_after_done=true:
-  fetch again
-  if HTTP 404 or empty/non-mapping -> stop
-  continue execution
-```
-
-A request with `refresh_after_done: true` is fetched again after each cycle. Polling stops on HTTP 404 or when the payload is not a mapping.
-
-Mu runs the complete new cycle, then polls again.
-
-## HTTP in master flow
-
-Spec and request downloads use `urllib` with a 30-second timeout. JSON parsing happens first; if JSON parsing fails, YAML parsing is attempted. HTTP headers may contain tokens or API keys.
-
-Do not commit secrets to the spec. Prefer injecting headers through environment variables or a temporary file that is not committed.
-
-## Complete master-flow example
-
-```yaml
-master-flow:
-  requests:
-    - url: https://api.example.invalid/next-song
-      header:
-        X-Worker: "{unit_name}"
-      pipeline: song-with-cover
-      refresh_after_done: true
-
-prepare:
-  - type: execute_command
-    target: hf
-    args:
-      - download
-      - organization/model
-      - model.gguf
-      - --local-dir
-      - "{sys[cache_dir]}/models"
-
-workloads:
-  generate:
-    params:
-      name:
-        type: string
-      output:
-        type: string
-    target: generator
-    args:
-      - --name
-      - "{params[name]}"
-      - --output
-      - "{params[output]}"
-
 pipeline:
-  song-with-cover:
+  demo:
+    context:
+      work: "{session[cache_dir]}/demo"
+    prepare:
+      - type: create_dir
+        path: "{work}"
     params:
-      name:
-        type: string
-      output:
-        type: string
-    nodes:
-      - name: generate
-        run:
-          workload: generate
-          args:
-            name: "{params[name]}"
-            output: "{params[output]}"
+      name: {type: string}
+    nodes: []
 ```
 
-The `{unit_name}` header template in this example is outside the available context because context includes only `sys/session/params/node/schedule`. Use `{session[unit_name]}` instead.
+Prepare runs once per pipeline per invocation, after a valid request selects it
+and before its nodes run. It is reused across batches. Unused pipelines are
+never prepared. Prepare receives the entry context merged with pipeline context;
+it has no `params`, `request`, `node` or `schedule`. Its context and saved action
+results are deep-copied into each request, then params and remote metadata are
+added. Node contexts are deep copies again. Pipeline context is merged once per
+prepared pipeline and must not depend on request input. Model discovery is
+refreshed after preparation. A preparation failure is cached for this invocation;
+other pipelines in the batch still execute.
 
-## Scheduling and device units
+## Local requests
 
-Compute devices are detected when `--device` is not provided:
-
-- NVIDIA via `nvidia-smi`;
-- AMD via `rocm-smi`;
-- capacity units = ceil(VRAM GiB / 4).
-
-Example: 10 GiB requires 3 units.
-
-A CPU workload with `units: 0` consumes no units. A GPU node reserves one device for its entire lifetime, including actions in `before` and `finally`.
-
-## CLI debugging patterns
-
-```bash
-uv run mu run --help
-uv run mu master-flow run --help
-uv run mu run --spec ./spec.yaml --request demo,./request.yaml --working_dir ./tmp
+```sh
+uv run mu run --spec ./spec.yaml --working_dir ./work \
+  --pipeline demo,./input.yaml \
+  --pipeline demo,./other.json
 ```
 
-When a node fails:
+`--pipeline NAME,FILE` is required and repeatable. Files contain a mapping or a
+list of mappings. `--request` was removed and reports the replacement syntax.
+Other options: `--working_dir` (current directory), `--sys_cache_dir` (`~/.cache`),
+`--unit_name` (`unknown`), `--device FAMILY,INDEX,MAX_UNITS` (repeatable; otherwise
+hardware detection). Workload arguments remain argv lists, without a shell.
 
-- Look for `[NODE-ERROR]` for details;
-- Look for `[BLOCKED]` to identify failed dependencies;
-- Look for `[SCHEDULE]` for device-unit decisions;
-- Look for `[ACTION]` to see which action is running;
-- Look for `[WORKLOAD]` to identify the executable.
+## Master flow
 
-A workload with an exit code other than zero causes the node to fail. Dependent nodes will not run afterward.
+```sh
+uv run mu master-flow run song-generation \
+  --batch-size 10 --by-pipeline song-with-cover --by-status waiting \
+  --unit-id kaggle-01 --refresh-loop
+```
+
+| Option | Behavior |
+|---|---|
+| `--server` | Convex HTTP site URL; overrides `MU_MASTER_FLOW_SERVER` |
+| `--token` | Unit bearer token; overrides `MU_MASTER_FLOW_TOKEN` |
+| `--batch-size` | 1–100; default 1 |
+| `--by-pipeline` | Repeatable; OR within the pipeline filter |
+| `--by-status` | Repeatable; OR within the status filter; default `waiting` |
+| `--by-unit-id` | Filter previous assignment, before claim |
+| `--unit-id` | Receiving unit; defaults to hostname |
+| `--unit-type` | Unit type; defaults to `unknown` |
+| `--refresh-loop` | Claim subsequent batches until an empty array |
+
+Working directory, system cache and device options match local execution.
+Filters combine with AND between groups. At most 100 distinct pipeline/status
+combinations are supported. The server selects oldest matches atomically, capped
+by batch size. API status `pending` is not the standard waiting status.
+
+Execution order:
+
+1. Resolve connection and devices; heartbeat `online` to `/api/units/heartbeat`.
+2. Fetch `/api/specs/{specSlug}` once; validate the spec.
+3. Run entry initialization.
+4. Claim `/api/requests/claim` with filters and `maxCount`.
+5. Convert `pipelineName` and mapping `payload` into a pipeline request.
+6. Prepare selected pipelines and execute batch nodes through the shared scheduler.
+7. Report request `processing`, then `succeeded` or `process_failed` using
+   `/api/requests/report`. Validation/preparation failures are also reported.
+8. Without refresh, exit after one batch. With refresh, claim again after the
+   entire batch finishes; an empty array ends the flow. A failed batch stops refresh.
+9. Run finalization, then heartbeat `offline`, retaining unit details.
+
+Remote request templates expose `{request[requestId]}` and `{request[specSlug]}`.
+Payload remains exclusively under `params`. Remote payloads must be mappings even
+though the server can store arbitrary JSON. Request metadata is never shared.
+The transport uses a 30-second timeout and never retries mutations automatically:
+a claim may commit before a connection fails. HTTP errors are fatal, not empty
+batches. A request returned twice in one invocation stops the flow to prevent
+unbounded execution with broad status filters. Node reporting remains spec-defined;
+the worker automatically reports overall request status only.
+
+## Scheduling
+
+Nodes across the batch share the existing scheduler, capped at 32 concurrent
+nodes. Dependencies remain local to each request. GPU units are reserved for the
+full node lifecycle; `units: 0` is CPU-only. Successful subprocess output is hidden.

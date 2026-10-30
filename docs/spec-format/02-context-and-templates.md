@@ -10,7 +10,7 @@ session
 params
 node
 schedule
-declared action context
+actions (when save_state is used)
 ```
 
 In a template, the outermost key is the context root. For example, `{params[name]}` reads `context["params"]["name"]`.
@@ -164,7 +164,11 @@ node:
   total_units: 3
 ```
 
-`node.status` is updated to `failed` or `success` before `finally` runs. `node.total_units` comes from `workload.units`.
+`node.status` is `running` throughout the main lifecycle and updated to
+`success` or `failed` before each finally action. `node.total_units` starts at
+zero and is assigned `workload.units` just before workload execution.
+Use [node_state](05-conditions.md#node_state) with `target: [status]`, `[name]`,
+or `[total_units]` and a required `expected` value to inspect these fields.
 
 ## Action context
 
@@ -179,7 +183,20 @@ An action can merge its own context:
   content: "{payload}"
 ```
 
-Note that `write_json` renders the entire action before execution, so a context mapping may not merge as expected if `content` references the placeholder. Action context exists only in the local context object being used; it does not replace the original root context.
+Action context is rendered and merged directly into the containing context
+before skip/precondition checks. There is no isolated action context copy;
+later actions in the same node see these additions. Merge replaces top-level
+keys rather than recursively merging mappings. Templates render values as
+strings; construct a mapping in `content` when writing a JSON object.
+
+`save_state: name` on a supported action writes `actions[name]` into this same
+containing context. In a node, later actions, workload rendering and finally
+can read it; other nodes and requests cannot read that node's changes.
+Entry actions share the flow context. Each pipeline prepares an isolated deep
+copy with its declared context. Saved prepare results are inherited by deep copy
+into requests; each request adds its validated `params`. Remote requests also
+receive `request: {requestId, specSlug}`. Nodes receive another deep copy.
+See [lifecycle context scopes](07-master-flow-and-cli.md).
 
 ## Schedule context
 

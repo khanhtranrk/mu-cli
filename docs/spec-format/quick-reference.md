@@ -4,8 +4,8 @@
 
 | Key | Type | Description |
 |---|---|---|
-| `master-flow` | mapping | Spec URL requests for master flow |
-| `prepare` | action list | Shared preparation before execution |
+| `entries` | mapping | `direct_flow` / `master_flow` lifecycle actions |
+| `pipeline.<name>.prepare` | action list | Lazy setup once per used pipeline |
 | `workloads` | mapping | Subprocess definitions |
 | `pipeline` | mapping | Pipeline definitions |
 
@@ -57,6 +57,7 @@ Action names use snake_case and are declared with `type`. No action aliases are 
 |---|---|---|
 | `name` | string | Unique identifier |
 | `context` | mapping | Node context |
+| `ignore_error` | boolean | Default false; report node failure as scheduler success after finally |
 | `skip_if` | condition | Skip the node when true |
 | `precondition` | condition | Required precondition |
 | `before_run` | action list | Run before the workload |
@@ -64,7 +65,7 @@ Action names use snake_case and are declared with `type`. No action aliases are 
 | `after_run` | action list | Run after the workload |
 | `postcondition` | condition | Check after the main section |
 | `finally` | action list | Always run last |
-| `depends_on` | list | Dependency `{node, condition}` |
+| `depends_on` | list | List of prerequisite node names; all must succeed |
 
 ## Condition operators
 
@@ -79,7 +80,8 @@ Operator names use snake_case without aliases.
 | `path_exists` | `path` | true | The path exists |
 | `action_state` | `target`, `expected` | required | Compare a saved action value at the target key path |
 | `exit_code` | `target`, `expected` | 0 | The command exits with `expected` |
-| `node_status` | `node`, `expected` | `success` | The dependency/current node has the expected state |
+| `node_state` | `target`, `expected` | required | Compare a field of the current node context |
+| `node_status` | `node`, `expected` | `success` | The selected scheduler node has the expected status |
 
 ## Context keys
 
@@ -138,13 +140,13 @@ params:
 
 ```bash
 # Run locally
-uv run mu run --spec ./spec.yaml --request pipeline,request.yaml
+uv run mu run --spec ./spec.yaml --pipeline pipeline,request.yaml
 
 # Configure a GPU manually
-uv run mu run --request pipeline,request.yaml --device cuda,0,4
+uv run mu run --pipeline pipeline,request.yaml --device cuda,0,4
 
 # Run a remote master flow
-uv run mu master-flow run https://example.invalid/spec.yaml
+uv run mu master-flow run song-generation
 
 # Help
 uv run mu --help

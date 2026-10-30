@@ -18,6 +18,11 @@ pipeline:
             path: "{params[output]}"
 ```
 
+### `prepare`
+
+Optional action list, executed once on the first valid request for this pipeline
+within a flow. No request params are available. See [lifecycle](07-master-flow-and-cli.md).
+
 ### `params`
 
 The schema for pipeline requests. It uses the same `type` and `default` fields as workload params.
@@ -36,6 +41,7 @@ A list of nodes. Every node in a pipeline request must have a unique, non-empty 
 - name: generate-song
   context:
     label: "{params[name]}"
+  ignore_error: false
   skip_if: {...}
   precondition: {...}
   before_run: [...]
@@ -60,7 +66,7 @@ A unique identifier within the pipeline:
 The name is used in:
 
 - logs;
-- `depends_on.node`;
+- `depends_on`;
 - `node_status`;
 - the request state map.
 
@@ -179,7 +185,8 @@ Actions that must run last:
 finally:
   - type: send_http_request
     precondition:
-      operator: node_status
+      operator: node_state
+      target: [status]
       expected: failed
     ignore_error: true
     url: https://example.invalid/status
@@ -198,36 +205,31 @@ finally:
 - a workload failure;
 - a failed postcondition.
 
-Mu sets `node.status` to the final state before the first finally action. A finally action can change the node's final state to failed; at the end of the pipeline, the runtime may return the failed state.
+Mu updates `node.status` before each finally action. Use `node_state` with `target: [status]` to read it. An unignored finally error changes the node to `failed`; subsequent finally actions see that state and are still considered for execution. Ignored errors do not change node status. A node blocked by failed dependencies never enters execution and does not run finally.
 
 ### `depends_on`
 
+A list of prerequisite node names in the same pipeline request:
+
 ```yaml
-depends_on:
-  - node: prepare
-    condition:
-      operator: node_status
-      expected: success
-  - node: validate
+depends_on: [prepare, validate]
 ```
 
-Each item contains:
-
-| Field | Required | Meaning |
-|---|---:|---|
-| `node` | Yes | Dependency name. The runtime also accepts the `name` alias. |
-| `condition` | No | Condition used to test the dependency. If omitted, it evaluates to true. |
-
-By default, a dependency must have success status. To depend only on a dependency having ended, without distinguishing status, use `node_status` with the appropriate expected state. There is no dependency condition that requires success; if `condition` is absent, the runtime compares `condition=None` and obtains true.
-
-Dependencies in another pipeline or request are not allowed. The runtime joins nodes only by `(request_index, node_name)`.
+The node waits for all prerequisites to complete, including finally, and
+runs only if every scheduler status is `success`. A failed prerequisite
+blocks execution; the blocked node's actions and finally do not run.
+Omitting `depends_on` or using `[]` means no prerequisites.
+Mapping entries, dependency conditions, and names from another pipeline or
+request are not supported. Unknown names and malformed lists are errors.
+A prerequisite with `ignore_error: true` reports success even after an error,
+so its dependents may run normally.
 
 ## Node scheduler
 
 The scheduler scans every pending node in declaration order and:
 
 - skips a node whose dependencies have not finished;
-- marks the node failed if a dependency condition is false;
+- marks the node failed if a dependency fails;
 - skips a node if enough GPU units are unavailable;
 - runs at most 32 nodes concurrently;
 - releases GPU units when a node finishes.
@@ -246,7 +248,9 @@ prepare failed
   -> transcribe BLOCKED/failed
 ```
 
-If a dependency is not successful, dependent nodes do not run. They enter the `failed` state, causing more distant nodes to become blocked as well.
+Every dependency requires success. A failed prerequisite blocks its dependents,
+which are marked failed as well, unless their own `ignore_error` converts that
+outcome to success. Blocked nodes do not execute actions or finally.
 
 ## Complete pipeline example
 
@@ -269,10 +273,7 @@ pipeline:
 
       - name: render
         depends_on:
-          - node: output-dir
-            condition:
-              operator: node_status
-              expected: success
+          - output-dir
         skip_if:
           operator: file_exists
           path: "{session[output_dir]}/{params[name]}/cover.png"
@@ -299,4 +300,35 @@ pipeline:
             header: {}
             body:
               status: "{node[status]}"
+```
+
+## Node `ignore_error`
+
+Optional boolean, default `false`. With `ignore_error: true`, a failed node
+is reported to the scheduler as `success`, allowing downstream dependencies
+to pass. A warning retains the error
+detail. This covers precondition, action, workload, postcondition and finally
+failures, as well as a node blocked by a failed dependency.
+
+Execution still stops at the first main-section failure and proceeds to
+finally; after_run and remaining main actions are not resumed. Finally sees
+the actual `success`/`failed` status through `node_state`. Only after finally
+finishes is failure converted to scheduler success. Action `save_state`
+results retain their actual outcome. Action-level `ignore_error` instead
+suppresses that individual action error and permits subsequent actions.
+
+A blocked node with this flag is marked success without entering execution;
+its actions and finally do not run. Invalid flag types and invalid pipeline
+declarations remain errors, rather than ignored execution outcomes.
+
+```yaml
+- name: optional_step
+  ignore_error: true
+  before_run:
+    - type: execute_command
+      target: python
+      args: [-c, "raise SystemExit(1)"]
+- name: continue_pipeline
+  depends_on:
+    - optional_step
 ```

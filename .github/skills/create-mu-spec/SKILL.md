@@ -33,7 +33,7 @@ Use this skill whenever the requested output is a Mu spec or a spec fragment. Th
    - Put request parameters and request-specific values in `pipeline.params` and request files.
    - Put independent executable steps in separate nodes.
    - Put ordering constraints in `depends_on`.
-   - Put setup that must run once in `prepare`.
+   - Put shared flow setup in `entries.<entry>.initialization`; put lazy pipeline setup in `pipeline.<name>.prepare`.
    - Put setup around a workload in `before_run` and `after_run`.
    - Put cleanup or guaranteed notifications in `finally`.
    - Use `skip_if` for already-complete output; use `postcondition` to prove completion.
@@ -45,13 +45,14 @@ Use this skill whenever the requested output is a Mu spec or a spec fragment. Th
    - Declare every pipeline/workload parameter explicitly.
    - Use `{params[...]}` for parameters, `{session[...]}` for session paths, and `{sys[...]}` for system cache/model paths.
    - Use argv lists in `target`/`args`; never require an undocumented shell.
-   - Use `node_status: success` for successful dependency checks.
+   - Use `depends_on: [node_name]`; prerequisites must report success and dependency conditions are not supported.
+   - Inside a node, use `operator: node_state`, `target: [status]`, and an explicit `expected` (for example `failed` in `finally`).
    - Prefer `ignore_error: true` only for telemetry or best-effort actions. Do not hide core command or output failures.
    - Avoid committing secrets, absolute machine paths, downloaded assets, or generated media.
 
 5. **Model the execution graph**
    - Give each node a unique name.
-   - Declare `depends_on.node` for every real prerequisite.
+   - List every real prerequisite by name in `depends_on`.
    - Ensure `depends_on` references only nodes from the same pipeline request.
    - Verify there is no dependency cycle.
    - Put GPU `device_args` templates behind `units > 0`.
@@ -81,7 +82,7 @@ Use this skill whenever the requested output is a Mu spec or a spec fragment. Th
 Use this shape for a new local pipeline:
 
 ```yaml
-prepare: []
+entries: {}
 
 workloads:
   example:
@@ -128,7 +129,7 @@ When modifying a spec:
 Before finishing, verify:
 
 - [ ] Spec root is a mapping.
-- [ ] `prepare`, `workloads`, and `pipeline` use the implemented keys.
+- [ ] `entries`, pipeline-local `prepare`, `workloads`, and `pipeline` use the implemented keys.
 - [ ] Every workload has a valid `target` and list `args`.
 - [ ] Every workload call supplies exactly the declared params.
 - [ ] Every pipeline request supplies exactly the declared params.

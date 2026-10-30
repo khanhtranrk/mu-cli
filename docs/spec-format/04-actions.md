@@ -123,7 +123,8 @@ Mu does not create a file. The action succeeds if the path already exists as a d
 
 An action can appear in:
 
-- `prepare`;
+- `entries.<entry>.initialization` and `.finalization`;
+- `pipeline.<name>.prepare`;
 - `node.before_run`;
 - `node.after_run`;
 - `node.finally`;
@@ -131,7 +132,7 @@ An action can appear in:
 
 ### Actions in `prepare`
 
-The base context contains only `sys` and `session`.
+Prepare receives the entry context plus pipeline context, without request params.
 
 ### Actions in a node
 
@@ -145,12 +146,12 @@ The node state is updated before `finally` runs:
 finally:
   - type: send_http_request
     precondition:
-      operator: node_status
-      node: current-node
+      operator: node_state
+      target: [status]
       expected: success
 ```
 
-When referring to the current node, `node` does not need to be declared; the runtime defaults to `context.node.name`.
+Use `node_state` with `target: [status]` to inspect the current node directly.
 
 
 ## Action execution sequence
@@ -192,7 +193,8 @@ finally:
   - type: send_http_request
     ignore_error: true
     precondition:
-      operator: node_status
+      operator: node_state
+      target: [status]
       expected: failed
     url: "https://example.invalid/notify"
     method: post
@@ -252,9 +254,9 @@ not create execution results.
 
 Later actions and `finally` in the same node can read saved results with
 `{actions[name][stdout]}` or `{actions[name][body]}`. Node/request contexts
-remain isolated. Prepare results live in the containing prepare context and are available to
-later prepare actions. The CLI passes the original base context to pipelines,
-so saved prepare results are not inherited by pipeline requests.
+remain isolated. Prepare results are available to later prepare actions and are
+deep-copied into each request of that pipeline. Entry results are inherited by
+pipeline preparation.
 
 The former `save_response_to_context` field is rejected. Legacy registry actions also use `type` and
 snake_case names (`command`, `create_dir`, `write_json_from_context`,

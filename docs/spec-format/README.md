@@ -19,14 +19,14 @@ This directory explains the YAML/JSON structure understood by Mu, using the spec
 ## A complete spec at a glance
 
 ```yaml
-master-flow:
-  requests: []
+entries:
+  direct_flow:
+    initialization:
+      - type: execute_command
+        target: python
+        args: [--version]
 
-prepare:
-  - type: execute_command
-    target: python
-    args: [--version]
-
+    finalization: []
 workloads:
   make-copy:
     params:
@@ -64,7 +64,8 @@ pipeline:
 
 The data tree above means:
 
-- `prepare`: actions that run once before every request.
+- `entries`: initialization and finalization for each command entry.
+- `pipeline.<name>.prepare`: runs once when that pipeline receives valid work.
 - `workloads`: reusable subprocess templates.
 - `pipeline`: workflows made up of tasks.
 - `pipeline.<name>.nodes`: the steps in a workflow.
@@ -101,15 +102,15 @@ The workload or pipeline schema identifies required parameters, optional paramet
 
 ### 5. Nodes participate in scheduling
 
-Mu schedules all nodes from every supplied request. A node runs only after its dependencies succeed and sufficient GPU resources (`units`) are available. A failed node prevents its dependent nodes from running. `units: 0` means CPU-only and consumes no GPU units.
+Mu schedules all nodes from every supplied request. Declare `depends_on: [node_a, node_b]` to wait for successful prerequisites. A failed prerequisite blocks execution, including finally. Ignored node failures report success and allow dependent nodes to proceed. `units: 0` means CPU-only and consumes no GPU units.
 
 ### 6. Canonical status values
 
-A runtime node uses only three execution states: `running`, `success`, and `failed`. When using `node_status` in dependencies or `finally`, use `success` or `failed`. The runtime accepts the alias `succeeded` and converts it to `success`, but the canonical name `success` should be used.
+A runtime node uses only three execution states: `running`, `success`, and `failed`. Dependencies automatically require scheduler success. Inside a node, use `node_state` with `target: [status]`: the value is `running` during the main lifecycle, then `success` or `failed` in `finally`. See [Conditions](05-conditions.md#node_state). The runtime accepts the alias `succeeded` and converts it to `success`, but the canonical name `success` should be used.
 
 ## The two CLI forms
 
-- `mu run --request PIPELINE,REQUEST.yaml ...`: runs a local spec and local requests.
-- `mu master-flow run SPEC_URL`: loads a spec, retrieves requests over HTTP, runs `prepare` and the pipeline, and then retrieves requests again if they have `refresh_after_done: true`.
+- `mu run --pipeline PIPELINE,REQUEST.yaml ...`: runs a local spec and local requests.
+- `mu master-flow run SPEC_SLUG`: registers a unit, retrieves the spec, and claims request batches from MasterFlow.
 
 See [Master-flow and CLI](07-master-flow-and-cli.md) for details.
