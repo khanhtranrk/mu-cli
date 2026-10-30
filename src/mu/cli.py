@@ -493,7 +493,9 @@ def master_flow_run(
             raise ValueError("--by-unit-id must be non-empty")
         client = MasterFlowClient(server, token)
         base = _runtime_base(working_dir, sys_cache_dir, unit_id)
-        base["session"].update(unit_id=unit_id, unit_type=unit_type)
+        base["session"].update(
+            unit_id=unit_id, unit_type=unit_type, server=client.server, token=client.token,
+        )
         devices = _runtime_devices(device)
         heartbeat = {"unitId": unit_id, "unitType": unit_type,
                      "workingDir": base["session"]["working_dir"],

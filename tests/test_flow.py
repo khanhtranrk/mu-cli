@@ -115,12 +115,24 @@ class FlowTests(unittest.TestCase):
         self.assertTrue((self.root / "cleanup").exists())
 
     def test_master_flow_real_http_batches_and_metadata(self):
+        self.check_master_flow_session(use_environment=False)
+
+    def test_master_flow_session_uses_environment_when_options_are_absent(self):
+        self.check_master_flow_session(use_environment=True)
+
+    def check_master_flow_session(self, *, use_environment):
         root = self.root
-        spec = {"entries": {"master_flow": {"initialization": [write(root / "init", {})],
-                "finalization": [write(root / "final", "{entry[status]}")]}},
-                "pipeline": {"demo": {"prepare": [write(root / "prepared", {})],
+        def notify(phase):
+            return {"type": "send_http_request", "method": "post",
+                    "url": "{session[server]}/test/action",
+                    "header": {"Authorization": "Bearer {session[token]}", "Content-Type": "application/json"},
+                    "body": {"phase": phase, "server": "{session[server]}"}}
+
+        spec = {"entries": {"master_flow": {"initialization": [write(root / "init", {}), notify("initialization")],
+                "finalization": [write(root / "final", "{entry[status]}"), notify("finalization")]}},
+                "pipeline": {"demo": {"prepare": [write(root / "prepared", {}), notify("prepare")],
                 "params": {"name": {"type": "string"}}, "nodes": [{"name": "save",
-                "before_run": [write("{session[working_dir]}/{params[name]}.json", "{request[requestId]}")]}]}}}
+                "before_run": [write("{session[working_dir]}/{params[name]}.json", "{request[requestId]}"), notify("node")]}]}}}
         events, selections, reports = [], [], []
         batches = [[{"requestId": str(i), "specSlug": "demo", "pipelineName": "demo", "payload": {"name": str(i)}}] for i in (1, 2)] + [[]]
         class Handler(BaseHTTPRequestHandler):
@@ -145,11 +157,16 @@ class FlowTests(unittest.TestCase):
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        endpoint = f"http://127.0.0.1:{server.server_port}"
+        args = ["master-flow", "run", "demo", "--unit-id", "worker", "--refresh-loop", "--working_dir", str(root),
+                "--by-pipeline", "demo", "--by-pipeline", "other"]
+        if use_environment:
+            environment = {"MU_MASTER_FLOW_SERVER": endpoint + "/", "MU_MASTER_FLOW_TOKEN": "test-token"}
+        else:
+            args += ["--server", endpoint + "/", "--token", "test-token"]
+            environment = {"MU_MASTER_FLOW_SERVER": "http://invalid", "MU_MASTER_FLOW_TOKEN": "wrong"}
         with patch("mu.cli.detect_devices", return_value=[]):
-            result = CliRunner().invoke(app, ["master-flow", "run", "demo", "--server", f"http://127.0.0.1:{server.server_port}",
-                "--token", "test-token", "--unit-id", "worker", "--refresh-loop", "--working_dir", str(root),
-                "--by-pipeline", "demo", "--by-pipeline", "other"],
-                env={"MU_MASTER_FLOW_SERVER": "http://invalid", "MU_MASTER_FLOW_TOKEN": "wrong"})
+            result = CliRunner().invoke(app, args, env=environment)
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertEqual(len(selections), 3)
         self.assertTrue(all(s["byStatus"] == ["waiting"] and s["byPipeline"] == ["demo", "other"] for s in selections))
@@ -158,6 +175,11 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(json.loads((root / "final").read_text()), "success")
         self.assertEqual(events[0][1]["status"], "online")
         self.assertEqual(events[-1][1]["status"], "offline")
+        actions = [body for path, body in (event for event in events if isinstance(event, tuple)) if path == "/test/action"]
+        self.assertEqual([action["phase"] for action in actions], ["initialization", "prepare", "node", "node", "finalization"])
+        self.assertTrue(all(action["server"] == endpoint for action in actions))
+        self.assertNotIn("test-token", result.output)
+        self.assertNotIn("wrong", result.output)
 
 
 if __name__ == "__main__":

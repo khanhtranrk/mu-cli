@@ -85,6 +85,12 @@ uv run mu master-flow run song-generation \
 | `--unit-type` | Unit type; defaults to `unknown` |
 | `--refresh-loop` | Claim subsequent batches until an empty array |
 
+The resolved connection is available in templates as `{session[server]}` and
+`{session[token]}` during initialization, pipeline prepare, nodes and finalization.
+The server has no trailing slash; use `Authorization: "Bearer {session[token]}"`
+in HTTP action headers. These fields exist only for master flow. See
+[connection context and example](02-context-and-templates.md#master-flow-connection-in-session).
+
 Working directory, system cache and device options match local execution.
 Filters combine with AND between groups. At most 100 distinct pipeline/status
 combinations are supported. The server selects oldest matches atomically, capped

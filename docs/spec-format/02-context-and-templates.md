@@ -39,6 +39,31 @@ session:
 
 `output_dir` and `session.cache_dir` are created automatically in `_runtime_base`.
 
+### Master-flow connection in `session`
+
+`mu master-flow run` adds `session.server`, `session.token`, `session.unit_id`
+and `session.unit_type` before entry initialization. Server and token are the
+resolved CLI/environment values (`--server` / `--token` take precedence).
+`session.server` has trailing slashes removed so API paths can be appended.
+These values are inherited by entry actions, pipeline prepare and node contexts;
+they are not added by local `mu run`.
+
+```yaml
+- type: send_http_request
+  url: "{session[server]}/api/notifications/send"
+  method: post
+  header:
+    Authorization: "Bearer {session[token]}"
+    Content-Type: application/json
+  body:
+    title: Worker ready
+    message: Initialization completed
+```
+
+The token is a secret; use it in authentication headers and avoid writing or
+printing it in action bodies, command arguments, logs or output files.
+See the [executable example](../../examples/master-flow-session/spec.yaml).
+
 ### `sys.cache_dir`
 
 This is `--sys_cache_dir`, defaulting to `$HOME/.cache`.

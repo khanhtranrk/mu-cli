@@ -167,7 +167,9 @@ uv run mu master-flow run --help
 
 Use `mu master-flow run SPEC_SLUG --unit-id WORKER` with
 `MU_MASTER_FLOW_SERVER` (Convex HTTP site URL) and `MU_MASTER_FLOW_TOKEN`.
-`--server` and `--token` override these values. `--batch-size` defaults to 1
+`--server` and `--token` override these values. HTTP actions can use
+`{session[server]}` and `{session[token]}`; see the
+[session example](examples/master-flow-session/spec.yaml). `--batch-size` defaults to 1
 (maximum 100). Repeat `--by-pipeline` / `--by-status` to filter; status defaults
 to `waiting`. `--by-unit-id` filters previous assignment. `--refresh-loop` drains
 batches until none remain. See [full lifecycle and CLI](docs/spec-format/07-master-flow-and-cli.md).
