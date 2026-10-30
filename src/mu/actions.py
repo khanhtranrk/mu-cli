@@ -23,10 +23,12 @@ def register_action(name: str) -> Callable[[ActionHandler], ActionHandler]:
 
 
 def run_action(action: dict[str, Any], context: dict[str, Any] | None = None) -> None:
-    name = action.get("action")
+    if "action" in action:
+        raise ActionError("use type, not action")
+    name = action.get("type")
     if not isinstance(name, str) or name not in ACTION_HANDLERS:
         raise ActionError(f"unknown action {name!r}")
-    ACTION_HANDLERS[name](action, context or {})
+    ACTION_HANDLERS[name](action, context if context is not None else {})
 
 
 @register_action("command")
@@ -48,35 +50,35 @@ def command_action(action: dict[str, Any], context: dict[str, Any]) -> None:
             )
 
 
-@register_action("create-dir")
+@register_action("create_dir")
 def create_dir_action(action: dict[str, Any], context: dict[str, Any]) -> None:
     """Create a directory path, including any missing parent directories."""
     raw_path = action.get("path")
     if not isinstance(raw_path, str) or not raw_path:
-        raise ActionError("create-dir.path must be a non-empty path string")
+        raise ActionError("create_dir.path must be a non-empty path string")
     path = Path(_render(raw_path, context)).expanduser()
     if not path.is_absolute():
         path = Path(context.get("working_dir", Path.cwd())) / path
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise ActionError(f"create-dir could not create {path}: {exc}") from exc
+        raise ActionError(f"create_dir could not create {path}: {exc}") from exc
 
 
-@register_action("write-jsons-from-context")
+@register_action("write_jsons_from_context")
 def write_jsons_from_context(action: dict[str, Any], context: dict[str, Any]) -> None:
     """Write one JSON document per item under context[action.target]."""
     target = action.get("target")
     output = action.get("output")
     content = action.get("content")
     if not isinstance(target, str) or not isinstance(output, str) or not isinstance(content, dict):
-        raise ActionError("write-jsons-from-context requires string target/output and mapping content")
+        raise ActionError("write_jsons_from_context requires string target/output and mapping content")
     items = context.get(target)
     if not isinstance(items, list):
         raise ActionError(f"context[{target!r}] must be a list")
     for item in items:
         if not isinstance(item, dict):
-            raise ActionError("write-jsons-from-context items must be mappings")
+            raise ActionError("write_jsons_from_context items must be mappings")
         values = {**context, "request": item}
         directory = Path(_render(output, values)).expanduser()
         directory.mkdir(parents=True, exist_ok=True)
@@ -86,15 +88,15 @@ def write_jsons_from_context(action: dict[str, Any], context: dict[str, Any]) ->
         )
 
 
-@register_action("write-json-from-context")
+@register_action("write_json_from_context")
 def write_json_from_context(action: dict[str, Any], context: dict[str, Any]) -> None:
     """Write one JSON document from the current (usually request) context."""
     output = action.get("output")
     content = action.get("content")
     if not isinstance(output, str) or not output:
-        raise ActionError("write-json-from-context.output must be a non-empty path string")
+        raise ActionError("write_json_from_context.output must be a non-empty path string")
     if not isinstance(content, dict):
-        raise ActionError("write-json-from-context.content must be a mapping")
+        raise ActionError("write_json_from_context.content must be a mapping")
     path = Path(_render(output, context)).expanduser()
     if not path.is_absolute():
         path = Path(context.get("working_dir", Path.cwd())) / path
@@ -103,7 +105,7 @@ def write_json_from_context(action: dict[str, Any], context: dict[str, Any]) -> 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(rendered, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     except OSError as exc:
-        raise ActionError(f"write-json-from-context could not write {path}: {exc}") from exc
+        raise ActionError(f"write_json_from_context could not write {path}: {exc}") from exc
 
 
 def _render(value: Any, context: dict[str, Any]) -> Any:
@@ -143,9 +145,3 @@ def _render(value: Any, context: dict[str, Any]) -> Any:
             break
         rendered = updated
     return rendered
-
-
-# Accept the older descriptive alias used in prose/config examples as well.
-ACTION_HANDLERS["write-jsons-from-text"] = write_jsons_from_context
-# Accept the common typo used in early configuration examples.
-ACTION_HANDLERS["write-json-form-context"] = write_json_from_context

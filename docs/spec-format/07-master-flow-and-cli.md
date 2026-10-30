@@ -23,7 +23,7 @@ uv run mu run \
 | `--unit_name TEXT` | `unknown` | Worker label shown in the session context |
 | `--device FAMILY,INDEX,CAPACITY` | auto-detect | Add a GPU with unit capacity; repeatable |
 
-Missing `--request` is an exit-code 2 error. A pipeline request that does not exist in the spec or a request file with the wrong root structure is an error.
+Missing `--request` is an exit_code 2 error. A pipeline request that does not exist in the spec or a request file with the wrong root structure is an error.
 
 ### Request file
 
@@ -156,15 +156,14 @@ master-flow:
       refresh_after_done: true
 
 prepare:
-  - type: execute-commands
-    commands:
-      - target: hf
-        args:
-          - download
-          - organization/model
-          - model.gguf
-          - --local-dir
-          - "{sys[cache_dir]}/models"
+  - type: execute_command
+    target: hf
+    args:
+      - download
+      - organization/model
+      - model.gguf
+      - --local-dir
+      - "{sys[cache_dir]}/models"
 
 workloads:
   generate:

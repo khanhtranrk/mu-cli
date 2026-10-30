@@ -36,16 +36,12 @@
 
 | Type | Type-specific fields | Result |
 |---|---|---|
-| `execute-command` | `target`, `args`, `env` | Run one process |
-| `execute-commands` | `commands` | Run commands sequentially |
-| `send_http_request` | `url`, `method`, `header`, `body`, `save_response_to_context` | Make an HTTP request and optionally save the response |
-| `write-json` | `path`, `content` | Write JSON |
-| `create-dir` | `path` | Create a directory and its parents |
+| `execute_command` | `target`, `args`, `env`, `save_state` | Run one process |
+| `send_http_request` | `url`, `method`, `header`, `body`, `save_state` | Make an HTTP request and optionally save the response |
+| `write_json` | `path`, `content` | Write JSON |
+| `create_dir` | `path` | Create a directory and its parents |
 
-Aliases accepted by the action runtime:
-
-- `send-http-request` instead of `send_http_request`.
-- `action` instead of `type`.
+Action names use snake_case and are declared with `type`. No action aliases are accepted.
 
 ## Pipeline keys
 
@@ -72,14 +68,17 @@ Aliases accepted by the action runtime:
 
 ## Condition operators
 
+Operator names use snake_case without aliases.
+
 | Operator | Fields | Default `expected` | True when |
 |---|---|---:|---|
 | `and` | `props` | true | All props are true |
 | `or` | `props` | true | At least one prop is true |
-| `file-exists` | `path` | true | The path is an existing file |
-| `folder-exists` | `path` | true | The path is an existing directory |
-| `path-exists` | `path` | true | The path exists |
-| `exit-code` | `target`, `expected` | 0 | The command exits with `expected` |
+| `file_exists` | `path` | true | The path is an existing file |
+| `folder_exists` | `path` | true | The path is an existing directory |
+| `path_exists` | `path` | true | The path exists |
+| `action_state` | `target`, `expected` | required | Compare a saved action value at the target key path |
+| `exit_code` | `target`, `expected` | 0 | The command exits with `expected` |
 | `node_status` | `node`, `expected` | `success` | The dependency/current node has the expected state |
 
 ## Context keys

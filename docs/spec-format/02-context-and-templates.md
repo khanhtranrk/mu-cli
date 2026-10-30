@@ -171,7 +171,7 @@ node:
 An action can merge its own context:
 
 ```yaml
-- type: write-json
+- type: write_json
   context:
     payload:
       name: "{params[name]}"
@@ -179,7 +179,7 @@ An action can merge its own context:
   content: "{payload}"
 ```
 
-Note that `write-json` renders the entire action before execution, so a context mapping may not merge as expected if `content` references the placeholder. Action context exists only in the local context object being used; it does not replace the original root context.
+Note that `write_json` renders the entire action before execution, so a context mapping may not merge as expected if `content` references the placeholder. Action context exists only in the local context object being used; it does not replace the original root context.
 
 ## Schedule context
 

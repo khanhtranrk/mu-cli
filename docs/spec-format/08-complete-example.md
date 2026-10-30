@@ -41,7 +41,7 @@ height: 800
 
 ```yaml
 prepare:
-  - type: execute-command
+  - type: execute_command
     target: python
     args: [--version]
 
@@ -112,7 +112,7 @@ pipeline:
         run:
           workload: noop
         before_run:
-          - type: write-json
+          - type: write_json
             path: "{session[cache_dir]}/{params[name]}.json"
             content:
               title: "{params[title]}"
@@ -120,7 +120,7 @@ pipeline:
               width: "{params[width]}"
               height: "{params[height]}"
         finally:
-          - type: create-dir
+          - type: create_dir
             path: "{item_dir}"
 
       - name: render-text
@@ -130,10 +130,10 @@ pipeline:
               operator: node_status
               expected: success
         precondition:
-          operator: file-exists
+          operator: file_exists
           path: "{session[cache_dir]}/{params[name]}.json"
         skip_if:
-          operator: file-exists
+          operator: file_exists
           path: "{item_dir}/result.txt"
         run:
           workload: render
@@ -144,9 +144,9 @@ pipeline:
         postcondition:
           operator: and
           props:
-            - operator: file-exists
+            - operator: file_exists
               path: "{item_dir}/result.txt"
-            - operator: folder-exists
+            - operator: folder_exists
               path: "{item_dir}"
         finally:
           - type: send_http_request
@@ -170,7 +170,7 @@ An action-only node is valid:
   depends_on:
     - node: make-output-dir
   before_run:
-    - type: write-json
+    - type: write_json
       path: "{session[cache_dir]}/{params[name]}.json"
       content:
         title: "{params[title]}"
@@ -183,7 +183,7 @@ The complete corrected version:
 
 ```yaml
 prepare:
-  - type: execute-command
+  - type: execute_command
     target: python
     args: [--version]
 
@@ -238,7 +238,7 @@ pipeline:
               operator: node_status
               expected: success
         before_run:
-          - type: write-json
+          - type: write_json
             path: "{session[cache_dir]}/{params[name]}.json"
             content:
               title: "{params[title]}"
@@ -253,10 +253,10 @@ pipeline:
               operator: node_status
               expected: success
         precondition:
-          operator: file-exists
+          operator: file_exists
           path: "{session[cache_dir]}/{params[name]}.json"
         skip_if:
-          operator: file-exists
+          operator: file_exists
           path: "{item_dir}/result.txt"
         run:
           workload: render
@@ -265,7 +265,7 @@ pipeline:
             request: "{session[cache_dir]}/{params[name]}.json"
             output: "{item_dir}/result.txt"
         postcondition:
-          operator: file-exists
+          operator: file_exists
           path: "{item_dir}/result.txt"
 ```
 

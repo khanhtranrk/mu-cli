@@ -3,7 +3,7 @@
 Actions and nodes use the same condition system. A condition is a mapping with an `operator`:
 
 ```yaml
-operator: file-exists
+operator: file_exists
 path: "{params[output]}"
 expected: true
 ```
@@ -25,9 +25,9 @@ AND all of the child properties:
 ```yaml
 operator: and
 props:
-  - operator: file-exists
+  - operator: file_exists
     path: /tmp/result.mp3
-  - operator: file-exists
+  - operator: file_exists
     path: /tmp/result.abc
 expected: true
 ```
@@ -43,20 +43,20 @@ OR at least one child property:
 ```yaml
 operator: or
 props:
-  - operator: file-exists
+  - operator: file_exists
     path: /tmp/cache-a.bin
-  - operator: file-exists
+  - operator: file_exists
     path: /tmp/cache-b.bin
 ```
 
 An empty list evaluates to `false`, matching Python's `any([])` behavior.
 
-## `file-exists`
+## `file_exists`
 
 Returns true only if the path exists and is a file:
 
 ```yaml
-operator: file-exists
+operator: file_exists
 path: "{session[output_dir]}/{params[name]}/cover.png"
 expected: true
 ```
@@ -65,35 +65,35 @@ expected: true
 - A symlink to a regular file is usually treated as a file by `is_file()`.
 - The default is `expected: true`.
 
-## `folder-exists`
+## `folder_exists`
 
 Returns true only if the path exists and is a directory:
 
 ```yaml
-operator: folder-exists
+operator: folder_exists
 path: "{session[output_dir]}/{params[name]}"
 ```
 
 - A symlink to a directory is usually treated as a directory.
 - The default is `expected: true`.
 
-## `path-exists`
+## `path_exists`
 
 Returns true for any existing object: a file, folder, or valid symlink:
 
 ```yaml
-operator: path-exists
+operator: path_exists
 path: "{params[output]}"
 ```
 
-Use `file-exists` or `folder-exists` when the object type must be constrained.
+Use `file_exists` or `folder_exists` when the object type must be constrained.
 
-## `exit-code`
+## `exit_code`
 
 Runs a command and compares its exit code:
 
 ```yaml
-operator: exit-code
+operator: exit_code
 target: ["{sys[cache_dir]}/bin/yue-synth", --help]
 expected: 0
 ```
@@ -107,12 +107,12 @@ expected: 0
 Example that expects exit code `1` to identify a legacy command:
 
 ```yaml
-operator: exit-code
+operator: exit_code
 target: [demucs, --help]
 expected: 1
 ```
 
-Do not use `exit-code` for expensive work. It is only a probe that re-executes the executable.
+Do not use `exit_code` for expensive work. It is only a probe that re-executes the executable.
 
 ## `node_status`
 
@@ -147,7 +147,7 @@ If `expected: succeeded`, the runtime normalizes the alias to `success`, but new
 A condition can be inverted:
 
 ```yaml
-operator: file-exists
+operator: file_exists
 path: /tmp/must-not-exist
 expected: false
 ```
@@ -156,7 +156,7 @@ This is useful with `skip_if`: skip an action when its output does not exist, al
 
 ```yaml
 skip_if:
-  operator: file-exists
+  operator: file_exists
   path: output.png
 expected: true
 ```
@@ -166,7 +166,7 @@ expected: true
 Mu resolves relative paths against `session.working_dir`:
 
 ```yaml
-operator: file-exists
+operator: file_exists
 path: output/demo.wav
 ```
 
@@ -181,17 +181,17 @@ Use an absolute template when a spec may run in a different environment or be st
 ## Conditions on actions
 
 ```yaml
-- type: execute-command
+- type: execute_command
   target: python
   args: [convert.py]
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: "{params[output]}"
   precondition:
-    operator: folder-exists
+    operator: folder_exists
     path: "{params[input_dir]}"
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: "{params[output]}"
 ```
 
@@ -207,14 +207,45 @@ The sequence is:
 ```yaml
 - name: generate
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: "{params[output]}"
   precondition:
-    operator: exit-code
+    operator: exit_code
     target: [generator, --help]
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: "{params[output]}"
 ```
 
 For details, see [Pipelines and nodes](06-pipelines-and-nodes.md).
+
+## `action_state`
+
+Reads saved action results from the containing context's `actions` mapping.
+`target` is a non-empty list of non-empty string keys. The first key is the
+`save_state` name; subsequent keys traverse nested mappings. List indexing
+is not supported. `expected` is required, including when the expected value
+is `null` or `false`. Comparison uses the same equality semantics as other
+conditions, without string/number coercion.
+
+```yaml
+precondition:
+  operator: action_state
+  target: [check_command, returncode]
+  expected: 1
+```
+
+This reads `context["actions"]["check_command"]["returncode"]`. HTTP examples
+include `[create_job, status_code]` and `[create_job, body, id]`. Missing state,
+missing keys, or encountering a non-mapping before the end returns false,
+even with `expected: null`. An explicitly stored null does match null.
+Missing `expected` or an invalid `target` is a declaration error.
+
+An action's own result is available in its postcondition. Later actions in
+the same node and `finally` can read it. A node precondition only sees state
+already inherited into that node; it cannot see results of its own future
+actions or another node's actions. The stored process field is `returncode`.
+
+Operator names use snake_case only: `and`, `or`, `file_exists`,
+`folder_exists`, `path_exists`, `exit_code`, `node_status`, `action_state`.
+Hyphenated operator names are rejected.

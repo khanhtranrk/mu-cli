@@ -9,6 +9,7 @@ import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from copy import deepcopy
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import yaml
@@ -62,22 +63,33 @@ def condition(spec: Any, context: dict[str, Any], states: dict[str, str]) -> boo
         props = spec.get("props", [])
         if not isinstance(props, list): raise RuntimeError(f"{op}.props must be a list")
         value = all(condition(x, context, states) for x in props) if op == "and" else any(condition(x, context, states) for x in props)
-    elif op in {"file-exists", "folder-exists", "path-exists"}:
+    elif op in {"file_exists", "folder_exists", "path_exists"}:
         path = Path(str(_render(spec.get("path", ""), context))).expanduser()
         if not path.is_absolute(): path = Path(context["session"]["working_dir"]) / path
-        value = path.is_file() if op == "file-exists" else path.is_dir() if op == "folder-exists" else path.exists()
-    elif op == "exit-code":
+        value = path.is_file() if op == "file_exists" else path.is_dir() if op == "folder_exists" else path.exists()
+    elif op == "exit_code":
         target = _render(spec.get("target"), context)
         if not isinstance(target, list) or not target:
-            raise RuntimeError("exit-code.target must be a non-empty command list")
+            raise RuntimeError("exit_code.target must be a non-empty command list")
         expected = spec.get("expected", 0)
         if not isinstance(expected, int) or isinstance(expected, bool):
-            raise RuntimeError("exit-code.expected must be an integer")
+            raise RuntimeError("exit_code.expected must be an integer")
         try:
             result = subprocess.run(list(map(str, target)), cwd=context["session"]["working_dir"], capture_output=True, text=True)
             value = result.returncode
         except OSError:
             value = None
+    elif op == "action_state":
+        if "expected" not in spec:
+            raise RuntimeError("action_state.expected is required")
+        target = _render(spec.get("target"), context)
+        if not isinstance(target, list) or not target or not all(isinstance(key, str) and key for key in target):
+            raise RuntimeError("action_state.target must be a non-empty list of non-empty string keys, starting with the save_state name")
+        value = context.get("actions", {})
+        for key in target:
+            if not isinstance(value, dict) or key not in value:
+                return False
+            value = value[key]
     elif op == "node_status":
         value = states.get(str(spec.get("node", context.get("node", {}).get("name", ""))))
         expected = spec.get("expected", "success")
@@ -97,8 +109,16 @@ def run_action(
     action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path,
     *, label: str = "action",
 ) -> None:
+    typ = action.get("type")
+    if "action" in action:
+        raise RuntimeError(f"{label}: use type, not action")
+    if not isinstance(typ, str) or typ not in {"execute_command", "create_dir", "write_json", "send_http_request"}:
+        raise RuntimeError(f"{label}: unknown action type {typ!r}; use snake_case names")
+    if "save_response_to_context" in action:
+        raise RuntimeError(f"{label}: save_response_to_context was removed; use save_state")
+    if "save_state" in action and typ not in {"execute_command", "send_http_request"}:
+        raise RuntimeError(f"{label}: save_state is only supported by execute_command and send_http_request")
     _apply_context(context, _render(action.get("context", {}), context))
-    typ = action.get("type", action.get("action"))
     if action.get("skip_if") and condition(action["skip_if"], context, states):
         print(f"[SKIP] {label} ({typ}): skip_if matched", flush=True)
         return
@@ -106,43 +126,74 @@ def run_action(
         print(f"[SKIP] {label} ({typ}): precondition did not match", flush=True)
         return
     values = _render(action, context)
+    key = values.get("save_state")
+    if "save_state" in values:
+        if not isinstance(key, str) or not key.strip():
+            raise RuntimeError(f"{label}.save_state must be a non-empty string")
+        if "actions" in context and not isinstance(context["actions"], dict):
+            raise RuntimeError(f"{label}: context.actions must be a mapping")
+    result = {"success": False, "error": None}
+    if typ == "execute_command":
+        result.update(returncode=None, stdout="", stderr="")
+    elif typ == "send_http_request":
+        result.update(status_code=None, headers={}, body=None)
     started = time.perf_counter()
     print(f"[ACTION] {label}: {typ} started", flush=True)
     try:
-        if typ in {"execute-command", "execute-commands"}:
-            commands = values.get("commands", []) if typ == "execute-commands" else [values]
-            for index, item in enumerate(commands, start=1):
-                target = item.get("target")
-                args = item.get("args", [])
-                if not target or not isinstance(args, list): raise RuntimeError("execute-command requires target and args")
-                print(f"[ACTION] {label}: command {index}/{len(commands)} ({target})", flush=True)
-                subprocess.run([str(target), *map(str, args)], cwd=workdir, env={**os.environ, **item.get("env", {})}, check=True, capture_output=True, text=True)
-        elif typ == "create-dir":
+        if typ == "execute_command":
+            target = values.get("target")
+            args = values.get("args", [])
+            if not target or not isinstance(args, list):
+                raise RuntimeError("execute_command requires target and args")
+            completed = subprocess.run(
+                [str(target), *map(str, args)], cwd=workdir,
+                env={**os.environ, **values.get("env", {})}, check=False,
+                capture_output=True, text=True, errors="replace",
+            )
+            result.update(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
+            if completed.returncode:
+                raise subprocess.CalledProcessError(completed.returncode, completed.args, completed.stdout, completed.stderr)
+        elif typ == "create_dir":
             Path(values["path"]).expanduser().mkdir(parents=True, exist_ok=True)
-        elif typ == "write-json":
+        elif typ == "write_json":
             path = Path(values["path"]).expanduser(); path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(values.get("content", {}), ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
-        elif typ in {"send_http_request", "send-http-request"}:
+        elif typ == "send_http_request":
             data = values.get("body")
             payload = json.dumps(data).encode() if data is not None else None
             req = Request(values["url"], data=payload, headers=values.get("header", {}), method=str(values.get("method", "get")).upper())
-            with urlopen(req, timeout=30) as response:
-                response_data = response.read()
-            key = values.get("save_response_to_context")
-            if key: context[key] = json.loads(response_data) if response_data else None
-        else:
-            raise RuntimeError(f"unknown action type {typ!r}")
+            http_error = None
+            try:
+                response = urlopen(req, timeout=30)
+            except HTTPError as exc:
+                response = exc
+                http_error = exc
+            with response:
+                result.update(status_code=response.code, headers={k.lower(): v for k, v in response.headers.items()})
+                raw = response.read()
+                if raw:
+                    text = raw.decode(response.headers.get_content_charset() or "utf-8", errors="replace")
+                    try:
+                        result["body"] = json.loads(text)
+                    except ValueError:
+                        result["body"] = text
+            if http_error is not None:
+                raise http_error
+        result["success"] = True
+        if key is not None:
+            context.setdefault("actions", {})[key] = result
+        if action.get("postcondition"):
+            if not condition(action["postcondition"], context, states):
+                raise RuntimeError("postcondition failed")
+            print(f"[CHECK] {label}: postcondition passed", flush=True)
     except Exception as exc:
+        result.update(success=False, error={"type": type(exc).__name__, "message": str(exc)})
+        if key is not None:
+            context.setdefault("actions", {})[key] = result
         if action.get("ignore_error"):
             print(f"[WARN] {label}: ignored action error: {exc}", flush=True)
             return
         raise RuntimeError(f"{label} ({typ}) failed: {exc}") from exc
-    if action.get("postcondition"):
-        if not condition(action["postcondition"], context, states):
-            if not action.get("ignore_error"): raise RuntimeError(f"{label} ({typ}) postcondition failed")
-            print(f"[WARN] {label}: postcondition failed; ignored", flush=True)
-        else:
-            print(f"[CHECK] {label}: postcondition passed", flush=True)
     elapsed = time.perf_counter() - started
     print(f"[ACTION] {label}: {typ} completed in {elapsed:.1f}s", flush=True)
 

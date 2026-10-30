@@ -32,7 +32,7 @@ pipeline:
             output: "{params[output]}"
         after_run: []
         postcondition:
-          operator: file-exists
+          operator: file_exists
           path: "{params[output]}"
         finally: []
         depends_on: []

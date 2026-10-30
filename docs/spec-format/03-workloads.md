@@ -101,7 +101,7 @@ target: python
 args: [-m, demo]
 ```
 
-If the executable cannot be found, the subprocess raises an error during execution. Use `precondition.operator: exit-code` to report the problem earlier if desired.
+If the executable cannot be found, the subprocess raises an error during execution. Use `precondition.operator: exit_code` to report the problem earlier if desired.
 
 ## `args`
 

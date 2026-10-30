@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 from mu.validators import ValidationError, ValidationResult, validate_action_checks
-from mu.actions import ActionError, run_action
+from mu.actions import ACTION_HANDLERS, ActionError, run_action
 
 
 class SpecError(ValueError):
@@ -35,9 +35,13 @@ def validate_spec(path: Path, *, context: dict[str, Any] | None = None) -> list[
     for index, action in enumerate(actions):
         if not isinstance(action, dict):
             raise SpecError(f"repair[{index}] must be a mapping")
-        action_type = action.get("action")
+        if "action" in action:
+            raise SpecError(f"repair[{index}]: use type, not action")
+        action_type = action.get("type")
         if not isinstance(action_type, str):
-            raise SpecError(f"repair[{index}].action must be a string")
+            raise SpecError(f"repair[{index}].type must be a string")
+        if action_type not in ACTION_HANDLERS:
+            raise SpecError(f"repair[{index}].type: unknown action {action_type!r}")
         checks = action.get("validate", [])
         if checks is None:
             continue

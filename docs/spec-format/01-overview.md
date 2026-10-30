@@ -7,7 +7,7 @@ master-flow:
   requests: []
 
 prepare:
-  - type: execute-command
+  - type: execute_command
     target: ...
     args: []
 
@@ -42,17 +42,17 @@ All sections are optional during parsing, but a spec that omits the section need
 
 ```yaml
 prepare:
-  - type: execute-commands
-    commands:
-      - target: python
-        args: [--version]
-      - target: hf
-        args: [download, organization/model, file.gguf]
+  - type: execute_command
+    target: python
+    args: [--version]
+  - type: execute_command
+    target: hf
+    args: [download, organization/model, file.gguf]
     skip_if:
-      operator: file-exists
+      operator: file_exists
       path: "{sys[cache_dir]}/models/file.gguf"
     postcondition:
-      operator: file-exists
+      operator: file_exists
       path: "{sys[cache_dir]}/models/file.gguf"
 ```
 
@@ -150,7 +150,7 @@ immediately jump to finally
 
 ```yaml
 prepare:
-  - type: create-dir
+  - type: create_dir
     path: "{session[working_dir]}/cache/models"
 
 workloads:
@@ -174,7 +174,7 @@ pipeline:
             source: "{params[source]}"
             destination: "{params[destination]}"
         finally:
-          - type: execute-command
+          - type: execute_command
             target: python
             args: [-c, "print('done')"]
 ```

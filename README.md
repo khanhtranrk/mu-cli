@@ -131,6 +131,15 @@ Templates use bracket lookup syntax such as `{params[name]}`, `{session[output_d
 - [Complete example](docs/spec-format/08-complete-example.md)
 - [Quick reference](docs/spec-format/quick-reference.md)
 
+Action names use `snake_case` and the `type` key, without aliases.
+`execute_command` and `send_http_request` support `save_state: name`, saving
+success or failure details at `actions[name]` in the containing context. See
+[Actions](docs/spec-format/04-actions.md#saved-action-results) for the result schemas.
+
+Conditions also use `snake_case` operator names. Use `action_state` with
+`target: [name, returncode]` and a required `expected` value to check saved
+action results; see [Conditions](docs/spec-format/05-conditions.md#action_state).
+
 ## CLI reference
 
 ```sh

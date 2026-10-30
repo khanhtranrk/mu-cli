@@ -1,9 +1,10 @@
 master-flow:
   requests: []
 prepare:
-- type: execute-command
+- type: execute_command
+  save_state: prepare_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
   target: hf
   args:
@@ -13,11 +14,16 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
-    path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
-- type: execute-command
+    operator: and
+    props:
+    - operator: file_exists
+      path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
+    - operator: action_state
+      target: [prepare_command, returncode]
+      expected: 0
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
   target: hf
   args:
@@ -27,11 +33,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
   target: hf
   args:
@@ -41,11 +47,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
   target: hf
   args:
@@ -55,11 +61,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
   target: hf
   args:
@@ -69,11 +75,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
   target: hf
   args:
@@ -83,11 +89,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
   target: hf
   args:
@@ -97,11 +103,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
   target: hf
   args:
@@ -111,11 +117,11 @@ prepare:
     - --local-dir
     - '{sys[cache_dir]}/models'
   postcondition:
-    operator: file-exists
+    operator: file_exists
     path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: exit-code
+    operator: exit_code
     target:
     - demucs
     - --help
@@ -129,13 +135,13 @@ prepare:
   - --with
   - numpy
   postcondition:
-    operator: exit-code
+    operator: exit_code
     target:
     - demucs
     - --help
-- type: execute-command
+- type: execute_command
   skip_if:
-    operator: exit-code
+    operator: exit_code
     target:
     - whisperx
     - --help
@@ -147,7 +153,7 @@ prepare:
   - --with
   - wrapt
   postcondition:
-    operator: exit-code
+    operator: exit_code
     target:
     - whisperx
     - --help
@@ -283,32 +289,32 @@ pipeline:
       skip_if:
         operator: and
         props:
-        - operator: file-exists
+        - operator: file_exists
           path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-        - operator: file-exists
+        - operator: file_exists
           path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
       postcondition:
         operator: and
         props:
-        - operator: file-exists
+        - operator: file_exists
           path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-        - operator: file-exists
+        - operator: file_exists
           path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-        - operator: exit-code
+        - operator: exit_code
           expected: 1
           target:
           - '{sys[cache_dir]}/bin/yue-synth'
           - --help
       precondition:
-        operator: exit-code
+        operator: exit_code
         expected: 1
         target:
         - '{sys[cache_dir]}/bin/yue-synth'
         - --help
       before_run:
-      - type: create-dir
+      - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
-      - type: write-json
+      - type: write_json
         path: '{session[cache_dir]}/requests/{params[name]}/{params[name]}.json'
         content:
           name: '{params[name]}'
@@ -322,18 +328,18 @@ pipeline:
           score: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
     - name: generate-cover
       precondition:
-        operator: exit-code
+        operator: exit_code
         target:
         - '{sys[cache_dir]}/bin/sd-cli'
         - --help
       skip_if:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/cover.png'
       postcondition:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/cover.png'
       before_run:
-      - type: create-dir
+      - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
       run:
         workload: qwen-image
@@ -344,10 +350,10 @@ pipeline:
           cover_height: '{params[cover_height]}'
     - name: separate-vocals
       skip_if:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
       postcondition:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
       depends_on:
       - node: generate-song
@@ -355,7 +361,7 @@ pipeline:
           operator: node_status
           expected: success
       before_run:
-      - type: create-dir
+      - type: create_dir
         path: '{session[output_dir]}/{params[name]}/separated'
       run:
         workload: demucs
@@ -364,10 +370,10 @@ pipeline:
           input: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
     - name: transcribe-vocals
       skip_if:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
       postcondition:
-        operator: file-exists
+        operator: file_exists
         path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
       depends_on:
       - node: separate-vocals
@@ -375,7 +381,7 @@ pipeline:
           operator: node_status
           expected: success
       before_run:
-      - type: create-dir
+      - type: create_dir
         path: '{session[output_dir]}/{params[name]}/transcript'
       run:
         workload: whisperx

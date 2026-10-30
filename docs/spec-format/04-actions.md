@@ -5,7 +5,7 @@ An action is a side-effecting operation: running a process, creating a directory
 ## Common properties
 
 ```yaml
-- type: execute-command
+- type: execute_command
   context: {}
   skip_if: {...}
   precondition: {...}
@@ -15,7 +15,7 @@ An action is a side-effecting operation: running a process, creating a directory
 
 | Property | Required | Meaning |
 |---|---:|---|
-| `type` | Yes | Action type. The canonical name; the runtime also accepts `action` as an alias. |
+| `type` | Yes | Action type. The only action declaration key. Action names use snake_case; aliases are rejected. |
 | `context` | No | Additional context mapping that is rendered and merged before the action. |
 | `skip_if` | No | If the condition is true, skip the action. |
 | `precondition` | No | Run only when the condition is true. If false, skip the action without failure. |
@@ -30,18 +30,18 @@ An action is a side-effecting operation: running a process, creating a directory
 
 With `ignore_error: true`, a false postcondition still prints a warning and execution continues.
 
-## `execute-command`
+## `execute_command`
 
 Runs one subprocess:
 
 ```yaml
-- type: execute-command
+- type: execute_command
   target: python
   args: [-m, pip, --version]
   env:
     PYTHONUTF8: "1"
   skip_if:
-    operator: exit-code
+    operator: exit_code
     target: [python, -m, pip, --version]
 ```
 
@@ -52,53 +52,9 @@ Runs one subprocess:
 | `args` | Argument list; defaults to `[]` |
 | `env` | Mapping of additional environment variables |
 
-Mu runs with `check=True` and overlays `env` on the current environment. Arguments and environment values may contain templates.
+Mu captures stdout/stderr, treats a nonzero exit code as failure, and overlays `env` on the current environment. Arguments and environment values may contain templates.
 
 **Do not use a shell:** `target: "echo hello"` is incorrect; use `target: echo`, `args: [hello]`.
-
-
-## `execute-commands`
-
-Runs several commands in order within one action:
-
-
-```yaml
-- type: execute-commands
-  commands:
-    - target: mkdir
-      args: [-p, "{session[cache_dir]}/models"]
-    - target: hf
-      args:
-        - download
-        - organization/model
-        - model.gguf
-        - --local-dir
-        - "{session[cache_dir]}/models"
-      env:
-        HF_HUB_DISABLE_TELEMETRY: "1"
-```
-
-
-If the second command fails, the third command does not run and the action fails. `ignore_error` can suppress the entire error.
-
-A real example from the current spec:
-
-```yaml
-prepare:
-  - type: execute-commands
-    skip_if:
-      operator: and
-      props:
-        - operator: file-exists
-          path: "{sys[cache_dir]}/models/file.gguf"
-    commands:
-      - target: hf
-        args: [download, organization/model, file.gguf,
-               --local-dir, "{sys[cache_dir]}/models"]
-    postcondition:
-      operator: file-exists
-      path: "{sys[cache_dir]}/models/file.gguf"
-```
 
 
 ## `send_http_request`
@@ -115,7 +71,7 @@ Sends an HTTP request:
   body:
     status: running
     name: "{params[name]}"
-  save_response_to_context: running
+  save_state: running
   ignore_error: true
 ```
 
@@ -125,19 +81,19 @@ Sends an HTTP request:
 | `method` | `get` | Mu uppercases it; `post`, `POST`, and `post` are all equivalent. |
 | `header` | `{}` | Headers passed to urllib |
 | `body` | none | If present, Mu encodes it as JSON with `json.dumps`. |
-| `save_response_to_context` | none | Context key used to store the JSON response. |
+| `save_state` | none | Non-empty name storing the result in `context["actions"][name]`. |
 
-If the response is empty, the stored value is `null`/`None`. If it is not valid JSON, the action can fail. The HTTP timeout is 30 seconds.
+The HTTP timeout is 30 seconds. See the saved-result contract below.
 
-The runtime accepts `send-http-request` as an alias.
+Action names and declaration keys have no aliases.
 
 
-## `write-json`
+## `write_json`
 
 Writes a JSON document:
 
 ```yaml
-- type: write-json
+- type: write_json
   path: "{session[cache_dir]}/requests/{params[name]}.json"
   content:
     name: "{params[name]}"
@@ -151,12 +107,12 @@ Mu creates parent directories automatically. JSON is indented by two spaces, wri
 
 If `content` is a mapping, it is rendered against the context before writing. A string template can render to a number or boolean and preserve that resolved type.
 
-## `create-dir`
+## `create_dir`
 
 Creates a directory and any required parents:
 
 ```yaml
-- type: create-dir
+- type: create_dir
   path: "{session[output_dir]}/{params[name]}"
 ```
 
@@ -216,9 +172,9 @@ if an error or postcondition is false:
 
 ```yaml
 before_run:
-  - type: create-dir
+  - type: create_dir
     path: "{session[cache_dir]}/requests/{params[name]}"
-  - type: write-json
+  - type: write_json
     path: "{session[cache_dir]}/requests/{params[name]}/request.json"
     content:
       name: "{params[name]}"
@@ -244,3 +200,62 @@ finally:
 ```
 
 If `before_run` fails, the workload does not run. If `after_run` fails, the node fails. If the workload fails, `after_run` is normally skipped because control flow jumps to `finally`; place cleanup in `finally` instead of `after_run`.
+
+## Saved action results
+
+Only `execute_command` and `send_http_request` accept `save_state: name`.
+The name must be a non-empty string. Results are stored in the containing
+context at `actions[name]`; repeated names overwrite earlier results.
+`context.actions`, if present, must be a mapping.
+
+```yaml
+- type: execute_command
+  target: python
+  args: [--version]
+  save_state: python_version
+- type: write_json
+  path: version.json
+  content:
+    stdout: "{actions[python_version][stdout]}"
+```
+
+Command result:
+
+```json
+{"success": true, "error": null, "returncode": 0, "stdout": "Python 3.13\n", "stderr": ""}
+```
+
+`stdout` and `stderr` retain whitespace and are not parsed as JSON. A nonzero
+return code fails the action (negative codes can indicate POSIX signals).
+Failure to start stores `returncode: null` and empty output strings.
+
+HTTP result:
+
+```json
+{"success": true, "error": null, "status_code": 201, "headers": {"content-type": "application/json"}, "body": {"id": "job-123"}}
+```
+
+Response header names are lowercase. Body is parsed as JSON when valid,
+otherwise decoded as text using the declared charset or UTF-8, replacing
+invalid bytes. An empty body is `null`. Binary responses are decoded as text;
+use a download tool for binary files. HTTP 4xx/5xx fail but retain response
+status, headers and body. Network errors without a response store
+`status_code: null`, `headers: {}`, and `body: null`.
+
+Errors use `{"type": "ExceptionClass", "message": "details"}` and set
+`success: false`. State is saved before propagating an execution error, even
+without `ignore_error`. Ignoring an error does not change its saved success.
+Results are available to the action's postcondition; a failed postcondition
+updates success/error while retaining response/output. Skipped actions do not
+write state. Invalid declarations or rendering failures before execution do
+not create execution results.
+
+Later actions and `finally` in the same node can read saved results with
+`{actions[name][stdout]}` or `{actions[name][body]}`. Node/request contexts
+remain isolated. Prepare results live in the containing prepare context and are available to
+later prepare actions. The CLI passes the original base context to pipelines,
+so saved prepare results are not inherited by pipeline requests.
+
+The former `save_response_to_context` field is rejected. Legacy registry actions also use `type` and
+snake_case names (`command`, `create_dir`, `write_json_from_context`,
+`write_jsons_from_context`), retaining their distinct legacy field schemas.

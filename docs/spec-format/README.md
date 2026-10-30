@@ -23,7 +23,7 @@ master-flow:
   requests: []
 
 prepare:
-  - type: execute-command
+  - type: execute_command
     target: python
     args: [--version]
 
@@ -50,7 +50,7 @@ pipeline:
     nodes:
       - name: copy
         before_run:
-          - type: create-dir
+          - type: create_dir
             path: "{session[working_dir]}/output"
         run:
           workload: make-copy
@@ -58,7 +58,7 @@ pipeline:
             source: "{params[source]}"
             destination: "{params[destination]}"
         postcondition:
-          operator: file-exists
+          operator: file_exists
           path: "{params[destination]}"
 ```
 

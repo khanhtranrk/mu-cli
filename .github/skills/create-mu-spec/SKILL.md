@@ -105,7 +105,7 @@ pipeline:
             input: "{params[input]}"
             output: "{params[output]}"
         postcondition:
-          operator: file-exists
+          operator: file_exists
           path: "{params[output]}"
 ```
 

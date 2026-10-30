@@ -102,9 +102,9 @@ A list of actions that run immediately before the workload:
 
 ```yaml
 before_run:
-  - type: create-dir
+  - type: create_dir
     path: "{params[output_dir]}"
-  - type: write-json
+  - type: write_json
     path: "{params[request]}"
     content:
       prompt: "{params[prompt]}"
@@ -159,9 +159,9 @@ The condition must be true after the main section runs:
 postcondition:
   operator: and
   props:
-    - operator: file-exists
+    - operator: file_exists
       path: output.mp4
-    - operator: file-exists
+    - operator: file_exists
       path: metadata.json
 ```
 
@@ -274,10 +274,10 @@ pipeline:
               operator: node_status
               expected: success
         skip_if:
-          operator: file-exists
+          operator: file_exists
           path: "{session[output_dir]}/{params[name]}/cover.png"
         before_run:
-          - type: write-json
+          - type: write_json
             path: "{session[cache_dir]}/{params[name]}.json"
             content:
               prompt: "{params[prompt]}"
@@ -289,7 +289,7 @@ pipeline:
             width: "{params[width]}"
             height: "{params[height]}"
         postcondition:
-          operator: file-exists
+          operator: file_exists
           path: "{session[output_dir]}/{params[name]}/cover.png"
         finally:
           - type: send_http_request
