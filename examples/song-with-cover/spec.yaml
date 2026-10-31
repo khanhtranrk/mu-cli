@@ -1,4 +1,4 @@
-# MasterFlow media example: run actions generate and upload files; Mu reports node lifecycle.
+# MasterFlow media example: generate/upload artifacts and report request completion in-spec.
 # Existing files skip only generation; uploads are retried with stable request artifact IDs.
 entries:
   direct_flow:
@@ -312,6 +312,21 @@ pipeline:
         default: 768
     nodes:
     - name: generate-song
+      finally:
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: process_failed
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: failed
+        ignore_error: true
       postcondition:
         operator: and
         props:
@@ -457,6 +472,21 @@ pipeline:
           nodeName: generate-song
           label: ABC notation
     - name: generate-cover
+      finally:
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: process_failed
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: failed
+        ignore_error: true
       precondition:
         operator: exit_code
         target:
@@ -533,6 +563,21 @@ pipeline:
           nodeName: generate-cover
           label: Cover image
     - name: separate-vocals
+      finally:
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: process_failed
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: failed
+        ignore_error: true
       postcondition: &id001
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
@@ -552,6 +597,21 @@ pipeline:
           path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
         postcondition: *id001
     - name: transcribe-vocals
+      finally:
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: process_failed
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: failed
+        ignore_error: true
       postcondition:
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
@@ -622,3 +682,49 @@ pipeline:
           name: vocals.json
           nodeName: transcribe-vocals
           label: Vocal transcript
+    - name: complete-request
+      depends_on:
+      - generate-song
+      - generate-cover
+      - separate-vocals
+      - transcribe-vocals
+      before_run:
+      - type: send_http_request
+        url: '{session[server]}/api/notifications/send'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          title: Song pipeline completed
+          message: 'Request {request[requestId]} for {params[name]} completed successfully'
+        ignore_error: true
+      finally:
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: succeeded
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: success
+        ignore_error: true
+      - type: send_http_request
+        url: '{session[server]}/api/requests/report'
+        method: post
+        header:
+          Authorization: "******"
+          Content-Type: application/json
+        body:
+          id: '{request[requestId]}'
+          status: process_failed
+        precondition:
+          operator: node_state
+          target: [status]
+          expected: failed
+        ignore_error: true

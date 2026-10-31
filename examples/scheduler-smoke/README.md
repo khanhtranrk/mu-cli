@@ -7,6 +7,9 @@ units** and sleep for 20 seconds; a CPU-only workload sleeps for 3 seconds. A
 final node waits for all three and writes a completion file. Every node sends
 `running` before its work and `succeeded` or `failed` from `finally`. Queue
 status is not reported because specs have no hook for that scheduler event.
+The `artifact-upload` node creates a small text file, registers its SHA-256 and
+byte size, uploads it through the native storage URL, completes registration,
+then downloads it and checks the bytes.
 
 The workloads do **not** use a GPU. Their `units` values only let you observe
 how the scheduler accounts for GPU capacity.
@@ -47,6 +50,12 @@ Expected files:
 - `simulated-gpu-a-finally.json`
 - `simulated-gpu-b-finally.json`
 - `scheduler-smoke-complete.json`
+- `<requestId>/scheduler-smoke.txt`
+- `<requestId>/scheduler-smoke-downloaded.txt`
+
+The request's **Artifacts** section should contain `scheduler-smoke.txt`,
+associated with the `artifact-upload` node. The same text is downloaded back
+and compared byte-for-byte before that node succeeds.
 
 This example explicitly reports node states only. It does not report overall
 request status, so MasterFlow may continue to show the request as possessed

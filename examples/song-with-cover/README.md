@@ -17,10 +17,34 @@ require the MasterFlow session and request context.
 Each workload action skips generation when its output files already exist;
 the remaining actions still hash, size, upload and register those files. Stable
 artifact IDs replace earlier versions on the same request. Upload failures fail
-the node. Mu automatically reports the final state after postcondition and
-`finally`; the spec does not send node lifecycle reports. Successful upload
-completion assigns `nodeName`, so Mu’s final node report inherits those artifact references.
-No WAV, SRT, or other intermediate outputs are uploaded.
+the node. Successful upload completion assigns `nodeName`, associating each
+artifact with its generating/transcribing node. No WAV, SRT, or other
+intermediate outputs are uploaded.
+
+The final `complete-request` node depends on every other pipeline node. It sends
+the request-level `succeeded` status only from `finally` when that node itself
+finishes successfully, after all generation, upload, and transcription work has
+completed. A workload-node failure sends `process_failed`; dependent nodes are
+blocked and the final success report is never sent. The final node also sends a
+success notification. Entry initialization/finalization continue to send
+worker-lifecycle notifications, which are separate from request status.
+
+Report calls use `ignore_error: true`, so a temporary report API failure does
+not replace the workload result. If the server is unreachable, the request may
+remain in its previous status and should be inspected/retried.
+
+## Collected artifacts
+
+| Artifact ID | Node | File in request artifacts |
+|---|---|---|
+| `song-mp3` | `generate-song` | `<name>.mp3` |
+| `song-abc` | `generate-song` | `<name>.abc` |
+| `cover-png` | `generate-cover` | `cover.png` |
+| `transcript-json` | `transcribe-vocals` | `vocals.json` |
+
+Artifacts are registered on the MasterFlow request and shown in its **Artifacts**
+section. Re-running a request with the same stable artifact IDs replaces those
+artifacts with the newly uploaded files.
 
 Uploads follow the existing [request artifact protocol](../../docs/spec-format/07-master-flow-and-cli.md#request-artifacts).
 Worker authorization is sent only to the application API, never to the returned
