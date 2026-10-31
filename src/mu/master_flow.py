@@ -4,7 +4,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-import yaml
+from mu.spec_yaml import load_spec_yaml
 
 from mu.http_headers import request_headers
 
@@ -38,7 +38,7 @@ class MasterFlowClient:
         return json.loads(self._call(path, body))
 
     def spec(self, path):
-        value = yaml.safe_load(self._call(path))
+        value = load_spec_yaml(self._call(path))
         if not isinstance(value, dict):
             raise ValueError("remote spec root must be a mapping")
         return value

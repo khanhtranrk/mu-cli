@@ -8,7 +8,7 @@ This document is an implementation-oriented map for coding agents. It describes 
 mu master-flow run <spec-slug>                  (src/mu/cli.py)
   -> fetch spec, register worker/unit, claim a batch of requests
   -> construct Flow(spec, "master_flow", ...)
-  -> Flow.execute(claimed requests, report, node_report)
+  -> Flow.execute(claimed requests)
        -> validate each requested pipeline and its parameters
        -> prepare each selected pipeline before scheduling its nodes
        -> execute_pipelines(spec, [(pipeline_name, payload), ...], ...)
@@ -25,10 +25,10 @@ mu master-flow run <spec-slug>                  (src/mu/cli.py)
                       -> return success/failed
                  -> collect completion, release GPU units, publish state
             -> finish each request independently
-  -> CLI reports lifecycle events to MasterFlow
+  -> spec event hooks call reporting routines/HTTP actions
 ```
 
-Local execution also uses the runtime pipeline scheduler; remote claim/report transport is specific to the MasterFlow CLI path.
+Local execution also uses the runtime pipeline scheduler; remote claiming is specific to the MasterFlow CLI path; reporting is spec-defined.
 
 ## 1. Request intake and preparation
 
@@ -109,9 +109,9 @@ Actions within each phase are sequential. A failed dependency prevents the depen
 
 ## 6. Reporting boundary: current behavior versus desired configuration
 
-**Current code:** `src/mu/cli.py` defines `report` and `node_report` callbacks that POST directly to `/api/requests/report`. It passes them into `Flow.execute`. The runtime emits lifecycle callbacks and the CLI sends them automatically, **even when the spec has no reporting action**. See the section "Scheduler-owned node reports" in `docs/spec-format/07-master-flow-and-cli.md`.
-
-**Intended future direction (not implemented):** keep scheduler state transitions and events internal, but make external HTTP reporting an explicit spec-defined behavior. Do **not** describe this as already implemented, and do not remove automatic reporting without coordinating request lifecycle/status updates. Reporting changes are separate from node admission and GPU reservation logic.
+Lifecycle reporting is spec-defined through [events](spec-format/10-events.md).
+The runtime emits server-neutral events; hooks own API payloads and status mapping.
+Node terminal events follow finally and ignore_error; blocked nodes also emit them.
 
 ## 7. Debugging unexpected concurrent execution
 
@@ -126,9 +126,9 @@ When 4–6 nodes appear active despite only 2–3 expected GPU slots, first comp
 
 ## Source map
 
-- `src/mu/cli.py`: remote claim, batch construction, hard-coded reporting callbacks.
+- `src/mu/cli.py`: remote claim and batch construction.
 - `src/mu/runtime.py`: `Flow`, `execute_pipelines`, `validate_pipeline`, `node_units`, `_execute_node`, `run_action`.
 - `src/mu/hardware.py`: detected devices and GPU unit capacities.
-- `tests/test_node_reporting.py`: focused scheduler/reporting behavior.
+- `tests/test_events.py`: focused scheduler/reporting behavior.
 - `docs/spec-format/06-pipelines-and-nodes.md`: node spec fields.
 - `docs/spec-format/07-master-flow-and-cli.md`: entry lifecycle, MasterFlow CLI, reporting details.

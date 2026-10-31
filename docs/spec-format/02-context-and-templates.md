@@ -122,6 +122,7 @@ Rules:
 - A key with a `default` uses that default.
 - `type: string` requires a string value.
 - `type: number` requires an `int` or `float` and rejects booleans.
+- `type: boolean`, `array`, and `object` validate their corresponding types (shallow validation).
 - Parameters outside the schema are rejected.
 - After schema processing, `params` becomes a mapping in the context.
 
@@ -311,3 +312,5 @@ schedule:
   device_family: cuda
   device_index: "1"
 ```
+
+Routine calls create an isolated context with their own params and actions; see [routines](09-routines.md). Payload mapping keys in HTTP body and write_json content are rendered recursively with collision checks.

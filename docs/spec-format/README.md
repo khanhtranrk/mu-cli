@@ -14,7 +14,9 @@ This directory explains the YAML/JSON structure understood by Mu, using the spec
 6. [06 – Pipelines and nodes](06-pipelines-and-nodes.md)
 7. [07 – Master-flow, CLI, and scheduling](07-master-flow-and-cli.md)
 8. [08 – Complete examples, from small to large](08-complete-example.md)
-9. [Quick-reference table](quick-reference.md)
+9. [Routines and file inspection](09-routines.md)
+10. [Lifecycle events](10-events.md)
+11. [Quick-reference table](quick-reference.md)
 
 ## A complete spec at a glance
 

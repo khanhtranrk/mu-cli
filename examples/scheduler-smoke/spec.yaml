@@ -1,371 +1,291 @@
+# Event-driven status reports; uploads remain explicit spec actions.
+# Run with --device cuda,0,8: heavy (6) + light (2) fit; the second heavy waits.
+# Workloads only sleep: no GPU access or model downloads.
 entries:
-  master_flow: {}
-
+  master_flow:
+    initialization:
+    - type: execute_routine
+      routine: send_notification
+      args:
+        title: Scheduler smoke started
+        message: Worker initialized for scheduler-smoke.
+      ignore_error: true
+    finalization:
+    - type: execute_routine
+      routine: send_notification
+      args:
+        title: Scheduler smoke ended
+        message: Worker finished with status {entry[status]}.
+      ignore_error: true
+routines:
+  send_notification:
+    params:
+      title:
+        type: string
+      message:
+        type: string
+      tags:
+        type: array
+        default: []
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/notifications/send'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        title: '{params[title]}'
+        message: '{params[message]}'
+        tags: '{params[tags]}'
+  report_node_status:
+    params:
+      status:
+        type: string
+      logs:
+        type: array
+        default: []
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/requests/report'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        id: '{request[requestId]}'
+        node_states:
+          '{node[name]}':
+            status: '{params[status]}'
+            logs: '{params[logs]}'
+  report_request_status:
+    params:
+      status:
+        type: string
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/requests/report'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        id: '{request[requestId]}'
+        status: '{params[status]}'
+  upload_artifact:
+    params:
+      artifact_path:
+        type: string
+      artifact_id:
+        type: string
+      node_name:
+        type: string
+      label:
+        type: string
+        default: Artifact
+      content_type:
+        type: string
+        default: application/octet-stream
+    actions:
+    - type: inspect_file
+      target: '{params[artifact_path]}'
+      save_state: file_info
+    - type: send_http_request
+      url: '{session[server]}/api/requests/artifacts/upload-url'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        requestId: '{request[requestId]}'
+        artifactId: '{params[artifact_id]}'
+        sha256: '{actions[file_info][sha256]}'
+        size: '{actions[file_info][size]}'
+      save_state: upload
+    - type: send_http_request
+      url: '{actions[upload][body][uploadUrl]}'
+      method: post
+      header:
+        Content-Type: '{params[content_type]}'
+      body_file: '{actions[file_info][path]}'
+      timeout: 120
+      save_state: stored
+    - type: send_http_request
+      url: '{session[server]}/api/requests/artifacts/complete'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        requestId: '{request[requestId]}'
+        uploadId: '{actions[upload][body][uploadId]}'
+        storageId: '{actions[stored][body][storageId]}'
+        name: '{actions[file_info][name]}'
+        nodeName: '{params[node_name]}'
+        label: '{params[label]}'
+      save_state: registered
+    returns: '{actions[registered][body]}'
 workloads:
   simulated-gpu-20s:
     target: python
     args:
-      - -c
-      - "import time; time.sleep(20)"
+    - -c
+    - import time; time.sleep(20)
     units: 6
-
   cpu-3s:
     target: python
     args:
-      - -c
-      - "import time; time.sleep(3)"
+    - -c
+    - import time; time.sleep(3)
     units: 0
-
   create-text-artifact:
     params:
-      output_path: {type: string}
-      request_id: {type: string}
+      output_path:
+        type: string
+      request_id:
+        type: string
     target: python
     args:
-      - -c
-      - "from pathlib import Path; import sys; path = Path(sys.argv[1]); path.parent.mkdir(parents=True, exist_ok=True); path.write_text(f'Scheduler smoke artifact for request {sys.argv[2]}\\n', encoding='utf-8')"
-      - "{params[output_path]}"
-      - "{params[request_id]}"
+    - -c
+    - from pathlib import Path; import sys; path = Path(sys.argv[1]); path.parent.mkdir(parents=True,
+      exist_ok=True); path.write_text(f'Scheduler smoke artifact for request {sys.argv[2]}\n',
+      encoding='utf-8')
+    - '{params[output_path]}'
+    - '{params[request_id]}'
     units: 0
-
+  simulated-gpu-light-10s:
+    target: python
+    args:
+    - -c
+    - import time; time.sleep(10)
+    units: 2
 pipeline:
   scheduler-smoke:
     nodes:
-      - name: simulated-gpu-a
-        before_run:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-a:
-                  status: running
-            ignore_error: true
-        run:
-          - type: execute_workload
-            workload: simulated-gpu-20s
-        finally:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-a:
-                  status: succeeded
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: success
-            ignore_error: true
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-a:
-                  status: failed
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: failed
-            ignore_error: true
-          - type: write_json
-            path: "{session[working_dir]}/simulated-gpu-a-finally.json"
-            content:
-              finalized: true
-
-      - name: simulated-gpu-b
-        before_run:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-b:
-                  status: running
-            ignore_error: true
-        run:
-          - type: execute_workload
-            workload: simulated-gpu-20s
-        finally:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-b:
-                  status: succeeded
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: success
-            ignore_error: true
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                simulated-gpu-b:
-                  status: failed
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: failed
-            ignore_error: true
-          - type: write_json
-            path: "{session[working_dir]}/simulated-gpu-b-finally.json"
-            content:
-              finalized: true
-
-      - name: cpu-check
-        before_run:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                cpu-check:
-                  status: running
-            ignore_error: true
-        run:
-          - type: execute_workload
-            workload: cpu-3s
-        finally:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                cpu-check:
-                  status: succeeded
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: success
-            ignore_error: true
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                cpu-check:
-                  status: failed
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: failed
-            ignore_error: true
-
-      - name: complete
-        depends_on:
-          - simulated-gpu-a
-          - simulated-gpu-b
-          - cpu-check
-          - artifact-upload
-        before_run:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                complete:
-                  status: running
-            ignore_error: true
-          - type: write_json
-            path: "{session[working_dir]}/scheduler-smoke-complete.json"
-            content:
-              complete: true
-        finally:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                complete:
-                  status: succeeded
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: success
-            ignore_error: true
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                complete:
-                  status: failed
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: failed
-            ignore_error: true
-        postcondition:
-          operator: file_exists
-          path: "{session[working_dir]}/scheduler-smoke-complete.json"
-
-      - name: artifact-upload
-        context:
-          artifact_path: "{session[working_dir]}/{request[requestId]}/scheduler-smoke.txt"
-          downloaded_path: "{session[working_dir]}/{request[requestId]}/scheduler-smoke-downloaded.txt"
-        before_run:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                artifact-upload:
-                  status: running
-            ignore_error: true
-        run:
-          - type: execute_workload
-            workload: create-text-artifact
-            args:
-              output_path: "{artifact_path}"
-              request_id: "{request[requestId]}"
-        after_run:
-          - type: execute_command
-            target: python
-            args:
-              - -c
-              - "import hashlib, sys; print(hashlib.file_digest(open(sys.argv[1], 'rb'), 'sha256').hexdigest(), end='')"
-              - "{artifact_path}"
-            save_state: artifact_hash
-          - type: execute_command
-            target: python
-            args:
-              - -c
-              - "import os, sys; print(os.path.getsize(sys.argv[1]), end='')"
-              - "{artifact_path}"
-            save_state: artifact_size
-          - type: send_http_request
-            url: "{session[server]}/api/requests/artifacts/upload-url"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              requestId: "{request[requestId]}"
-              artifactId: scheduler-smoke-text
-              sha256: "{actions[artifact_hash][stdout]}"
-              size: "{actions[artifact_size][stdout]}"
-            save_state: artifact_upload
-          - type: send_http_request
-            url: "{actions[artifact_upload][body][uploadUrl]}"
-            method: post
-            header:
-              Content-Type: text/plain; charset=utf-8
-            body_file: "{artifact_path}"
-            timeout: 120
-            save_state: artifact_storage
-          - type: send_http_request
-            url: "{session[server]}/api/requests/artifacts/complete"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              requestId: "{request[requestId]}"
-              uploadId: "{actions[artifact_upload][body][uploadId]}"
-              storageId: "{actions[artifact_storage][body][storageId]}"
-              name: scheduler-smoke.txt
-              nodeName: artifact-upload
-              label: Scheduler smoke text
-          - type: send_http_request
-            url: "{session[server]}/api/requests/artifacts/download?requestId={request[requestId]}&artifactId=scheduler-smoke-text"
-            header:
-              Authorization: "Bearer {session[token]}"
-            response_file: "{downloaded_path}"
-            timeout: 120
-          - type: execute_command
-            target: python
-            args:
-              - -c
-              - "from pathlib import Path; import sys; assert Path(sys.argv[1]).read_bytes() == Path(sys.argv[2]).read_bytes()"
-              - "{artifact_path}"
-              - "{downloaded_path}"
-        finally:
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                artifact-upload:
-                  status: succeeded
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: success
-            ignore_error: true
-          - type: send_http_request
-            url: "{session[server]}/api/requests/report"
-            method: post
-            header:
-              Authorization: "Bearer {session[token]}"
-              Content-Type: application/json
-            body:
-              id: "{request[requestId]}"
-              node_states:
-                artifact-upload:
-                  status: failed
-            precondition:
-              operator: node_state
-              target: [status]
-              expected: failed
-            ignore_error: true
+    - name: simulated-gpu-a
+      run:
+      - type: execute_workload
+        workload: simulated-gpu-20s
+      finally:
+      - type: write_json
+        path: '{session[working_dir]}/{request[requestId]}/simulated-gpu-a-finally.json'
+        content:
+          finalized: true
+    - name: simulated-gpu-b
+      run:
+      - type: execute_workload
+        workload: simulated-gpu-20s
+      finally:
+      - type: write_json
+        path: '{session[working_dir]}/{request[requestId]}/simulated-gpu-b-finally.json'
+        content:
+          finalized: true
+    - name: simulated-gpu-light
+      run:
+      - type: execute_workload
+        workload: simulated-gpu-light-10s
+    - name: cpu-check
+      run:
+      - type: execute_workload
+        workload: cpu-3s
+    - name: complete
+      depends_on:
+      - simulated-gpu-a
+      - simulated-gpu-b
+      - cpu-check
+      - artifact-upload
+      - simulated-gpu-light
+      before_run:
+      - type: write_json
+        path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke-complete.json'
+        content:
+          complete: true
+      postcondition:
+        operator: file_exists
+        path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke-complete.json'
+    - name: artifact-upload
+      context:
+        artifact_path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke.txt'
+      run:
+      - type: execute_workload
+        workload: create-text-artifact
+        args:
+          output_path: '{artifact_path}'
+          request_id: '{request[requestId]}'
+      after_run:
+      - type: execute_routine
+        routine: upload_artifact
+        args:
+          artifact_path: '{artifact_path}'
+          artifact_id: scheduler-smoke-text
+          node_name: '{node[name]}'
+          label: Scheduler smoke text
+          content_type: text/plain; charset=utf-8
+        save_state: registered_artifact
+events:
+- 'on': pipeline_started
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: processing
+- 'on': node_started
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: running
+      logs:
+      - 'Started {event[node][name]}: {event[node][total_units]} units on {event[node][device][family]}:{event[node][device][index]}.'
+- 'on': node_finished
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: succeeded
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: failed
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed
+- 'on': pipeline_finished
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: succeeded
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: process_failed
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed

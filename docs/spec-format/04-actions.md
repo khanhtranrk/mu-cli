@@ -316,3 +316,7 @@ pipeline preparation.
 The former `save_response_to_context` field is rejected. Legacy registry actions also use `type` and
 snake_case names (`command`, `create_dir`, `write_json_from_context`,
 `write_jsons_from_context`), retaining their distinct legacy field schemas.
+
+## Reusable routines and file inspection
+
+`execute_routine` and `inspect_file` also support `save_state`. See [Routines](09-routines.md) for the complete schema, isolated context, returns and dynamic payload keys.

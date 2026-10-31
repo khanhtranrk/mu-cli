@@ -1,6 +1,9 @@
 """Runtime for the workload/pipeline spec format."""
 from __future__ import annotations
 
+import hashlib
+import re
+import stat
 import json
 from contextlib import ExitStack
 import tempfile
@@ -19,6 +22,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from mu.spec_yaml import load_spec_yaml
 from mu.http_headers import request_headers
 from mu.hardware import ComputeDevice
 from mu.pipelines import _render
@@ -78,13 +82,15 @@ def _run_process(command, **kwargs):
 def read_data(path: Path) -> Any:
     try:
         raw = path.read_text(encoding="utf-8")
-        value = json.loads(raw) if path.suffix.lower() == ".json" else yaml.safe_load(raw)
+        value = json.loads(raw) if path.suffix.lower() == ".json" else load_spec_yaml(raw)
     except (OSError, yaml.YAMLError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"cannot read {path}: {exc}") from exc
     return value
 
 
 def params_for(schema: dict[str, Any], supplied: dict[str, Any], context: dict[str, Any], label: str) -> dict[str, Any]:
+    if not isinstance(schema, dict) or not isinstance(supplied, dict):
+        raise RuntimeError(f"{label}: params and args must be mappings")
     result = {}
     for name, declaration in schema.items():
         declaration = declaration if isinstance(declaration, dict) else {}
@@ -94,6 +100,10 @@ def params_for(schema: dict[str, Any], supplied: dict[str, Any], context: dict[s
             value = declaration["default"]
         else:
             raise RuntimeError(f"{label} requires parameter {name!r}")
+        value = _render(value, context)
+        kind = declaration.get("type")
+        if kind in {"array", "object", "boolean"} and not isinstance(value, {"array": list, "object": dict, "boolean": bool}[kind]):
+            raise RuntimeError(f"{label}.{name} must be {kind}")
         if declaration.get("type") == "string" and not isinstance(value, str):
             raise RuntimeError(f"{label}.{name} must be a string")
         if declaration.get("type") == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
@@ -158,22 +168,142 @@ def _apply_context(target: dict[str, Any], values: Any) -> None:
         target.update(values)
 
 
+def render_payload(value: Any, context: dict[str, Any]) -> Any:
+    """Render data keys without changing structural spec keys."""
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            key = _render(key, context)
+            if not isinstance(key, str) or not key.strip() or re.search(r"\{[^{}]+\}", key):
+                raise RuntimeError("payload key must resolve to a non-empty string")
+            if key in result:
+                raise RuntimeError(f"duplicate rendered payload key {key!r}")
+            result[key] = render_payload(item, context)
+        return result
+    if isinstance(value, list):
+        return [render_payload(item, context) for item in value]
+    rendered = _render(value, context)
+    if isinstance(rendered, (dict, list)):
+        return render_payload(rendered, context)
+    return rendered
+
+
+def validate_routines(spec: dict) -> None:
+    routines = spec.get("routines", {})
+    if not isinstance(routines, dict):
+        raise RuntimeError("routines must be a mapping")
+    visited, visiting = set(), set()
+    def visit(name):
+        if name in visiting:
+            raise RuntimeError(f"routines.{name}: routine call cycle")
+        if name in visited:
+            return
+        declaration = routines.get(name)
+        if not isinstance(name, str) or not name.strip() or not isinstance(declaration, dict):
+            raise RuntimeError(f"routines.{name}: undefined or invalid routine")
+        if not isinstance(declaration.get("params", {}), dict):
+            raise RuntimeError(f"routines.{name}.params must be a mapping")
+        for param, field in declaration.get("params", {}).items():
+            if not isinstance(field, dict) or field.get("type") not in {None, "string", "number", "boolean", "array", "object"}:
+                raise RuntimeError(f"routines.{name}.params.{param}: invalid parameter declaration")
+        actions = declaration.get("actions")
+        if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+            raise RuntimeError(f"routines.{name}.actions must be a list of action mappings")
+        visiting.add(name)
+        for action in actions:
+            if action.get("type") == "execute_workload":
+                raise RuntimeError(f"routines.{name}: execute_workload is not supported inside routines")
+            if action.get("type") == "execute_routine":
+                target = action.get("routine")
+                if not isinstance(target, str) or not target or re.search(r"[{}]", target):
+                    raise RuntimeError(f"routines.{name}: routine must be a literal name")
+                visit(target)
+        visiting.remove(name)
+        visited.add(name)
+    for name in routines:
+        visit(name)
+
+
+EVENT_NAMES = {"node_started", "node_finished", "pipeline_started", "pipeline_finished"}
+
+
+def validate_events(spec: dict) -> None:
+    """Validate hooks before executing any side effects."""
+    scopes = [("events", spec, EVENT_NAMES)]
+    pipelines = spec.get("pipeline", {})
+    if not isinstance(pipelines, dict):
+        raise RuntimeError("pipeline must be a mapping")
+    for name, pipeline in pipelines.items():
+        if not isinstance(pipeline, dict):
+            continue
+        scopes.append((f"pipeline.{name}.events", pipeline, EVENT_NAMES))
+        for node in pipeline.get("nodes", []) if isinstance(pipeline.get("nodes", []), list) else []:
+            if isinstance(node, dict):
+                scopes.append((f"pipeline.{name}.nodes.{node.get('name')}.events", node,
+                               {"node_started", "node_finished"}))
+    for path, scope, allowed in scopes:
+        hooks = scope.get("events", [])
+        if not isinstance(hooks, list):
+            raise RuntimeError(f"{path}: expected a list of hooks")
+        for index, hook in enumerate(hooks):
+            label = f"{path}[{index}]"
+            if not isinstance(hook, dict) or not isinstance(hook.get("on"), str) or hook["on"] not in allowed:
+                raise RuntimeError(f"{label}.on: expected one of {sorted(allowed)}")
+            actions = hook.get("do")
+            if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+                raise RuntimeError(f"{label}.do: expected a list of actions")
+            for action in actions:
+                if action.get("type") not in {"execute_command", "create_dir", "write_json", "send_http_request", "inspect_file", "execute_routine"}:
+                    raise RuntimeError(f"{label}.do: unsupported hook action {action.get('type')!r}")
+                if action.get("type") == "execute_routine" and (not isinstance(action.get("routine"), str) or action["routine"] not in spec.get("routines", {})):
+                    raise RuntimeError(f"{label}.do: undefined routine {action.get('routine')!r}")
+
+
+def emit_event(spec, name, pipeline_name, context, states, workdir, *, node=None,
+               status="running", error=None, skipped=False, blocked=False, ignored_error=None):
+    """Run isolated, best-effort hooks; hook actions cannot emit lifecycle events."""
+    pipeline = spec.get("pipeline", {}).get(pipeline_name, {})
+    pipeline = pipeline if isinstance(pipeline, dict) else {}
+    event = {"name": name, "pipeline": {"name": pipeline_name, "status": status},
+             "error": deepcopy(error)}
+    if node is not None:
+        event["pipeline"].pop("status")
+        event["node"] = {**context.get("node", {}), "name": node["name"], "status": status,
+                         "skipped": skipped, "blocked": blocked, "ignored_error": ignored_error}
+    for scope in (spec, pipeline, *((node,) if node is not None else ())):
+        for index, hook in enumerate(scope.get("events", [])):
+            if hook["on"] != name:
+                continue
+            try:
+                local = deepcopy(context)
+                local["event"] = deepcopy(event)
+                local["actions"] = {}
+                if node is not None:
+                    local["node"] = deepcopy(event["node"])
+                for action_index, action in enumerate(hook["do"]):
+                    run_action(action, local, dict(states), workdir, spec=spec, allow_workload=False,
+                               label=f"event {name} hook[{index}].do[{action_index}]")
+            except Exception as exc:
+                print(f"[WARN] event {name} hook[{index}] failed: {exc}", flush=True)
+
+
 def run_action(
     action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path,
     *, label: str = "action", spec: dict[str, Any] | None = None,
-    device: ComputeDevice | None = None,
+    device: ComputeDevice | None = None, routine_stack: tuple[str, ...] = (),
+    allow_workload: bool = True,
 ) -> None:
     typ = action.get("type")
     if "action" in action:
         raise RuntimeError(f"{label}: use type, not action")
-    if not isinstance(typ, str) or typ not in {"execute_command", "execute_workload", "create_dir", "write_json", "send_http_request"}:
+    if not isinstance(typ, str) or typ not in {"execute_command", "execute_workload", "create_dir", "write_json", "send_http_request", "inspect_file", "execute_routine"}:
         raise RuntimeError(f"{label}: unknown action type {typ!r}; use snake_case names")
-    if typ == "execute_workload" and spec is None:
+    if typ == "execute_workload" and (spec is None or not allow_workload):
         raise RuntimeError(f"{label}: execute_workload is only supported in node before_run, run and after_run")
     if "save_response_to_context" in action:
         raise RuntimeError(f"{label}: save_response_to_context was removed; use save_state")
-    if "save_state" in action and typ not in {"execute_command", "send_http_request"}:
-        raise RuntimeError(f"{label}: save_state is only supported by execute_command and send_http_request")
+    if "save_state" in action and typ not in {"execute_command", "send_http_request", "inspect_file", "execute_routine"}:
+        raise RuntimeError(f"{label}: save_state requires a command, HTTP, inspect_file or execute_routine action")
     _apply_context(context, _render(action.get("context", {}), context))
     if action.get("skip_if") and condition(action["skip_if"], context, states):
         print(f"[SKIP] {label} ({typ}): skip_if matched", flush=True)
@@ -196,7 +326,50 @@ def run_action(
     started = time.perf_counter()
     print(f"[ACTION] {label}: {typ} started", flush=True)
     try:
-        if typ == "execute_command":
+        for field in ({"send_http_request": ["body"], "write_json": ["content"]}.get(typ, [])):
+            if field in action:
+                values[field] = render_payload(action[field], context)
+        if typ == "execute_routine":
+            name = action.get("routine")
+            if not isinstance(name, str) or not name or re.search(r"[{}]", name):
+                raise RuntimeError("execute_routine.routine must be a literal name")
+            if name in routine_stack:
+                raise RuntimeError(f"routine call cycle: {' -> '.join((*routine_stack, name))}")
+            declaration = (spec or {}).get("routines", {}).get(name)
+            if not isinstance(declaration, dict):
+                raise RuntimeError(f"routine {name!r} is not defined")
+            local = deepcopy(context)
+            local["params"] = params_for(declaration.get("params", {}), values.get("args", {}), context, f"routine {name}")
+            local["actions"] = {}
+            actions = declaration.get("actions")
+            if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+                raise RuntimeError(f"routine {name}.actions must be a list of action mappings")
+            for index, child in enumerate(actions):
+                run_action(child, local, states, workdir, label=f"{label}/{name}.actions[{index}]",
+                           spec=spec, routine_stack=(*routine_stack, name), allow_workload=False)
+            result["output"] = _render(declaration.get("returns"), local)
+        elif typ == "inspect_file":
+            target = values.get("target")
+            if not isinstance(target, str) or not target.strip():
+                raise RuntimeError("inspect_file.target must be a non-empty path")
+            path = Path(target).expanduser()
+            path = (path if path.is_absolute() else workdir / path).resolve()
+            if not path.is_file():
+                raise RuntimeError("inspect_file.target must be a regular file")
+            with path.open("rb") as source:
+                before = os.fstat(source.fileno())
+                if not stat.S_ISREG(before.st_mode):
+                    raise RuntimeError("inspect_file.target must be a regular file")
+                digest = hashlib.sha256()
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                after = os.fstat(source.fileno())
+            current = path.stat()
+            signature = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            if signature(before) != signature(after) or signature(after) != signature(current):
+                raise RuntimeError("file changed during inspection")
+            result.update(path=str(path), name=path.name, size=after.st_size, sha256=digest.hexdigest())
+        elif typ == "execute_command":
             target = values.get("target")
             args = values.get("args", [])
             if not target or not isinstance(args, list):
@@ -288,6 +461,7 @@ def run_action(
                 raise RuntimeError("postcondition failed")
             print(f"[CHECK] {label}: postcondition passed", flush=True)
     except Exception as exc:
+        result.pop("output", None)
         result.update(success=False, error={"type": type(exc).__name__, "message": str(exc)})
         if key is not None:
             context.setdefault("actions", {})[key] = result
@@ -344,12 +518,15 @@ def _execute_node(
             "index": device.index if device else None,
         },
     }
-    _apply_context(node_context, _render(node.get("context", {}), node_context))
+    emit_event(spec, "node_started", context.get("pipeline_name", pipeline_name), node_context, states, workdir, node=node)
     state, error = "success", None
+    skipped = False
     started = time.perf_counter()
     print(f"[NODE] {pipeline_name}/{name}: starting", flush=True)
     try:
+        _apply_context(node_context, _render(node.get("context", {}), node_context))
         if node.get("skip_if") and condition(node["skip_if"], node_context, states):
+            skipped = True
             print(f"[SKIP] {pipeline_name}/{name}: skip_if matched", flush=True)
             if node.get("postcondition") and not condition(node["postcondition"], node_context, states):
                 raise RuntimeError(f"node {name!r} postcondition failed after skip")
@@ -373,11 +550,17 @@ def _execute_node(
     for index, action in enumerate(node.get("finally", []), start=1):
         node_context["node"]["status"] = state
         try:
-            run_action(action, node_context, final_states, workdir, label=f"{pipeline_name}/{name} finally[{index}]")
+            run_action(action, node_context, final_states, workdir, label=f"{pipeline_name}/{name} finally[{index}]", spec=spec, allow_workload=False)
         except Exception as exc:
             state, error = "failed", str(exc)
             final_states[name] = state
+    original_error = error
     state, error = _node_result(node, state, error, f"{pipeline_name}/{name}")
+    node_context["node"]["status"] = state
+    emit_event(spec, "node_finished", context.get("pipeline_name", pipeline_name), node_context,
+               {**states, name: state}, workdir, node=node, status=state, skipped=skipped,
+               error={"type": "RuntimeError", "message": error} if error else None,
+               ignored_error=original_error if original_error and not error else None)
     elapsed = time.perf_counter() - started
     if state == "failed": print(f"[FAIL] {pipeline_name}/{name} after {elapsed:.1f}s: {error}", flush=True)
     else: print(f"[OK] {pipeline_name}/{name} {state} in {elapsed:.1f}s", flush=True)
@@ -450,21 +633,30 @@ def execute_pipelines(
     spec: dict[str, Any], requests: list[tuple[str, dict[str, Any]]], base: dict[str, Any],
     devices: list[ComputeDevice], workdir: Path,
     *, request_contexts: list[dict[str, Any]] | None = None,
+    events_started: bool = False,
 ) -> list[dict[str, str]]:
     """Schedule ready nodes across all requests, respecting dependencies and GPU units."""
+    validate_events(spec)
     jobs: dict[str, dict[str, Any]] = {}
     results: list[dict[str, str]] = []
     job_by_request_name: dict[tuple[int, str], str] = {}
     order: list[str] = []
+    remaining = {}
+    execution_contexts = []
     for request_index, (pipeline_name, request) in enumerate(requests):
         definition = spec.get("pipeline", {}).get(pipeline_name)
         if not isinstance(definition, dict): raise RuntimeError(f"pipeline {pipeline_name!r} is not defined")
         context = deepcopy(request_contexts[request_index] if request_contexts is not None else base)
         if request_contexts is None:
             _apply_context(context, _render(definition.get("context", {}), context))
+        context["pipeline_name"] = pipeline_name
         context["params"] = params_for(definition.get("params", {}), request, context, f"pipeline {pipeline_name}")
+        if not events_started:
+            emit_event(spec, "pipeline_started", pipeline_name, context, {}, workdir)
         nodes = validate_pipeline(definition, pipeline_name)
         print(f"[PIPELINE] {pipeline_name} request {request_index + 1}: queued ({len(nodes)} nodes)", flush=True)
+        remaining[request_index] = len(nodes)
+        execution_contexts.append(context)
         results.append({})
         for node in nodes:
             job_id = f"p{request_index}:{node['name']}"
@@ -475,11 +667,21 @@ def execute_pipelines(
                 "context": context, "node": node, "status": "pending", "units": node_units(spec, node),
             }
 
+    for index, (pipeline_name, _) in enumerate(requests):
+        if remaining[index] == 0:
+            emit_event(spec, "pipeline_finished", pipeline_name,
+                       execution_contexts[index], {}, workdir, status="success")
+
     def finish(job_id, state):
         job = jobs[job_id]
         index = job["request_index"]
         job["status"] = state
         results[index][job["node"]["name"]] = state
+        remaining[index] -= 1
+        if remaining[index] == 0:
+            status = "failed" if "failed" in results[index].values() else "success"
+            emit_event(spec, "pipeline_finished", job["pipeline"], job["context"], results[index], workdir,
+                       status=status, error={"type": "RuntimeError", "message": "one or more nodes failed"} if status == "failed" else None)
 
     device_free = {device.index: float(device.capacity_units) for device in devices}
     futures: dict[Future[tuple[str, str | None]], tuple[str, ComputeDevice | None, float]] = {}
@@ -503,6 +705,10 @@ def execute_pipelines(
                     detail = f"dependency {dependency_name} failed"
                     print(f"[BLOCKED] {job['pipeline']}/{node['name']}: {detail}", flush=True)
                     state, _ = _node_result(node, "failed", detail, f"{job['pipeline']}/{node['name']}")
+                    emit_event(spec, "node_finished", job["pipeline"], job["context"],
+                               {**pipeline_states, node["name"]: state}, workdir, node=node, status=state,
+                               blocked=True, error={"type": "DependencyError", "message": detail} if state == "failed" else None,
+                               ignored_error=detail if state == "success" else None)
                     finish(job_id, state)
                     continue
 
@@ -541,12 +747,20 @@ def execute_pipelines(
             for future in completed:
                 job_id, device, units = futures.pop(future)
                 if device: device_free[device.index] += units
+                runner_error = None
                 try:
                     state, error = future.result()
                 except Exception as exc:
                     state, error = "failed", f"unexpected node runner error: {exc}"
+                    runner_error = error
                 job = jobs[job_id]
                 state, error = _node_result(job["node"], state, error, f"{job['pipeline']}/{job['node']['name']}")
+                if runner_error:
+                    emit_event(spec, "node_finished", job["pipeline"], job["context"],
+                               {**results[job["request_index"]], job["node"]["name"]: state}, workdir,
+                               node=job["node"], status=state,
+                               error={"type": "RuntimeError", "message": error} if error else None,
+                               ignored_error=runner_error if not error else None)
                 finish(job_id, state)
                 if state == "failed" and error:
                     print(f"[NODE-ERROR] {job['pipeline']}/{job['node']['name']}: {error}", flush=True)
@@ -572,6 +786,8 @@ class Flow:
             raise RuntimeError("spec.prepare was removed; move actions to pipeline.<name>.prepare or entries.<entry>.initialization")
         if "master-flow" in spec:
             raise RuntimeError("spec.master-flow was removed; use entries.master_flow and server request claiming")
+        validate_routines(spec)
+        validate_events(spec)
         entries = spec.get("entries", {})
         if not isinstance(entries, dict):
             raise RuntimeError("entries must be a mapping")
@@ -601,14 +817,14 @@ class Flow:
 
     def initialize(self) -> None:
         for index, action in enumerate(self.lifecycle.get("initialization", [])):
-            run_action(action, self.context, {}, self.workdir, label=f"entry initialization[{index}]")
+            run_action(action, self.context, {}, self.workdir, label=f"entry initialization[{index}]", spec=self.spec, allow_workload=False)
 
     def finalize(self, failed: bool) -> None:
         self.context["entry"]["status"] = "failed" if failed else "success"
         errors = []
         for index, action in enumerate(self.lifecycle.get("finalization", [])):
             try:
-                run_action(action, self.context, {}, self.workdir, label=f"entry finalization[{index}]")
+                run_action(action, self.context, {}, self.workdir, label=f"entry finalization[{index}]", spec=self.spec, allow_workload=False)
             except Exception as exc:
                 errors.append(str(exc))
                 self.context["entry"]["status"] = "failed"
@@ -619,6 +835,10 @@ class Flow:
         queued, contexts = [], []
         failed = False
         for name, payload, request in requests:
+            context = deepcopy(self.context)
+            context["request"] = deepcopy(request)
+            context["pipeline_name"] = name
+            emit_event(self.spec, "pipeline_started", name, context, {}, self.workdir)
             try:
                 definition = self.spec.get("pipeline", {}).get(name)
                 if not isinstance(definition, dict):
@@ -636,7 +856,7 @@ class Flow:
                 if name not in self.prepared:
                     try:
                         for index, action in enumerate(definition.get("prepare", [])):
-                            run_action(action, context, {}, self.workdir, label=f"pipeline {name} prepare[{index}]")
+                            run_action(action, context, {}, self.workdir, label=f"pipeline {name} prepare[{index}]", spec=self.spec, allow_workload=False)
                         from mu.pipelines import _discover_models
                         context["sys"]["models"] = _discover_models(Path(context["sys"]["cache_dir"]))
                         self.prepared[name] = context
@@ -644,16 +864,20 @@ class Flow:
                         self.prepare_errors[name] = exc
                         raise
                 context = deepcopy(self.prepared[name])
+                context["pipeline_name"] = name
                 if request:
                     context["request"] = deepcopy(request)
                 queued.append((name, payload))
                 contexts.append(context)
             except Exception as exc:
+                context["request"] = deepcopy(request)
+                emit_event(self.spec, "pipeline_finished", name, context, {}, self.workdir, status="failed",
+                           error={"type": type(exc).__name__, "message": str(exc)})
                 print(f"[REQUEST] {name}: failed: {exc}", flush=True)
                 failed = True
         if queued:
             results = execute_pipelines(
-                self.spec, queued, self.context, self.devices, self.workdir, request_contexts=contexts,
+                self.spec, queued, self.context, self.devices, self.workdir, request_contexts=contexts, events_started=True,
             )
             failed |= any(state == "failed" for result in results for state in result.values())
         return failed

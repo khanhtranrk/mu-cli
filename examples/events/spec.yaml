@@ -1,0 +1,42 @@
+# Offline example: write one JSON snapshot at each lifecycle boundary.
+routines:
+  record_event:
+    params:
+      path: {type: string}
+    actions:
+      - type: write_json
+        path: "{params[path]}"
+        content: "{event}"
+events:
+  - on: pipeline_started
+    do:
+      - type: execute_routine
+        routine: record_event
+        args:
+          path: "{session[working_dir]}/pipeline-started.json"
+  - on: node_started
+    do:
+      - type: execute_routine
+        routine: record_event
+        args:
+          path: "{session[working_dir]}/{event[node][name]}-started.json"
+  - on: node_finished
+    do:
+      - type: execute_routine
+        routine: record_event
+        args:
+          path: "{session[working_dir]}/{event[node][name]}-finished.json"
+  - on: pipeline_finished
+    do:
+      - type: execute_routine
+        routine: record_event
+        args:
+          path: "{session[working_dir]}/pipeline-finished.json"
+pipeline:
+  demo:
+    nodes:
+      - name: hello
+        run:
+          - type: write_json
+            path: "{session[working_dir]}/hello.json"
+            content: {message: hello}

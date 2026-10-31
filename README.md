@@ -39,6 +39,8 @@ For a remote worker, see the [master-flow CLI guide](docs/spec-format/07-master-
 | --- | --- |
 | Spec format, contexts, actions, conditions, pipelines | [Spec format guide](docs/spec-format/README.md) |
 | Local and remote execution, CLI flags, lifecycle | [Master-flow and CLI](docs/spec-format/07-master-flow-and-cli.md) |
+| Spec-defined lifecycle hooks | [Events](docs/spec-format/10-events.md) |
+| Reusable routines and file metadata | [Routines](docs/spec-format/09-routines.md) |
 | Complete YAML example | [Example spec](examples/song-with-cover/spec.yaml) |
 | Cross-project workspace | [MU workspace](https://github.com/khanhtranrk/mu) |
 

@@ -1,25 +1,14 @@
-# Scheduler smoke test
+# Scheduler smoke with lifecycle events
 
-This example exercises the workload/pipeline runtime without downloading models
-or requiring a GPU. It runs through MasterFlow so node status can be sent with
-`send_http_request`. Two simulated GPU workloads each reserve **6 scheduling
-units** and sleep for 20 seconds; a CPU-only workload sleeps for 3 seconds. A
-final node waits for all three and writes a completion file. Every node sends
-`running` before its work and `succeeded` or `failed` from `finally`. Queue
-status is not reported because specs have no hook for that scheduler event.
-The `artifact-upload` node creates a small text file, registers its SHA-256 and
-byte size, uploads it through the native storage URL, completes registration,
-then downloads it and checks the bytes.
-
-The workloads do **not** use a GPU. Their `units` values only let you observe
-how the scheduler accounts for GPU capacity.
+This server-connected example uses Python sleep workloads to make GPU scheduling
+visible without accessing GPU hardware or downloading models. Upload the current
+`spec.yaml` to MasterFlow and create a waiting request for `scheduler-smoke` with
+payload `{}`.
 
 ## Run
 
-Configure `MU_MASTER_FLOW_SERVER` and `MU_MASTER_FLOW_TOKEN`, store
-`spec.yaml` in MasterFlow, and create one waiting request for the
-`scheduler-smoke` pipeline with an empty payload (`{}`). From the `mu-cli`
-repository root, run:
+Configure `MU_MASTER_FLOW_SERVER` and `MU_MASTER_FLOW_TOKEN` in the environment.
+From the CLI repository, run:
 
 ```sh
 uv run mu master-flow run scheduler-smoke \
@@ -30,39 +19,49 @@ uv run mu master-flow run scheduler-smoke \
   --device cuda,0,8
 ```
 
-`--device cuda,0,8` declares a scheduler-only device with 8 units (32 GiB in
-the CLI's 4-GiB unit bands). It is a simulated capacity declaration; `mu-cli`
-does not check whether that GPU exists, and these workloads never access it.
-Because both simulated GPU nodes need 6 units, they cannot run simultaneously
-on this 8-unit device. The 0-unit CPU node can run alongside one of them.
-Expect about 43 seconds of workload sleep, plus startup overhead.
+The first `scheduler-smoke` argument is the saved spec slug; change it if your
+uploaded spec has a different slug. `--device cuda,0,8` declares a simulated
+8-unit device (32 GiB in scheduler accounting), even without a real GPU.
 
-The exit code should be zero. In the console, look for the node dispatch and
-completion messages; the second simulated GPU node should dispatch after the
-first releases its units. Check the output files:
+| Node | Units | Work | Expected behavior with 8 units |
+| --- | --- | --- | --- |
+| simulated-gpu-a | 6 | sleep 20s | Starts in the first wave |
+| simulated-gpu-b | 6 | sleep 20s | Waits for the first heavy node to finish |
+| simulated-gpu-light | 2 | sleep 10s | Runs alongside the first heavy node: 6 + 2 = 8 |
+| cpu-check | 0 | sleep 3s | Runs without consuming GPU capacity |
+| artifact-upload | 0 | create/upload a small text file | Runs independently; uses real server/storage endpoints |
+| complete | 0 | write completion marker | Waits for all five preceding nodes |
 
-```sh
-ls -l /tmp/mu-scheduler-smoke
-```
+Watch the request graph in MasterFlow. Initially, `simulated-gpu-a` and
+`simulated-gpu-light` should be running together; `simulated-gpu-b` has no running
+report until admitted. There is no queue event in this version. CPU work and
+upload can run alongside them. Once the first heavy node finishes, the second
+heavy node starts. Expect roughly 40 seconds of workload sleep on the critical
+path, plus HTTP/reporting overhead; slow uploads can extend total duration.
 
-Expected files:
+To compare, create a fresh request and use `--device cuda,0,14`: all three GPU
+workloads fit together (6 + 6 + 2), reducing the sleep critical path to about
+20 seconds. Run one worker at a time for this comparison. Omitting `--device`
+uses hardware detection and may fall back to CPU, which does not demonstrate the
+intended capacity limit.
+
+## Reports and outputs
+
+Shared root event hooks report request `processing`, then `succeeded` or
+`process_failed`. They report node `running`, then `succeeded` or `failed`, and
+append readable start/finish logs. Terminal reports follow finally and include
+blocked-node outcomes. Status mappings and HTTP payloads are defined in the spec.
+Hook failures print warnings without changing workload results; inspect these
+warnings if the desktop graph does not update.
+
+Files are isolated under `/tmp/mu-scheduler-smoke/<requestId>/`:
 
 - `simulated-gpu-a-finally.json`
 - `simulated-gpu-b-finally.json`
 - `scheduler-smoke-complete.json`
-- `<requestId>/scheduler-smoke.txt`
-- `<requestId>/scheduler-smoke-downloaded.txt`
+- `scheduler-smoke.txt`
 
-The request's **Artifacts** section should contain `scheduler-smoke.txt`,
-associated with the `artifact-upload` node. The same text is downloaded back
-and compared byte-for-byte before that node succeeds.
-
-This example explicitly reports node states only. It does not report overall
-request status, so MasterFlow may continue to show the request as possessed
-after the worker finishes. Create a fresh request for another run.
-
-The report actions use `ignore_error: true`: an unavailable report endpoint
-prints a warning but does not fail the workload or change its result. If you
-omit `--device`, no device capacity is declared and the scheduler uses its
-existing CPU fallback for GPU-unit requests; this does not demonstrate
-GPU-unit serialization.
+The request's Artifacts section should contain `scheduler-smoke.txt`, associated
+with `artifact-upload`. Upload remains an explicit required routine in after_run;
+its failure fails the node and blocks complete. This example does not download
+the uploaded file. Use a fresh waiting request for another run.
