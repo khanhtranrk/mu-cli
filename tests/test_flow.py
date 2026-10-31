@@ -40,7 +40,7 @@ class FlowTests(unittest.TestCase):
         flow.initialize()
         for name in ("a", "b"):
             self.assertFalse(flow.execute([("used", {"name": name}, {"requestId": name, "specSlug": "demo"})]))
-            self.assertEqual(json.loads((self.root / f"{name}.json").read_text()), {"id": name, "ready": "True"})
+            self.assertEqual(json.loads((self.root / f"{name}.json").read_text()), {"id": name, "ready": True})
         flow.finalize(False)
         self.assertEqual((self.root / "count").read_text(), "x")
         self.assertFalse((self.root / "unused").exists())
@@ -111,7 +111,7 @@ class FlowTests(unittest.TestCase):
             raise ValueError("report unavailable")
         with self.assertRaisesRegex(ValueError, "reporting failed"):
             _execute_flow(flow, lambda: flow.execute([("demo", {}, {"requestId": "one"})], report))
-        self.assertEqual(reports, ["processing", "succeeded"])
+        self.assertEqual(reports, ["succeeded"])
         self.assertTrue((self.root / "cleanup").exists())
 
     def test_master_flow_real_http_batches_and_metadata(self):
@@ -174,7 +174,9 @@ class FlowTests(unittest.TestCase):
         self.assertIn("No matching requests", result.output)
         self.assertIn("Unit worker: offline", result.output)
         self.assertTrue(all(s["byStatus"] == ["waiting"] and s["byPipeline"] == ["demo", "other"] for s in selections))
-        self.assertEqual([r["status"] for r in reports], ["processing", "succeeded"] * 2)
+        self.assertEqual([r["status"] for r in reports if "status" in r], ["processing", "succeeded"] * 2)
+        self.assertEqual([r["node_states"]["save"]["status"] for r in reports if "node_states" in r],
+                         ["queue", "running", "succeeded"] * 2)
         self.assertEqual(json.loads((root / "2.json").read_text()), "2")
         self.assertEqual(json.loads((root / "final").read_text()), "success")
         self.assertEqual(events[0][1]["status"], "online")

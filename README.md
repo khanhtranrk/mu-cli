@@ -123,6 +123,11 @@ allowing the pipeline to continue. See [node error handling](docs/spec-format/06
 
 Workloads declare `params`, `target`, `args`, optional `env`, `device_args`, and `units`. Nodes declare `context`, conditions, actions, `run`, and `depends_on`.
 
+A whole-value template preserves the referenced type (for example, numeric
+cover dimensions); composed strings render substitutions as text. Workload
+parameter types stay strict, and subprocess argv values become strings at execution.
+See [rendering rules](docs/spec-format/02-context-and-templates.md#rendering-rules).
+
 Templates use bracket lookup syntax such as `{params[name]}`, `{session[output_dir]}`, `{sys[cache_dir]}`, `{node[status]}`, and `{schedule[device_index]}`. The full model is documented in the [spec format guide](docs/spec-format/README.md), including a quick reference and a complete working example:
 
 - [Overview](docs/spec-format/01-overview.md)
@@ -212,3 +217,8 @@ workload actions are included in this maximum. See [actions](docs/spec-format/04
 ## Request file artifacts
 
 `send_http_request` supports raw streaming uploads with `body_file`, atomic binary downloads with `response_file`, and configurable `timeout` seconds. JSON `body` remains supported and cannot be combined with `body_file`. MasterFlow artifacts belong to a request and optionally annotate their producing node. See the [action reference](docs/spec-format/04-actions.md), [artifact flow](docs/spec-format/07-master-flow-and-cli.md#request-artifacts), and the [CPU-only upload/download example](examples/master-flow-artifacts/spec.yaml).
+
+Master-flow node status is reported automatically by the scheduler: queued while
+waiting, running after resource reservation, and terminal after finally. Each
+request starts processing at its first dispatch and finishes independently of its
+batch. See [node reporting](docs/spec-format/07-master-flow-and-cli.md#scheduler-owned-node-reports).

@@ -224,8 +224,9 @@ An action can merge its own context:
 Action context is rendered and merged directly into the containing context
 before skip/precondition checks. There is no isolated action context copy;
 later actions in the same node see these additions. Merge replaces top-level
-keys rather than recursively merging mappings. Templates render values as
-strings; construct a mapping in `content` when writing a JSON object.
+keys rather than recursively merging mappings. A whole-value placeholder preserves the referenced type, including a copied
+mapping or list; composed strings convert substitutions to text. For example,
+`content: "{payload}"` writes a JSON object when `payload` is a mapping.
 
 `save_state: name` on a supported action writes `actions[name]` into this same
 containing context. In a node, later actions, workload rendering and finally
@@ -278,8 +279,14 @@ Rendering supports:
 - strings: `{params[name]}`;
 - mappings: each value is rendered;
 - lists: each item is rendered;
-- numbers and booleans: preserve the original type when the entire string is a placeholder;
+- whole-value placeholders: preserve numbers, booleans, null, strings, lists and mappings; containers are deep-copied to avoid sharing mutable context;
 - composed strings: replacements are converted to text.
+
+For example, `cover_with: "{params[cover_with]}"` passes the number `1280`
+to workload parameter validation when the pipeline value is numeric. It does
+not convert an input string `"1280"` to a number: declared types remain strict.
+Subprocess argv elements are converted to strings only when commands are built.
+Nested string templates follow the same rule within the eight-pass limit.
 
 ## Full context example
 

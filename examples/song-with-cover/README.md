@@ -3,7 +3,7 @@
 This MasterFlow example executes workloads and uploads request artifacts using
 sequential actions in each node's `run`. Configure `MU_MASTER_FLOW_SERVER` and
 `MU_MASTER_FLOW_TOKEN`, store `spec.yaml` in MasterFlow, and submit a request
-using the parameter shape in `input.yaml`. The notification/report/upload actions
+using the parameter shape in `input.yaml`. The notification/upload actions
 require the MasterFlow session and request context.
 
 | Node | Registered artifact ID | File |
@@ -17,8 +17,9 @@ require the MasterFlow session and request context.
 Each workload action skips generation when its output files already exist;
 the remaining actions still hash, size, upload and register those files. Stable
 artifact IDs replace earlier versions on the same request. Upload failures fail
-the node and prevent its `after_run` success report. Successful upload completion
-assigns `nodeName`, so the following node report inherits those artifact references.
+the node. Mu automatically reports the final state after postcondition and
+`finally`; the spec does not send node lifecycle reports. Successful upload
+completion assigns `nodeName`, so Mu’s final node report inherits those artifact references.
 No WAV, SRT, or other intermediate outputs are uploaded.
 
 Uploads follow the existing [request artifact protocol](../../docs/spec-format/07-master-flow-and-cli.md#request-artifacts).

@@ -118,6 +118,12 @@ def _render(value: Any, context: dict[str, Any]) -> Any:
 
     rendered = value
     for _ in range(8):
+        whole = re.fullmatch(r"\{([^{}]+)\}", rendered)
+        if whole:
+            found, replacement = _lookup(whole.group(1), context)
+            if found and not isinstance(replacement, str):
+                return deepcopy(replacement)
+
         def replace(match: re.Match[str]) -> str:
             found, replacement = _lookup(match.group(1), context)
             return str(replacement) if found else match.group(0)

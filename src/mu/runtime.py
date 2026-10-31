@@ -13,7 +13,7 @@ import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from copy import deepcopy
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -450,10 +450,13 @@ def execute_pipelines(
     spec: dict[str, Any], requests: list[tuple[str, dict[str, Any]]], base: dict[str, Any],
     devices: list[ComputeDevice], workdir: Path,
     *, request_contexts: list[dict[str, Any]] | None = None,
+    on_node_state: Callable[[int, str, dict[str, Any]], None] | None = None,
+    on_request_state: Callable[[int, str], None] | None = None,
 ) -> list[dict[str, str]]:
     """Schedule ready nodes across all requests, respecting dependencies and GPU units."""
     jobs: dict[str, dict[str, Any]] = {}
     results: list[dict[str, str]] = []
+    remaining: list[int] = []
     job_by_request_name: dict[tuple[int, str], str] = {}
     order: list[str] = []
     for request_index, (pipeline_name, request) in enumerate(requests):
@@ -466,6 +469,7 @@ def execute_pipelines(
         nodes = validate_pipeline(definition, pipeline_name)
         print(f"[PIPELINE] {pipeline_name} request {request_index + 1}: queued ({len(nodes)} nodes)", flush=True)
         results.append({})
+        remaining.append(len(nodes))
         for node in nodes:
             job_id = f"p{request_index}:{node['name']}"
             job_by_request_name[(request_index, node["name"])] = job_id
@@ -474,6 +478,40 @@ def execute_pipelines(
                 "request_index": request_index, "pipeline": pipeline_name,
                 "context": context, "node": node, "status": "pending", "units": node_units(spec, node),
             }
+
+    started_requests: set[int] = set()
+    published: dict[str, dict] = {}
+
+    def publish(job_id, status, reason="", device=None):
+        job = jobs[job_id]
+        update = {"status": status, "reason": reason}
+        if device is not None:
+            # The worker API currently represents device indices as numbers.
+            try:
+                update["device"] = {"family": {"nvidia": "cuda"}.get(device.backend, device.backend),
+                                    "index": int(device.index)}
+            except (ValueError, TypeError):
+                pass
+        if published.get(job_id) != update:
+            published[job_id] = update
+            if on_node_state:
+                on_node_state(job["request_index"], job["node"]["name"], update)
+
+    def finish(job_id, state, reason="", device=None):
+        job = jobs[job_id]
+        index = job["request_index"]
+        job["status"] = state
+        results[index][job["node"]["name"]] = state
+        publish(job_id, "succeeded" if state == "success" else "failed", reason, device)
+        remaining[index] -= 1
+        if remaining[index] == 0 and on_request_state:
+            on_request_state(index, "process_failed" if "failed" in results[index].values() else "succeeded")
+
+    for job_id, job in jobs.items():
+        publish(job_id, "queue", "Waiting for dependencies" if job["node"].get("depends_on") else "Waiting for resources or execution slot")
+    for index, count in enumerate(remaining):
+        if count == 0 and on_request_state:
+            on_request_state(index, "succeeded")
 
     device_free = {device.index: float(device.capacity_units) for device in devices}
     futures: dict[Future[tuple[str, str | None]], tuple[str, ComputeDevice | None, float]] = {}
@@ -497,8 +535,7 @@ def execute_pipelines(
                     detail = f"dependency {dependency_name} failed"
                     print(f"[BLOCKED] {job['pipeline']}/{node['name']}: {detail}", flush=True)
                     state, _ = _node_result(node, "failed", detail, f"{job['pipeline']}/{node['name']}")
-                    job["status"] = state
-                    pipeline_states[node["name"]] = state
+                    finish(job_id, state, f"Blocked: {detail}")
                     continue
 
                 units = job["units"]
@@ -507,17 +544,26 @@ def execute_pipelines(
                     fitting = [candidate for candidate in devices if candidate.capacity_units >= units]
                     if fitting:
                         available = [candidate for candidate in fitting if device_free[candidate.index] >= units]
-                        if not available: continue
+                        if not available:
+                            publish(job_id, "queue", "Waiting for GPU resources")
+                            continue
                         device = min(available, key=lambda candidate: device_free[candidate.index] - units)
                     else:
                         print(f"[SCHEDULE] {job['pipeline']}/{node['name']}: no GPU fits {units:g} units; using CPU", flush=True)
-                if len(futures) >= max_workers: continue
+                if len(futures) >= max_workers:
+                    publish(job_id, "queue", "Waiting for execution slot")
+                    continue
                 job["status"] = "running"
                 if device:
                     device_free[device.index] -= units
-                print(f"[SCHEDULE] {job['pipeline']}/{node['name']}: dispatched ({units:g} units; {device.backend + ':' + device.index if device else 'cpu'})", flush=True)
+                if request_index not in started_requests:
+                    started_requests.add(request_index)
+                    if on_request_state:
+                        on_request_state(request_index, "processing")
+                publish(job_id, "running", device=device)
+                print(f"[SCHEDULE] request {request_index + 1} {job['pipeline']}/{node['name']}: dispatched ({units:g} units; {device.backend + ':' + device.index if device else 'cpu'})", flush=True)
                 future = pool.submit(
-                    _execute_node, spec, job["pipeline"], node, job["context"],
+                    _execute_node, spec, f"{job['pipeline']} request {request_index + 1}", node, job["context"],
                     dict(pipeline_states), device, workdir,
                 )
                 futures[future] = (job_id, device, units)
@@ -540,8 +586,7 @@ def execute_pipelines(
                     state, error = "failed", f"unexpected node runner error: {exc}"
                 job = jobs[job_id]
                 state, error = _node_result(job["node"], state, error, f"{job['pipeline']}/{job['node']['name']}")
-                job["status"] = state
-                results[job["request_index"]][job["node"]["name"]] = state
+                finish(job_id, state, error or "", device)
                 if state == "failed" and error:
                     print(f"[NODE-ERROR] {job['pipeline']}/{job['node']['name']}: {error}", flush=True)
 
@@ -609,14 +654,14 @@ class Flow:
         if errors:
             raise RuntimeError("entry finalization: " + "; ".join(errors))
 
-    def execute(self, requests: list[tuple[str, dict, dict]], report=None) -> bool:
+    def execute(self, requests: list[tuple[str, dict, dict]], report=None, node_report=None) -> bool:
         terminal = set()
         def tracked_report(request, status):
             report(request, status)
             if status in {"succeeded", "process_failed"}:
                 terminal.add(request.get("requestId"))
         try:
-            return self._execute(requests, tracked_report if report else None)
+            return self._execute(requests, tracked_report if report else None, node_report)
         except KeyboardInterrupt:
             if report:
                 for _, _, request in requests:
@@ -627,7 +672,7 @@ class Flow:
                             print(f"[REPORT] interrupted request: {exc}", flush=True)
             raise
 
-    def _execute(self, requests: list[tuple[str, dict, dict]], report=None) -> bool:
+    def _execute(self, requests: list[tuple[str, dict, dict]], report=None, node_report=None) -> bool:
         queued, contexts, metadata = [], [], []
         report_errors = []
         def send(request, status):
@@ -665,8 +710,6 @@ class Flow:
                 context = deepcopy(self.prepared[name])
                 if request:
                     context["request"] = deepcopy(request)
-                if report:
-                    send(request, "processing")
                 queued.append((name, payload))
                 contexts.append(context)
                 metadata.append(request)
@@ -676,18 +719,33 @@ class Flow:
                 if report:
                     send(request, "process_failed")
         if queued:
+            finished_requests: set[int] = set()
+            node_updates: dict[tuple[int, str], dict] = {}
+            def request_state(index, status):
+                nonlocal failed
+                if status in {"process_failed", "succeeded"}:
+                    finished_requests.add(index)
+                    failed |= status == "process_failed"
+                send(metadata[index], status)
+            def node_state(index, name, update):
+                node_updates[index, name] = update
+                if node_report:
+                    try:
+                        node_report(metadata[index], name, update)
+                    except Exception as exc:
+                        report_errors.append(str(exc))
             try:
-                outcomes = execute_pipelines(self.spec, queued, self.context, self.devices, self.workdir, request_contexts=contexts)
-            except BaseException:
-                if report:
-                    for request in metadata:
+                execute_pipelines(self.spec, queued, self.context, self.devices, self.workdir,
+                                  request_contexts=contexts, on_node_state=node_state,
+                                  on_request_state=request_state)
+            except BaseException as exc:
+                for (index, name), update in list(node_updates.items()):
+                    if update["status"] in {"queue", "running"}:
+                        node_state(index, name, {"status": "failed", "reason": "Execution interrupted" if isinstance(exc, KeyboardInterrupt) else f"Execution aborted: {exc}"})
+                for index, request in enumerate(metadata):
+                    if index not in finished_requests:
                         send(request, "process_failed")
                 raise
-            for request, states in zip(metadata, outcomes):
-                error = any(value == "failed" for value in states.values())
-                failed |= error
-                if report:
-                    send(request, "process_failed" if error else "succeeded")
         if report_errors:
             raise RuntimeError("request reporting failed: " + "; ".join(report_errors))
         return failed

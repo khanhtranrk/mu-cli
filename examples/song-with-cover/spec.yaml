@@ -1,4 +1,4 @@
-# MasterFlow media example: run actions generate files, upload them, then report node success.
+# MasterFlow media example: run actions generate and upload files; Mu reports node lifecycle.
 # Existing files skip only generation; uploads are retried with stable request artifact IDs.
 entries:
   direct_flow:
@@ -331,17 +331,6 @@ pipeline:
         - '{sys[cache_dir]}/bin/yue-synth'
         - --help
       before_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            generate-song:
-              status: running
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
       - type: write_json
@@ -467,18 +456,6 @@ pipeline:
           name: '{params[name]}.abc'
           nodeName: generate-song
           label: ABC notation
-      after_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            generate-song:
-              status: succeeded
     - name: generate-cover
       precondition:
         operator: exit_code
@@ -489,17 +466,6 @@ pipeline:
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/cover.png'
       before_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            generate-cover:
-              status: running
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
       run:
@@ -566,18 +532,6 @@ pipeline:
           name: cover.png
           nodeName: generate-cover
           label: Cover image
-      after_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            generate-cover:
-              status: succeeded
     - name: separate-vocals
       postcondition: &id001
         operator: file_exists
@@ -585,17 +539,6 @@ pipeline:
       depends_on:
       - generate-song
       before_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            separate-vocals:
-              status: running
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}/separated'
       run:
@@ -608,18 +551,6 @@ pipeline:
           operator: file_exists
           path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
         postcondition: *id001
-      after_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            separate-vocals:
-              status: succeeded
     - name: transcribe-vocals
       postcondition:
         operator: file_exists
@@ -627,17 +558,6 @@ pipeline:
       depends_on:
       - separate-vocals
       before_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            transcribe-vocals:
-              status: running
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}/transcript'
       run:
@@ -702,15 +622,3 @@ pipeline:
           name: vocals.json
           nodeName: transcribe-vocals
           label: Vocal transcript
-      after_run:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          node_states:
-            transcribe-vocals:
-              status: succeeded
