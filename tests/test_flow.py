@@ -51,13 +51,9 @@ class FlowTests(unittest.TestCase):
         spec = {"pipeline": {"bad": {"prepare": [{"type": "execute_command", "target": "missing-mu-test-tool"}], "nodes": []},
                              "good": {"nodes": [{"name": "ok", "before_run": [write(self.root / "ok", {})]}]}}}
         flow = self.flow(spec)
-        reports = []
-        self.assertTrue(flow.execute([("bad", {}, {"requestId": "bad"}), ("good", {}, {"requestId": "good"})],
-                                     lambda meta, status: reports.append((meta["requestId"], status))))
+        self.assertTrue(flow.execute([("bad", {}, {"requestId": "bad"}), ("good", {}, {"requestId": "good"})]))
         self.assertTrue((self.root / "ok").exists())
         self.assertIn("bad", flow.prepare_errors)
-        self.assertIn(("bad", "process_failed"), reports)
-        self.assertIn(("good", "succeeded"), reports)
 
     def test_invalid_request_does_not_prepare(self):
         flow = self.flow({"pipeline": {"demo": {"params": {"name": {"type": "string"}},
@@ -102,16 +98,10 @@ class FlowTests(unittest.TestCase):
             if child.poll() is None:
                 child.kill(); child.communicate()
 
-    def test_reporting_failure_attempts_other_reports_and_finalizes(self):
+    def test_flow_runs_without_integrated_status_reporting(self):
         flow = self.flow({"entries": {"direct_flow": {"finalization": [write(self.root / "cleanup", {})]}},
                           "pipeline": {"demo": {"nodes": []}}})
-        reports = []
-        def report(meta, status):
-            reports.append(status)
-            raise ValueError("report unavailable")
-        with self.assertRaisesRegex(ValueError, "reporting failed"):
-            _execute_flow(flow, lambda: flow.execute([("demo", {}, {"requestId": "one"})], report))
-        self.assertEqual(reports, ["succeeded"])
+        _execute_flow(flow, lambda: flow.execute([("demo", {}, {"requestId": "one"})]))
         self.assertTrue((self.root / "cleanup").exists())
 
     def test_master_flow_real_http_batches_and_metadata(self):
@@ -133,7 +123,7 @@ class FlowTests(unittest.TestCase):
                 "pipeline": {"demo": {"prepare": [write(root / "prepared", {}), notify("prepare")],
                 "params": {"name": {"type": "string"}}, "nodes": [{"name": "save",
                 "before_run": [write("{session[working_dir]}/{params[name]}.json", "{request[requestId]}"), notify("node")]}]}}}
-        events, selections, reports = [], [], []
+        events, selections = [], []
         batches = [[{"requestId": str(i), "specSlug": "demo", "pipelineName": "demo", "payload": {"name": str(i)}}] for i in (1, 2)] + [[]]
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -150,8 +140,6 @@ class FlowTests(unittest.TestCase):
                 if self.path.endswith("claim"):
                     assert (root / "init").exists()
                     selections.append(body); response = batches.pop(0)
-                if self.path.endswith("report"):
-                    reports.append(body)
                 self.send_response(200); self.end_headers(); self.wfile.write(json.dumps(response).encode())
             def assert_auth(self):
                 assert self.headers["Authorization"] == "Bearer test-token"
@@ -174,9 +162,10 @@ class FlowTests(unittest.TestCase):
         self.assertIn("No matching requests", result.output)
         self.assertIn("Unit worker: offline", result.output)
         self.assertTrue(all(s["byStatus"] == ["waiting"] and s["byPipeline"] == ["demo", "other"] for s in selections))
-        self.assertEqual([r["status"] for r in reports if "status" in r], ["processing", "succeeded"] * 2)
-        self.assertEqual([r["node_states"]["save"]["status"] for r in reports if "node_states" in r],
-                         ["queue", "running", "succeeded"] * 2)
+        self.assertFalse(any(
+            event[0].endswith("/api/requests/report")
+            for event in events if isinstance(event, tuple)
+        ))
         self.assertEqual(json.loads((root / "2.json").read_text()), "2")
         self.assertEqual(json.loads((root / "final").read_text()), "success")
         self.assertEqual(events[0][1]["status"], "online")
