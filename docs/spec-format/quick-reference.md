@@ -37,7 +37,7 @@
 | Type | Type-specific fields | Result |
 |---|---|---|
 | `execute_command` | `target`, `args`, `env`, `save_state` | Run one process |
-| `send_http_request` | `url`, `method`, `header`, `body`, `save_state` | Make an HTTP request and optionally save the response |
+| `send_http_request` | `url`, `method`, `header`, `body`/`body_file`, `response_file`, `timeout`, `save_state` | Make an HTTP request and optionally save the response |
 | `write_json` | `path`, `content` | Write JSON |
 | `create_dir` | `path` | Create a directory and its parents |
 

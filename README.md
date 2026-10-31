@@ -207,3 +207,8 @@ Node GPU reservations use the maximum workload `units` across the sequential
 action lists `before_run`, `run`, and `after_run`. Mu reserves this capacity
 before starting any node actions and releases it after `finally`. Conditional
 workload actions are included in this maximum. See [actions](docs/spec-format/04-actions.md) for `execute_workload`.
+
+
+## Request file artifacts
+
+`send_http_request` supports raw streaming uploads with `body_file`, atomic binary downloads with `response_file`, and configurable `timeout` seconds. JSON `body` remains supported and cannot be combined with `body_file`. MasterFlow artifacts belong to a request and optionally annotate their producing node. See the [action reference](docs/spec-format/04-actions.md), [artifact flow](docs/spec-format/07-master-flow-and-cli.md#request-artifacts), and the [CPU-only upload/download example](examples/master-flow-artifacts/spec.yaml).

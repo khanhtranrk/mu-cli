@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import ExitStack
+import tempfile
 import math
 import os
 from pathlib import Path
@@ -217,26 +219,67 @@ def run_action(
             path = Path(values["path"]).expanduser(); path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(values.get("content", {}), ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         elif typ == "send_http_request":
-            data = values.get("body")
-            payload = json.dumps(data).encode() if data is not None else None
-            req = Request(values["url"], data=payload, headers=request_headers(values.get("header", {})), method=str(values.get("method", "get")).upper())
-            http_error = None
-            try:
-                response = urlopen(req, timeout=30)
-            except HTTPError as exc:
-                response = exc
-                http_error = exc
-            with response:
-                result.update(status_code=response.code, headers={k.lower(): v for k, v in response.headers.items()})
-                raw = response.read()
-                if raw:
-                    text = raw.decode(response.headers.get_content_charset() or "utf-8", errors="replace")
-                    try:
-                        result["body"] = json.loads(text)
-                    except ValueError:
-                        result["body"] = text
-            if http_error is not None:
-                raise http_error
+            if "body" in values and "body_file" in values:
+                raise RuntimeError("send_http_request: body and body_file are mutually exclusive")
+            timeout = values.get("timeout", 30)
+            if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+                raise RuntimeError("send_http_request.timeout must be a positive finite number of seconds")
+            def file_path(field):
+                value = values[field]
+                if not isinstance(value, str) or not value.strip():
+                    raise RuntimeError(f"send_http_request.{field} must be a non-empty path")
+                path = Path(value).expanduser()
+                return (path if path.is_absolute() else workdir / path).resolve()
+            destination = file_path("response_file") if "response_file" in values else None
+            headers = request_headers(values.get("header", {}))
+            with ExitStack() as resources:
+                if "body_file" in values:
+                    source = file_path("body_file")
+                    payload = resources.enter_context(source.open("rb"))
+                    headers = {k: v for k, v in headers.items() if k.lower() not in {"content-length", "transfer-encoding"}}
+                    headers["Content-Length"] = str(os.fstat(payload.fileno()).st_size)
+                    if not any(k.lower() == "content-type" for k in headers):
+                        headers["Content-Type"] = "application/octet-stream"
+                else:
+                    data = values.get("body")
+                    payload = json.dumps(data).encode() if data is not None else None
+                req = Request(values["url"], data=payload, headers=headers, method=str(values.get("method", "get")).upper())
+                http_error = None
+                try:
+                    response = urlopen(req, timeout=timeout)
+                except HTTPError as exc:
+                    response = exc
+                    http_error = exc
+                with response:
+                    result.update(status_code=response.code, headers={k.lower(): v for k, v in response.headers.items()})
+                    if destination is not None and http_error is None:
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        temporary = None
+                        try:
+                            with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".mu-download-", delete=False) as output:
+                                temporary = Path(output.name)
+                                size = 0
+                                while chunk := response.read(1024 * 1024):
+                                    output.write(chunk)
+                                    size += len(chunk)
+                            expected = response.headers.get("Content-Length")
+                            if expected is not None and size != int(expected):
+                                raise RuntimeError("Incomplete HTTP download: Content-Length does not match bytes received")
+                            temporary.replace(destination)
+                            result.update(response_file=str(destination), size=size)
+                        finally:
+                            if temporary is not None:
+                                temporary.unlink(missing_ok=True)
+                    else:
+                        raw = response.read()
+                        if raw:
+                            text = raw.decode(response.headers.get_content_charset() or "utf-8", errors="replace")
+                            try:
+                                result["body"] = json.loads(text)
+                            except ValueError:
+                                result["body"] = text
+                if http_error is not None:
+                    raise http_error
         result["success"] = True
         if key is not None:
             context.setdefault("actions", {})[key] = result

@@ -108,9 +108,36 @@ Sends an HTTP request:
 | `method` | `get` | Mu uppercases it; `post`, `POST`, and `post` are all equivalent. |
 | `header` | `{}` | Headers passed to urllib |
 | `body` | none | If present, Mu encodes it as JSON with `json.dumps`. |
+| `body_file` | none | Path to file whose raw bytes are streamed as the request body; mutually exclusive with `body`. |
+| `response_file` | none | Save a successful response as raw bytes to this path instead of decoding it. |
+| `timeout` | `30` | Positive finite number of seconds for network operations. |
 | `save_state` | none | Non-empty name storing the result in `context["actions"][name]`. |
 
-The HTTP timeout is 30 seconds. See the saved-result contract below.
+The default HTTP timeout is 30 seconds; `timeout` can increase it for file transfers. This is a socket-operation timeout, not a total transfer deadline. File paths are template-rendered, `~` is expanded, and relative paths resolve against the worker working directory.
+
+With `body_file`, Mu opens the file in binary mode, sets the actual `Content-Length`, removes any conflicting `Transfer-Encoding`, and defaults `Content-Type` to `application/octet-stream` unless supplied. There is no JSON encoding or multipart wrapper. Keep the source unchanged while uploading. File uploads stream without loading the entire file into memory.
+
+With `response_file`, Mu creates parent directories, streams to a uniquely named temporary file in the destination directory, verifies `Content-Length` when present, then atomically replaces the destination. Network errors, truncated responses and HTTP errors leave an existing destination intact and remove the temporary file. The successful saved result has `body: null`, an absolute `response_file` path, and byte `size`. Headers still come from the server. Without `response_file`, the existing JSON/text response behavior is unchanged.
+
+```yaml
+- type: send_http_request
+  url: "{actions[upload][body][uploadUrl]}"
+  method: post
+  header:
+    Content-Type: audio/wav
+  body_file: "{session[output_dir]}/song.wav"
+  timeout: 120
+  save_state: stored_file
+- type: send_http_request
+  url: "{session[server]}/api/requests/artifacts/download?requestId={request[requestId]}&artifactId=audio"
+  header:
+    Authorization: "Bearer {session[token]}"
+  response_file: "{session[output_dir]}/downloaded.wav"
+  timeout: 120
+  save_state: downloaded
+```
+
+Request artifacts use a three-step upload receipt flow. See [the complete CPU-only example](../../examples/master-flow-artifacts/spec.yaml) and [master-flow artifacts](07-master-flow-and-cli.md#request-artifacts). Send the worker token only to the application API, never to returned native storage URLs.
 
 Action names and declaration keys have no aliases.
 
@@ -267,9 +294,9 @@ HTTP result:
 
 Response header names are lowercase. Body is parsed as JSON when valid,
 otherwise decoded as text using the declared charset or UTF-8, replacing
-invalid bytes. An empty body is `null`. Binary responses are decoded as text;
-use a download tool for binary files. HTTP 4xx/5xx fail but retain response
-status, headers and body. Network errors without a response store
+invalid bytes. An empty body is `null`. Binary responses without `response_file` are decoded as text;
+set `response_file` to preserve binary data. HTTP 4xx/5xx fail but retain response
+status, headers and body; `response_file` destinations are not overwritten. Network errors without a response store
 `status_code: null`, `headers: {}`, and `body: null`.
 
 Errors use `{"type": "ExceptionClass", "message": "details"}` and set
