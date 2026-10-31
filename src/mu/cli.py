@@ -512,10 +512,6 @@ def master_flow_run(
                 selection["byPipeline"] = by_pipeline
             if by_unit_id is not None:
                 selection["byUnitId"] = by_unit_id
-            def report(request, status):
-                client.post("/api/requests/report", {"id": request["requestId"], "status": status})
-            def node_report(request, name, update):
-                client.post("/api/requests/report", {"id": request["requestId"], "node_states": {name: update}})
             def batches():
                 seen = set()
                 while True:
@@ -536,10 +532,9 @@ def master_flow_run(
                         seen.add(item["requestId"])
                         metadata = {"requestId": item["requestId"], "specSlug": item["specSlug"]}
                         if item["specSlug"] != spec_slug:
-                            report(metadata, "process_failed")
                             raise ValueError("claim returned a different specSlug")
                         parsed.append((item["pipelineName"], item["payload"], metadata))
-                    failed = flow.execute(parsed, report, node_report)
+                    failed = flow.execute(parsed)
                     if failed or not refresh_loop:
                         return failed
             _execute_flow(flow, batches)

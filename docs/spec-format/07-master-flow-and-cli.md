@@ -104,13 +104,9 @@ Execution order:
 4. Claim `/api/requests/claim` with filters and `maxCount`.
 5. Convert `pipelineName` and mapping `payload` into a pipeline request.
 6. Prepare selected pipelines and execute batch nodes through the shared scheduler.
-7. Report node queue/start/completion through `/api/requests/report`. A request
-   becomes `processing` only when its first node is dispatched, then `succeeded`
-   or `process_failed` as soon as its own nodes finish. Validation/preparation
-   failures are also reported.
-8. Without refresh, exit after one batch. With refresh, claim again after the
+7. Without refresh, exit after one batch. With refresh, claim again after the
    entire batch finishes; an empty array ends the flow. A failed batch stops refresh.
-9. Run finalization, then heartbeat `offline`, retaining unit details.
+8. Run finalization, then heartbeat `offline`, retaining unit details.
 
 Remote request templates expose `{request[requestId]}` and `{request[specSlug]}`.
 Payload remains exclusively under `params`. Remote payloads must be mappings even
@@ -118,8 +114,9 @@ though the server can store arbitrary JSON. Request metadata is never shared.
 The transport uses a 30-second timeout and never retries mutations automatically:
 a claim may commit before a connection fails. HTTP errors are fatal, not empty
 batches. A request returned twice in one invocation stops the flow to prevent
-unbounded execution with broad status filters. The scheduler owns automatic node and overall request reporting. Specs should
-not duplicate lifecycle status reports.
+unbounded execution with broad status filters. The worker does not send automatic
+request or node status reports; MasterFlow request status is not updated by this
+worker after claim.
 
 ## Scheduling
 
@@ -149,43 +146,10 @@ Use `send_http_request` to call `POST /api/requests/artifacts/upload-url` with `
 
 Download with `GET /api/requests/artifacts/download?requestId=...&artifactId=...`, a worker Authorization header and `response_file`. URL-encode query values; the example uses a simple safe artifact ID. The authenticated endpoint supports files up to 100 MiB. For larger files, `GET /api/requests/artifacts/download-url` returns `{url,name,contentType,size}`; fetch `url` with `response_file` **without a worker token**. Such direct URLs are bearer links without automatic app-level expiry. Revoking the token or soft-deleting the request does not revoke an already issued link. Native upload/download URLs can use a different host/port from `session.server`, and both must be reachable.
 
-A request supports at most 100 stored artifacts. Soft deletion preserves files but blocks new registration/download lookups. Abandoned uploads and receipts are not automatically cleaned up. Node `artifacts` now use the same metadata-array shape as request artifacts. A `node_states` report may reference only exact registered metadata on the same request and matching assigned node. Omit the field to retain references; use `[]` to clear node references without deleting storage. Legacy path/URL maps are rejected. Completion refreshes existing node references on replacement; the first node report inherits matching files if artifacts are omitted.
+A request supports at most 100 stored artifacts. Soft deletion preserves files but blocks new registration/download lookups. Abandoned uploads and receipts are not automatically cleaned up. Node `artifacts` now use the same metadata-array shape as request artifacts. Completion refreshes existing node references on replacement.
 
 See [the executable example](../../examples/master-flow-artifacts/spec.yaml), which creates and uploads a small JSON file, downloads it again and compares the bytes. Store the spec in MasterFlow, create a disposable request for its `demo` pipeline, and run `uv run mu master-flow run <spec-slug> --unit-id artifact-demo` with `MU_MASTER_FLOW_SERVER` and `MU_MASTER_FLOW_TOKEN` configured. No GPU or model downloads are required. Only run against requests intended for this test.
 
-## Scheduler-owned node reports
-
-Master-flow execution reports every node as `queue` before execution. The optional
-`reason` explains waiting for dependencies, GPU resources or an execution slot.
-A node becomes `running` only after the scheduler reserves its GPU capacity and
-an execution slot, before any node context, condition or `before_run` action.
-Zero-unit nodes consume no GPU capacity. Existing CPU fallback when no device can
-fit a GPU request is unchanged.
-
-The final node report follows postcondition, every `finally` action and node-level
-`ignore_error` handling. Internal `success` is reported as API `succeeded`.
-Workload/action errors, context errors and precondition failures report `failed`
-with a reason. Dependency-blocked nodes report `failed` with a `Blocked:` reason
-without running their actions or finally. Successful skips report `succeeded`.
-The scheduler holds GPU units through finally. Reports include a device for GPU
-placement when its index can be represented by the worker API's numeric index.
-
-A claimed request stays `possessed` until its first node dispatches; other nodes
-may still be queued while the request is `processing`. Each request reports its
-terminal result independently of other requests in the batch. Empty pipelines
-succeed without a processing transition. Refresh still waits for the batch to end.
-On interruption/abort, known queued/running nodes are reported failed when the
-transport remains reachable. Reporting failures are collected and surfaced rather
-than silently discarded; hard termination or an unreachable server can leave
-incomplete state.
-
-Remove lifecycle `send_http_request` reports from node before/after/finally hooks
-when adopting automatic reporting. Keep notifications and artifact upload actions.
-The song-with-cover example demonstrates this: upload failure is a node failure;
-no separate spec success report is required. Update the stored MasterFlow YAML
-explicitly; repository edits do not change an existing server spec.
-
-Deploy the MasterFlow backend with optional node `reason` support before upgrading
-workers. Existing records and older workers remain supported. The desktop shows
-unconfirmed final node states if an ended request retains old queue/running data;
-it never invents a successful or failed node result from request status alone.
+Request and node execution statuses are not automatically synchronized back to
+MasterFlow. The worker still reports its availability through the unit heartbeat;
+the user-defined lifecycle actions remain available for explicit notifications.

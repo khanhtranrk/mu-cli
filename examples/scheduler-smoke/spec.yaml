@@ -1,0 +1,240 @@
+entries:
+  master_flow: {}
+
+workloads:
+  simulated-gpu-20s:
+    target: python
+    args:
+      - -c
+      - "import time; time.sleep(20)"
+    units: 6
+
+  cpu-3s:
+    target: python
+    args:
+      - -c
+      - "import time; time.sleep(3)"
+    units: 0
+
+pipeline:
+  scheduler-smoke:
+    nodes:
+      - name: simulated-gpu-a
+        before_run:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-a:
+                  status: running
+            ignore_error: true
+        run:
+          - type: execute_workload
+            workload: simulated-gpu-20s
+        finally:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-a:
+                  status: succeeded
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: success
+            ignore_error: true
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-a:
+                  status: failed
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: failed
+            ignore_error: true
+          - type: write_json
+            path: "{session[working_dir]}/simulated-gpu-a-finally.json"
+            content:
+              finalized: true
+
+      - name: simulated-gpu-b
+        before_run:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-b:
+                  status: running
+            ignore_error: true
+        run:
+          - type: execute_workload
+            workload: simulated-gpu-20s
+        finally:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-b:
+                  status: succeeded
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: success
+            ignore_error: true
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                simulated-gpu-b:
+                  status: failed
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: failed
+            ignore_error: true
+          - type: write_json
+            path: "{session[working_dir]}/simulated-gpu-b-finally.json"
+            content:
+              finalized: true
+
+      - name: cpu-check
+        before_run:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                cpu-check:
+                  status: running
+            ignore_error: true
+        run:
+          - type: execute_workload
+            workload: cpu-3s
+        finally:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                cpu-check:
+                  status: succeeded
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: success
+            ignore_error: true
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                cpu-check:
+                  status: failed
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: failed
+            ignore_error: true
+
+      - name: complete
+        depends_on:
+          - simulated-gpu-a
+          - simulated-gpu-b
+          - cpu-check
+        before_run:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                complete:
+                  status: running
+            ignore_error: true
+          - type: write_json
+            path: "{session[working_dir]}/scheduler-smoke-complete.json"
+            content:
+              complete: true
+        finally:
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                complete:
+                  status: succeeded
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: success
+            ignore_error: true
+          - type: send_http_request
+            url: "{session[server]}/api/requests/report"
+            method: post
+            header:
+              Authorization: "Bearer {session[token]}"
+              Content-Type: application/json
+            body:
+              id: "{request[requestId]}"
+              node_states:
+                complete:
+                  status: failed
+            precondition:
+              operator: node_state
+              target: [status]
+              expected: failed
+            ignore_error: true
+        postcondition:
+          operator: file_exists
+          path: "{session[working_dir]}/scheduler-smoke-complete.json"
