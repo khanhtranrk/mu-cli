@@ -1,6 +1,6 @@
-# Scheduler smoke with reusable routines; no artifact download.
-# Node reports below preserve this demo's explicit reporting. Mu also reports lifecycle automatically.
-# start reports processing; complete reports succeeded only after its postcondition and final node reports.
+# Event-driven status reports; uploads remain explicit spec actions.
+# Run with --device cuda,0,8: heavy (6) + light (2) fit; the second heavy waits.
+# Workloads only sleep: no GPU access or model downloads.
 entries:
   master_flow:
     initialization:
@@ -147,182 +147,65 @@ workloads:
     target: python
     args:
     - -c
-    - from pathlib import Path; import sys; path = Path(sys.argv[1]); path.parent.mkdir(parents=True, exist_ok=True);
-      path.write_text(f'Scheduler smoke artifact for request {sys.argv[2]}\n', encoding='utf-8')
+    - from pathlib import Path; import sys; path = Path(sys.argv[1]); path.parent.mkdir(parents=True,
+      exist_ok=True); path.write_text(f'Scheduler smoke artifact for request {sys.argv[2]}\n',
+      encoding='utf-8')
     - '{params[output_path]}'
     - '{params[request_id]}'
     units: 0
+  simulated-gpu-light-10s:
+    target: python
+    args:
+    - -c
+    - import time; time.sleep(10)
+    units: 2
 pipeline:
   scheduler-smoke:
     nodes:
-    - name: start
-      run:
-      - type: execute_routine
-        routine: report_request_status
-        args:
-          status: processing
     - name: simulated-gpu-a
-      depends_on: [start]
-      before_run:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: running
-        ignore_error: true
       run:
       - type: execute_workload
         workload: simulated-gpu-20s
       finally:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: success
-        ignore_error: true
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: failed
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: failed
-        ignore_error: true
       - type: write_json
-        path: '{session[working_dir]}/simulated-gpu-a-finally.json'
+        path: '{session[working_dir]}/{request[requestId]}/simulated-gpu-a-finally.json'
         content:
           finalized: true
     - name: simulated-gpu-b
-      depends_on: [start]
-      before_run:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: running
-        ignore_error: true
       run:
       - type: execute_workload
         workload: simulated-gpu-20s
       finally:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: success
-        ignore_error: true
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: failed
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: failed
-        ignore_error: true
       - type: write_json
-        path: '{session[working_dir]}/simulated-gpu-b-finally.json'
+        path: '{session[working_dir]}/{request[requestId]}/simulated-gpu-b-finally.json'
         content:
           finalized: true
+    - name: simulated-gpu-light
+      run:
+      - type: execute_workload
+        workload: simulated-gpu-light-10s
     - name: cpu-check
-      depends_on: [start]
-      before_run:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: running
-        ignore_error: true
       run:
       - type: execute_workload
         workload: cpu-3s
-      finally:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: success
-        ignore_error: true
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: failed
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: failed
-        ignore_error: true
     - name: complete
       depends_on:
       - simulated-gpu-a
       - simulated-gpu-b
       - cpu-check
       - artifact-upload
+      - simulated-gpu-light
       before_run:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: running
-        ignore_error: true
       - type: write_json
-        path: '{session[working_dir]}/scheduler-smoke-complete.json'
+        path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke-complete.json'
         content:
           complete: true
-      finally:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: success
-        ignore_error: true
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: failed
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: failed
-        ignore_error: true
-      - type: execute_routine
-        routine: report_request_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: success
       postcondition:
         operator: file_exists
-        path: '{session[working_dir]}/scheduler-smoke-complete.json'
+        path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke-complete.json'
     - name: artifact-upload
-      depends_on: [start]
       context:
         artifact_path: '{session[working_dir]}/{request[requestId]}/scheduler-smoke.txt'
-      before_run:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: running
-        ignore_error: true
       run:
       - type: execute_workload
         workload: create-text-artifact
@@ -339,24 +222,70 @@ pipeline:
           label: Scheduler smoke text
           content_type: text/plain; charset=utf-8
         save_state: registered_artifact
-      finally:
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: succeeded
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: success
-        ignore_error: true
-      - type: execute_routine
-        routine: report_node_status
-        args:
-          status: failed
-        precondition:
-          operator: node_state
-          target:
-          - status
-          expected: failed
-        ignore_error: true
+events:
+- 'on': pipeline_started
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: processing
+- 'on': node_started
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: running
+      logs:
+      - 'Started {event[node][name]}: {event[node][total_units]} units on {event[node][device][family]}:{event[node][device][index]}.'
+- 'on': node_finished
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: succeeded
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: failed
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed
+- 'on': pipeline_finished
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: succeeded
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: process_failed
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed

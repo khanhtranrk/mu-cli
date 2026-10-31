@@ -1,7 +1,7 @@
 # Song with cover
 
 This MasterFlow example executes workloads and uploads request artifacts using
-sequential actions in each node's `run`. Configure `MU_MASTER_FLOW_SERVER` and
+reusable routines called from each node's `after_run`. Configure `MU_MASTER_FLOW_SERVER` and
 `MU_MASTER_FLOW_TOKEN`, store `spec.yaml` in MasterFlow, and submit a request
 using the parameter shape in `input.yaml`. The notification/upload actions
 require the MasterFlow session and request context.
@@ -15,23 +15,31 @@ require the MasterFlow session and request context.
 | `transcribe-vocals` | `transcript-json` | `transcript/vocals.json` |
 
 Each workload action skips generation when its output files already exist;
-the remaining actions still hash, size, upload and register those files. Stable
+the upload routine still inspects, uploads and registers those files. inspect_file
+provides an integer byte size and SHA-256, avoiding string-valued sizes from command stdout. Stable
 artifact IDs replace earlier versions on the same request. Upload failures fail
 the node. Successful upload completion assigns `nodeName`, associating each
 artifact with its generating/transcribing node. No WAV, SRT, or other
 intermediate outputs are uploaded.
 
-The final `complete-request` node depends on every other pipeline node. It sends
-the request-level `succeeded` status only from `finally` when that node itself
-finishes successfully, after all generation, upload, and transcription work has
-completed. A workload-node failure sends `process_failed`; dependent nodes are
-blocked and the final success report is never sent. The final node also sends a
-success notification. Entry initialization/finalization continue to send
-worker-lifecycle notifications, which are separate from request status.
+Shared lifecycle event hooks report node running/succeeded/failed and request
+processing/succeeded/process_failed. Node terminal reports follow finally and
+include dependency-blocked nodes. Pipeline completion is per request, after all
+nodes terminate; no complete-request node is needed. A separate pipeline-finished
+hook sends the success notification. Entry initialization/finalization use the
+shared notification routine for worker lifecycle notifications.
 
-Report calls use `ignore_error: true`, so a temporary report API failure does
-not replace the workload result. If the server is unreachable, the request may
-remain in its previous status and should be inspected/retried.
+Hook failures print warnings without replacing execution results. Uploads remain
+required node actions: an upload failure fails the producing node and blocks its
+dependents. External reporting and upload protocols remain defined entirely in
+this spec; Mu only executes lifecycle hooks, routines and generic actions.
+
+Preparation installs Demucs and WhisperX with uv tool; workloads invoke those
+installed commands directly. Ensure the uv tool executable directory is on PATH.
+The yue-synth and sd-cli binaries must already exist under the configured cache
+bin directory. File preconditions check their presence instead of assuming a
+particular --help exit code; actual execution still verifies command success.
+The existing cover_with parameter spelling is retained for request compatibility.
 
 ## Collected artifacts
 

@@ -1,29 +1,24 @@
-# MasterFlow media example: generate/upload artifacts and report request completion in-spec.
-# Existing files skip only generation; uploads are retried with stable request artifact IDs.
+# MasterFlow media example: lifecycle reports via events; required uploads via routines.
+# Cached outputs skip generation only; uploads still run with stable artifact IDs.
+# Requires a configured MasterFlow worker; real execution downloads models and uses GPU tools.
 entries:
   direct_flow:
     initialization: []
   master_flow:
     initialization:
-    - type: send_http_request
-      url: "{session[server]}/api/notifications/send"
-      method: post
-      header:
-        Authorization: Bearer {session[token]}
-        Content-Type: application/json
-      body:
+    - type: execute_routine
+      routine: send_notification
+      args:
         title: Worker ready
         message: Initialization completed
+      ignore_error: true
     finalization:
-    - type: send_http_request
-      url: "{session[server]}/api/notifications/send"
-      method: post
-      header:
-        Authorization: Bearer {session[token]}
-        Content-Type: application/json
-      body:
+    - type: execute_routine
+      routine: send_notification
+      args:
         title: Worker ended
-        message: Finalization completed
+        message: Worker finished with status {entry[status]}.
+      ignore_error: true
 workloads:
   yue2:
     params:
@@ -33,21 +28,21 @@ workloads:
         type: string
       score:
         type: string
-    target: "{sys[cache_dir]}/bin/yue-synth"
+    target: '{sys[cache_dir]}/bin/yue-synth'
     args:
     - --model
-    - "{sys[models][YuE2-3B-BF16]}"
+    - '{sys[models][YuE2-3B-BF16]}'
     - --vae
-    - "{sys[models][YuE2-Vae-F32]}"
+    - '{sys[models][YuE2-Vae-F32]}'
     - --request
-    - "{params[request]}"
+    - '{params[request]}'
     - --out
-    - "{params[output]}"
+    - '{params[output]}'
     - --score
-    - "{params[score]}"
+    - '{params[score]}'
     device_args:
     - --device
-    - "{schedule[device_family]}{schedule[device_index]}"
+    - '{schedule[device_family]}{schedule[device_index]}'
     units: 3
   qwen-image:
     params:
@@ -59,30 +54,30 @@ workloads:
         type: number
       output:
         type: string
-    target: "{sys[cache_dir]}/bin/sd-cli"
+    target: '{sys[cache_dir]}/bin/sd-cli'
     args:
     - --diffusion-model
-    - "{sys[models][qwen-image-2.1-Q4_K_M]}"
+    - '{sys[models][qwen-image-2.1-Q4_K_M]}'
     - --vae
-    - "{sys[models][vae/qwen_image_2.1_vae_bf16]}"
+    - '{sys[models][vae/qwen_image_2.1_vae_bf16]}'
     - --llm
-    - "{sys[models][Qwen3-VL-8B-Instruct-UD-Q4_K_XL]}"
+    - '{sys[models][Qwen3-VL-8B-Instruct-UD-Q4_K_XL]}'
     - --flash-attn
     - off,diffusion=on
     - --prompt
-    - "{params[prompt]}"
+    - '{params[prompt]}'
     - --steps
-    - "24"
+    - '24'
     - --cfg-scale
-    - "5.0"
+    - '5.0'
     - --sampling-method
     - euler
     - -W
-    - "{params[cover_with]}"
+    - '{params[cover_with]}'
     - -H
-    - "{params[cover_height]}"
+    - '{params[cover_height]}'
     - -o
-    - "{params[output]}"
+    - '{params[output]}'
     device_args:
     - --backend
     - diffusion={schedule[device_family]}{schedule[device_index]},te={schedule[device_family]}{schedule[device_index]},vae={schedule[device_family]}{schedule[device_index]}
@@ -93,19 +88,18 @@ workloads:
         type: string
       output:
         type: string
-    target: uvx
+    target: demucs
     args:
-    - demucs
     - -n
     - htdemucs
     - --two-stems=vocals
     - --shifts
-    - "1"
+    - '1'
     - -j
-    - "2"
+    - '2'
     - -o
-    - "{params[output]}"
-    - "{params[input]}"
+    - '{params[output]}'
+    - '{params[input]}'
     units: 1
     device_args:
     - -d
@@ -116,24 +110,23 @@ workloads:
         type: string
       output:
         type: string
-    target: uvx
+    target: whisperx
     args:
-    - whisperx
-    - "{params[input]}"
+    - '{params[input]}'
     - --model
     - large-v3
     - --device
     - cuda
     - --batch_size
-    - "4"
+    - '4'
     - --output_dir
-    - "{params[output]}"
+    - '{params[output]}'
     - --output_format
     - all
     units: 3
     device_args:
     - --device_index
-    - "{schedule[device_index]}"
+    - '{schedule[device_index]}'
 pipeline:
   song-with-cover:
     prepare:
@@ -141,19 +134,19 @@ pipeline:
       save_state: prepare_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/YuE2-Vae-F32.gguf"
+        path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
       target: hf
       args:
       - download
       - Serveurperso/YuE2-GGUF
       - YuE2-Vae-F32.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: and
         props:
         - operator: file_exists
-          path: "{sys[cache_dir]}/models/YuE2-Vae-F32.gguf"
+          path: '{sys[cache_dir]}/models/YuE2-Vae-F32.gguf'
         - operator: action_state
           target:
           - prepare_command
@@ -162,101 +155,101 @@ pipeline:
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/YuE2-3B-BF16.gguf"
+        path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
       target: hf
       args:
       - download
       - Serveurperso/YuE2-GGUF
       - YuE2-3B-BF16.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/YuE2-3B-BF16.gguf"
+        path: '{sys[cache_dir]}/models/YuE2-3B-BF16.gguf'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
       target: hf
       args:
       - download
       - Serveurperso/YuE2-GGUF
       - MERT-v2-FullSong-Q8_0.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/MERT-v2-FullSong-Q8_0.gguf'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
       target: hf
       args:
       - download
       - Serveurperso/YuE2-GGUF
       - SheetSage2-Q8_0.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/SheetSage2-Q8_0.gguf'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
       target: hf
       args:
       - download
       - Serveurperso/YuE2-GGUF
       - yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf"
+        path: '{sys[cache_dir]}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf"
+        path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
       target: hf
       args:
       - download
       - unsloth/Qwen-Image-2.1-GGUF
       - qwen-image-2.1-Q4_K_M.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf"
+        path: '{sys[cache_dir]}/models/qwen-image-2.1-Q4_K_M.gguf'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors"
+        path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
       target: hf
       args:
       - download
       - unsloth/Qwen-Image-2.1-FP8
       - vae/qwen_image_2.1_vae_bf16.safetensors
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors"
+        path: '{sys[cache_dir]}/models/vae/qwen_image_2.1_vae_bf16.safetensors'
     - type: execute_command
       skip_if:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf"
+        path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
       target: hf
       args:
       - download
       - unsloth/Qwen3-VL-8B-Instruct-GGUF
       - Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
       - --local-dir
-      - "{sys[cache_dir]}/models"
+      - '{sys[cache_dir]}/models'
       postcondition:
         operator: file_exists
-        path: "{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf"
+        path: '{sys[cache_dir]}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf'
     - type: execute_command
       skip_if:
         operator: exit_code
@@ -312,21 +305,6 @@ pipeline:
         default: 768
     nodes:
     - name: generate-song
-      finally:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: process_failed
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: failed
-        ignore_error: true
       postcondition:
         operator: and
         props:
@@ -334,17 +312,9 @@ pipeline:
           path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
         - operator: file_exists
           path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-        - operator: exit_code
-          expected: 1
-          target:
-          - '{sys[cache_dir]}/bin/yue-synth'
-          - --help
       precondition:
-        operator: exit_code
-        expected: 1
-        target:
-        - '{sys[cache_dir]}/bin/yue-synth'
-        - --help
+        operator: file_exists
+        path: '{sys[cache_dir]}/bin/yue-synth'
       before_run:
       - type: create_dir
         path: '{session[output_dir]}/{params[name]}'
@@ -375,123 +345,27 @@ pipeline:
             path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
           - operator: file_exists
             path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-      - type: execute_command
-        target: python
+      after_run:
+      - type: execute_routine
+        routine: upload_artifact
         args:
-        - -c
-        - import hashlib, sys; from pathlib import Path; p = Path(sys.argv[1]); print(hashlib.file_digest(p.open('rb'),
-          'sha256').hexdigest(), end='')
-        - '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-        save_state: song_mp3_hash
-      - type: execute_command
-        target: python
-        args:
-        - -c
-        - import os, sys; print(os.path.getsize(sys.argv[1]), end='')
-        - '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-        save_state: song_mp3_size
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/upload-url'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          artifactId: song-mp3
-          sha256: '{actions[song_mp3_hash][stdout]}'
-          size: '{actions[song_mp3_size][stdout]}'
-        save_state: song_mp3_upload
-      - type: send_http_request
-        url: '{actions[song_mp3_upload][body][uploadUrl]}'
-        method: post
-        header:
-          Content-Type: audio/mpeg
-        body_file: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
-        timeout: 120
-        save_state: song_mp3_stored
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          uploadId: '{actions[song_mp3_upload][body][uploadId]}'
-          storageId: '{actions[song_mp3_stored][body][storageId]}'
-          name: '{params[name]}.mp3'
-          nodeName: generate-song
+          artifact_path: '{session[output_dir]}/{params[name]}/{params[name]}.mp3'
+          artifact_id: song-mp3
+          node_name: '{node[name]}'
           label: Song audio
-      - type: execute_command
-        target: python
+          content_type: audio/mpeg
+      - type: execute_routine
+        routine: upload_artifact
         args:
-        - -c
-        - import hashlib, sys; from pathlib import Path; p = Path(sys.argv[1]); print(hashlib.file_digest(p.open('rb'),
-          'sha256').hexdigest(), end='')
-        - '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-        save_state: song_abc_hash
-      - type: execute_command
-        target: python
-        args:
-        - -c
-        - import os, sys; print(os.path.getsize(sys.argv[1]), end='')
-        - '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-        save_state: song_abc_size
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/upload-url'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          artifactId: song-abc
-          sha256: '{actions[song_abc_hash][stdout]}'
-          size: '{actions[song_abc_size][stdout]}'
-        save_state: song_abc_upload
-      - type: send_http_request
-        url: '{actions[song_abc_upload][body][uploadUrl]}'
-        method: post
-        header:
-          Content-Type: text/vnd.abc
-        body_file: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
-        timeout: 120
-        save_state: song_abc_stored
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          uploadId: '{actions[song_abc_upload][body][uploadId]}'
-          storageId: '{actions[song_abc_stored][body][storageId]}'
-          name: '{params[name]}.abc'
-          nodeName: generate-song
+          artifact_path: '{session[output_dir]}/{params[name]}/{params[name]}.abc'
+          artifact_id: song-abc
+          node_name: '{node[name]}'
           label: ABC notation
+          content_type: text/vnd.abc
     - name: generate-cover
-      finally:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: process_failed
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: failed
-        ignore_error: true
       precondition:
-        operator: exit_code
-        target:
-        - '{sys[cache_dir]}/bin/sd-cli'
-        - --help
+        operator: file_exists
+        path: '{sys[cache_dir]}/bin/sd-cli'
       postcondition:
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/cover.png'
@@ -514,70 +388,16 @@ pipeline:
           props:
           - operator: file_exists
             path: '{session[output_dir]}/{params[name]}/cover.png'
-      - type: execute_command
-        target: python
+      after_run:
+      - type: execute_routine
+        routine: upload_artifact
         args:
-        - -c
-        - import hashlib, sys; from pathlib import Path; p = Path(sys.argv[1]); print(hashlib.file_digest(p.open('rb'),
-          'sha256').hexdigest(), end='')
-        - '{session[output_dir]}/{params[name]}/cover.png'
-        save_state: cover_png_hash
-      - type: execute_command
-        target: python
-        args:
-        - -c
-        - import os, sys; print(os.path.getsize(sys.argv[1]), end='')
-        - '{session[output_dir]}/{params[name]}/cover.png'
-        save_state: cover_png_size
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/upload-url'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          artifactId: cover-png
-          sha256: '{actions[cover_png_hash][stdout]}'
-          size: '{actions[cover_png_size][stdout]}'
-        save_state: cover_png_upload
-      - type: send_http_request
-        url: '{actions[cover_png_upload][body][uploadUrl]}'
-        method: post
-        header:
-          Content-Type: image/png
-        body_file: '{session[output_dir]}/{params[name]}/cover.png'
-        timeout: 120
-        save_state: cover_png_stored
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          uploadId: '{actions[cover_png_upload][body][uploadId]}'
-          storageId: '{actions[cover_png_stored][body][storageId]}'
-          name: cover.png
-          nodeName: generate-cover
+          artifact_path: '{session[output_dir]}/{params[name]}/cover.png'
+          artifact_id: cover-png
+          node_name: '{node[name]}'
           label: Cover image
+          content_type: image/png
     - name: separate-vocals
-      finally:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: process_failed
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: failed
-        ignore_error: true
       postcondition: &id001
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
@@ -597,21 +417,6 @@ pipeline:
           path: '{session[output_dir]}/{params[name]}/separated/htdemucs/{params[name]}/vocals.wav'
         postcondition: *id001
     - name: transcribe-vocals
-      finally:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: process_failed
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: failed
-        ignore_error: true
       postcondition:
         operator: file_exists
         path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
@@ -634,97 +439,202 @@ pipeline:
           props:
           - operator: file_exists
             path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
-      - type: execute_command
-        target: python
+      after_run:
+      - type: execute_routine
+        routine: upload_artifact
         args:
-        - -c
-        - import hashlib, sys; from pathlib import Path; p = Path(sys.argv[1]); print(hashlib.file_digest(p.open('rb'),
-          'sha256').hexdigest(), end='')
-        - '{session[output_dir]}/{params[name]}/transcript/vocals.json'
-        save_state: transcript_json_hash
-      - type: execute_command
-        target: python
-        args:
-        - -c
-        - import os, sys; print(os.path.getsize(sys.argv[1]), end='')
-        - '{session[output_dir]}/{params[name]}/transcript/vocals.json'
-        save_state: transcript_json_size
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/upload-url'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          artifactId: transcript-json
-          sha256: '{actions[transcript_json_hash][stdout]}'
-          size: '{actions[transcript_json_size][stdout]}'
-        save_state: transcript_json_upload
-      - type: send_http_request
-        url: '{actions[transcript_json_upload][body][uploadUrl]}'
-        method: post
-        header:
-          Content-Type: application/json
-        body_file: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
-        timeout: 120
-        save_state: transcript_json_stored
-      - type: send_http_request
-        url: '{session[server]}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: Bearer {session[token]}
-          Content-Type: application/json
-        body:
-          requestId: '{request[requestId]}'
-          uploadId: '{actions[transcript_json_upload][body][uploadId]}'
-          storageId: '{actions[transcript_json_stored][body][storageId]}'
-          name: vocals.json
-          nodeName: transcribe-vocals
+          artifact_path: '{session[output_dir]}/{params[name]}/transcript/vocals.json'
+          artifact_id: transcript-json
+          node_name: '{node[name]}'
           label: Vocal transcript
-    - name: complete-request
-      depends_on:
-      - generate-song
-      - generate-cover
-      - separate-vocals
-      - transcribe-vocals
-      before_run:
-      - type: send_http_request
-        url: '{session[server]}/api/notifications/send'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          title: Song pipeline completed
-          message: 'Request {request[requestId]} for {params[name]} completed successfully'
-        ignore_error: true
-      finally:
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: succeeded
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: success
-        ignore_error: true
-      - type: send_http_request
-        url: '{session[server]}/api/requests/report'
-        method: post
-        header:
-          Authorization: "******"
-          Content-Type: application/json
-        body:
-          id: '{request[requestId]}'
-          status: process_failed
-        precondition:
-          operator: node_state
-          target: [status]
-          expected: failed
-        ignore_error: true
+          content_type: application/json
+routines:
+  send_notification:
+    params:
+      title:
+        type: string
+      message:
+        type: string
+      tags:
+        type: array
+        default: []
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/notifications/send'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        title: '{params[title]}'
+        message: '{params[message]}'
+        tags: '{params[tags]}'
+  report_node_status:
+    params:
+      status:
+        type: string
+      logs:
+        type: array
+        default: []
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/requests/report'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        id: '{request[requestId]}'
+        node_states:
+          '{node[name]}':
+            status: '{params[status]}'
+            logs: '{params[logs]}'
+  report_request_status:
+    params:
+      status:
+        type: string
+    actions:
+    - type: send_http_request
+      url: '{session[server]}/api/requests/report'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        id: '{request[requestId]}'
+        status: '{params[status]}'
+  upload_artifact:
+    params:
+      artifact_path:
+        type: string
+      artifact_id:
+        type: string
+      node_name:
+        type: string
+      label:
+        type: string
+        default: Artifact
+      content_type:
+        type: string
+        default: application/octet-stream
+    actions:
+    - type: inspect_file
+      target: '{params[artifact_path]}'
+      save_state: file_info
+    - type: send_http_request
+      url: '{session[server]}/api/requests/artifacts/upload-url'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        requestId: '{request[requestId]}'
+        artifactId: '{params[artifact_id]}'
+        sha256: '{actions[file_info][sha256]}'
+        size: '{actions[file_info][size]}'
+      save_state: upload
+    - type: send_http_request
+      url: '{actions[upload][body][uploadUrl]}'
+      method: post
+      header:
+        Content-Type: '{params[content_type]}'
+      body_file: '{actions[file_info][path]}'
+      timeout: 120
+      save_state: stored
+    - type: send_http_request
+      url: '{session[server]}/api/requests/artifacts/complete'
+      method: post
+      header:
+        Authorization: Bearer {session[token]}
+        Content-Type: application/json
+      body:
+        requestId: '{request[requestId]}'
+        uploadId: '{actions[upload][body][uploadId]}'
+        storageId: '{actions[stored][body][storageId]}'
+        name: '{actions[file_info][name]}'
+        nodeName: '{params[node_name]}'
+        label: '{params[label]}'
+      save_state: registered
+    returns: '{actions[registered][body]}'
+events:
+- 'on': pipeline_started
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: processing
+- 'on': node_started
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: running
+      logs:
+      - 'Started {event[node][name]}: {event[node][total_units]} units on {event[node][device][family]}:{event[node][device][index]}.'
+- 'on': node_finished
+  do:
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: succeeded
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_node_status
+    args:
+      status: failed
+      logs:
+      - 'Finished {event[node][name]}: {event[node][status]}; skipped={event[node][skipped]};
+        blocked={event[node][blocked]}; error={event[error]}.'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed
+- 'on': pipeline_finished
+  do:
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: succeeded
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success
+  - type: execute_routine
+    routine: report_request_status
+    args:
+      status: process_failed
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: failed
+- 'on': pipeline_finished
+  do:
+  - type: execute_routine
+    routine: send_notification
+    args:
+      title: Song pipeline completed
+      message: Request {request[requestId]} for {params[name]} completed successfully
+    context:
+      node:
+        status: '{event[pipeline][status]}'
+    precondition:
+      operator: node_state
+      target:
+      - status
+      expected: success

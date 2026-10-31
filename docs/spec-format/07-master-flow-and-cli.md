@@ -153,3 +153,6 @@ See [the executable example](../../examples/master-flow-artifacts/spec.yaml), wh
 Request and node execution statuses are not automatically synchronized back to
 MasterFlow. The worker still reports its availability through the unit heartbeat;
 the user-defined lifecycle actions remain available for explicit notifications.
+
+Shared request/node reporting can be configured with [lifecycle events](10-events.md),
+without repeating report actions in every node. Uploads remain explicit spec actions.

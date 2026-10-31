@@ -79,8 +79,8 @@ body:
 Keys must resolve to non-empty strings; unresolved key templates and duplicate keys
 after rendering fail before writing/sending. Whole-value templates retain lists,
 objects and numbers. Structural spec keys and mapping keys in other fields retain
-their existing behavior. Mu already reports request/node lifecycle automatically;
-avoid competing manual lifecycle reports in routine actions.
+their existing behavior. Mu does not report request/node lifecycle automatically. Configure shared
+[lifecycle event hooks](10-events.md) to call reporting routines once per transition.
 
 See the [safe local executable demo](../../examples/routines/spec.yaml). Download
 and upload routines are user-defined compositions of HTTP/file actions, not built-ins.
