@@ -1,6 +1,9 @@
 """Runtime for the workload/pipeline spec format."""
 from __future__ import annotations
 
+import hashlib
+import re
+import stat
 import json
 from contextlib import ExitStack
 import tempfile
@@ -85,6 +88,8 @@ def read_data(path: Path) -> Any:
 
 
 def params_for(schema: dict[str, Any], supplied: dict[str, Any], context: dict[str, Any], label: str) -> dict[str, Any]:
+    if not isinstance(schema, dict) or not isinstance(supplied, dict):
+        raise RuntimeError(f"{label}: params and args must be mappings")
     result = {}
     for name, declaration in schema.items():
         declaration = declaration if isinstance(declaration, dict) else {}
@@ -94,6 +99,10 @@ def params_for(schema: dict[str, Any], supplied: dict[str, Any], context: dict[s
             value = declaration["default"]
         else:
             raise RuntimeError(f"{label} requires parameter {name!r}")
+        value = _render(value, context)
+        kind = declaration.get("type")
+        if kind in {"array", "object", "boolean"} and not isinstance(value, {"array": list, "object": dict, "boolean": bool}[kind]):
+            raise RuntimeError(f"{label}.{name} must be {kind}")
         if declaration.get("type") == "string" and not isinstance(value, str):
             raise RuntimeError(f"{label}.{name} must be a string")
         if declaration.get("type") == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
@@ -158,22 +167,79 @@ def _apply_context(target: dict[str, Any], values: Any) -> None:
         target.update(values)
 
 
+def render_payload(value: Any, context: dict[str, Any]) -> Any:
+    """Render data keys without changing structural spec keys."""
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            key = _render(key, context)
+            if not isinstance(key, str) or not key.strip() or re.search(r"\{[^{}]+\}", key):
+                raise RuntimeError("payload key must resolve to a non-empty string")
+            if key in result:
+                raise RuntimeError(f"duplicate rendered payload key {key!r}")
+            result[key] = render_payload(item, context)
+        return result
+    if isinstance(value, list):
+        return [render_payload(item, context) for item in value]
+    rendered = _render(value, context)
+    if isinstance(rendered, (dict, list)):
+        return render_payload(rendered, context)
+    return rendered
+
+
+def validate_routines(spec: dict) -> None:
+    routines = spec.get("routines", {})
+    if not isinstance(routines, dict):
+        raise RuntimeError("routines must be a mapping")
+    visited, visiting = set(), set()
+    def visit(name):
+        if name in visiting:
+            raise RuntimeError(f"routines.{name}: routine call cycle")
+        if name in visited:
+            return
+        declaration = routines.get(name)
+        if not isinstance(name, str) or not name.strip() or not isinstance(declaration, dict):
+            raise RuntimeError(f"routines.{name}: undefined or invalid routine")
+        if not isinstance(declaration.get("params", {}), dict):
+            raise RuntimeError(f"routines.{name}.params must be a mapping")
+        for param, field in declaration.get("params", {}).items():
+            if not isinstance(field, dict) or field.get("type") not in {None, "string", "number", "boolean", "array", "object"}:
+                raise RuntimeError(f"routines.{name}.params.{param}: invalid parameter declaration")
+        actions = declaration.get("actions")
+        if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+            raise RuntimeError(f"routines.{name}.actions must be a list of action mappings")
+        visiting.add(name)
+        for action in actions:
+            if action.get("type") == "execute_workload":
+                raise RuntimeError(f"routines.{name}: execute_workload is not supported inside routines")
+            if action.get("type") == "execute_routine":
+                target = action.get("routine")
+                if not isinstance(target, str) or not target or re.search(r"[{}]", target):
+                    raise RuntimeError(f"routines.{name}: routine must be a literal name")
+                visit(target)
+        visiting.remove(name)
+        visited.add(name)
+    for name in routines:
+        visit(name)
+
+
 def run_action(
     action: dict[str, Any], context: dict[str, Any], states: dict[str, str], workdir: Path,
     *, label: str = "action", spec: dict[str, Any] | None = None,
-    device: ComputeDevice | None = None,
+    device: ComputeDevice | None = None, routine_stack: tuple[str, ...] = (),
+    allow_workload: bool = True,
 ) -> None:
     typ = action.get("type")
     if "action" in action:
         raise RuntimeError(f"{label}: use type, not action")
-    if not isinstance(typ, str) or typ not in {"execute_command", "execute_workload", "create_dir", "write_json", "send_http_request"}:
+    if not isinstance(typ, str) or typ not in {"execute_command", "execute_workload", "create_dir", "write_json", "send_http_request", "inspect_file", "execute_routine"}:
         raise RuntimeError(f"{label}: unknown action type {typ!r}; use snake_case names")
-    if typ == "execute_workload" and spec is None:
+    if typ == "execute_workload" and (spec is None or not allow_workload):
         raise RuntimeError(f"{label}: execute_workload is only supported in node before_run, run and after_run")
     if "save_response_to_context" in action:
         raise RuntimeError(f"{label}: save_response_to_context was removed; use save_state")
-    if "save_state" in action and typ not in {"execute_command", "send_http_request"}:
-        raise RuntimeError(f"{label}: save_state is only supported by execute_command and send_http_request")
+    if "save_state" in action and typ not in {"execute_command", "send_http_request", "inspect_file", "execute_routine"}:
+        raise RuntimeError(f"{label}: save_state requires a command, HTTP, inspect_file or execute_routine action")
     _apply_context(context, _render(action.get("context", {}), context))
     if action.get("skip_if") and condition(action["skip_if"], context, states):
         print(f"[SKIP] {label} ({typ}): skip_if matched", flush=True)
@@ -196,7 +262,50 @@ def run_action(
     started = time.perf_counter()
     print(f"[ACTION] {label}: {typ} started", flush=True)
     try:
-        if typ == "execute_command":
+        for field in ({"send_http_request": ["body"], "write_json": ["content"]}.get(typ, [])):
+            if field in action:
+                values[field] = render_payload(action[field], context)
+        if typ == "execute_routine":
+            name = action.get("routine")
+            if not isinstance(name, str) or not name or re.search(r"[{}]", name):
+                raise RuntimeError("execute_routine.routine must be a literal name")
+            if name in routine_stack:
+                raise RuntimeError(f"routine call cycle: {' -> '.join((*routine_stack, name))}")
+            declaration = (spec or {}).get("routines", {}).get(name)
+            if not isinstance(declaration, dict):
+                raise RuntimeError(f"routine {name!r} is not defined")
+            local = deepcopy(context)
+            local["params"] = params_for(declaration.get("params", {}), values.get("args", {}), context, f"routine {name}")
+            local["actions"] = {}
+            actions = declaration.get("actions")
+            if not isinstance(actions, list) or not all(isinstance(a, dict) for a in actions):
+                raise RuntimeError(f"routine {name}.actions must be a list of action mappings")
+            for index, child in enumerate(actions):
+                run_action(child, local, states, workdir, label=f"{label}/{name}.actions[{index}]",
+                           spec=spec, routine_stack=(*routine_stack, name), allow_workload=False)
+            result["output"] = _render(declaration.get("returns"), local)
+        elif typ == "inspect_file":
+            target = values.get("target")
+            if not isinstance(target, str) or not target.strip():
+                raise RuntimeError("inspect_file.target must be a non-empty path")
+            path = Path(target).expanduser()
+            path = (path if path.is_absolute() else workdir / path).resolve()
+            if not path.is_file():
+                raise RuntimeError("inspect_file.target must be a regular file")
+            with path.open("rb") as source:
+                before = os.fstat(source.fileno())
+                if not stat.S_ISREG(before.st_mode):
+                    raise RuntimeError("inspect_file.target must be a regular file")
+                digest = hashlib.sha256()
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                after = os.fstat(source.fileno())
+            current = path.stat()
+            signature = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            if signature(before) != signature(after) or signature(after) != signature(current):
+                raise RuntimeError("file changed during inspection")
+            result.update(path=str(path), name=path.name, size=after.st_size, sha256=digest.hexdigest())
+        elif typ == "execute_command":
             target = values.get("target")
             args = values.get("args", [])
             if not target or not isinstance(args, list):
@@ -288,6 +397,7 @@ def run_action(
                 raise RuntimeError("postcondition failed")
             print(f"[CHECK] {label}: postcondition passed", flush=True)
     except Exception as exc:
+        result.pop("output", None)
         result.update(success=False, error={"type": type(exc).__name__, "message": str(exc)})
         if key is not None:
             context.setdefault("actions", {})[key] = result
@@ -373,7 +483,7 @@ def _execute_node(
     for index, action in enumerate(node.get("finally", []), start=1):
         node_context["node"]["status"] = state
         try:
-            run_action(action, node_context, final_states, workdir, label=f"{pipeline_name}/{name} finally[{index}]")
+            run_action(action, node_context, final_states, workdir, label=f"{pipeline_name}/{name} finally[{index}]", spec=spec, allow_workload=False)
         except Exception as exc:
             state, error = "failed", str(exc)
             final_states[name] = state
@@ -572,6 +682,7 @@ class Flow:
             raise RuntimeError("spec.prepare was removed; move actions to pipeline.<name>.prepare or entries.<entry>.initialization")
         if "master-flow" in spec:
             raise RuntimeError("spec.master-flow was removed; use entries.master_flow and server request claiming")
+        validate_routines(spec)
         entries = spec.get("entries", {})
         if not isinstance(entries, dict):
             raise RuntimeError("entries must be a mapping")
@@ -601,14 +712,14 @@ class Flow:
 
     def initialize(self) -> None:
         for index, action in enumerate(self.lifecycle.get("initialization", [])):
-            run_action(action, self.context, {}, self.workdir, label=f"entry initialization[{index}]")
+            run_action(action, self.context, {}, self.workdir, label=f"entry initialization[{index}]", spec=self.spec, allow_workload=False)
 
     def finalize(self, failed: bool) -> None:
         self.context["entry"]["status"] = "failed" if failed else "success"
         errors = []
         for index, action in enumerate(self.lifecycle.get("finalization", [])):
             try:
-                run_action(action, self.context, {}, self.workdir, label=f"entry finalization[{index}]")
+                run_action(action, self.context, {}, self.workdir, label=f"entry finalization[{index}]", spec=self.spec, allow_workload=False)
             except Exception as exc:
                 errors.append(str(exc))
                 self.context["entry"]["status"] = "failed"
@@ -636,7 +747,7 @@ class Flow:
                 if name not in self.prepared:
                     try:
                         for index, action in enumerate(definition.get("prepare", [])):
-                            run_action(action, context, {}, self.workdir, label=f"pipeline {name} prepare[{index}]")
+                            run_action(action, context, {}, self.workdir, label=f"pipeline {name} prepare[{index}]", spec=self.spec, allow_workload=False)
                         from mu.pipelines import _discover_models
                         context["sys"]["models"] = _discover_models(Path(context["sys"]["cache_dir"]))
                         self.prepared[name] = context
