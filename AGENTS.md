@@ -24,6 +24,7 @@ Do not assume that fields in the legacy `processors`/`pipelines`/`steps` format 
 
 - The workload/pipeline format uses `workloads`, singular `pipeline`, and node action lists with `type: execute_workload`; the media example uses this format.
 - Entry lifecycle and lazy pipeline preparation follow [the lifecycle guide](docs/spec-format/07-master-flow-and-cli.md).
+- For the complete request → pipeline preparation → node-job construction → GPU admission → node execution → reporting path, read [the request-to-node scheduling workflow](docs/request-to-node-scheduling.md) before changing the scheduler or reporting behavior.
 - Every request gets an isolated pipeline context. Pipeline context is merged once, parameter values are validated, and node contexts are copied before node-local additions.
 - The base context contains `sys` and `session`. Pipelines add `params`; nodes add `node`; scheduled GPU workloads add `schedule`.
 - Workload `params` are a declared schema. Missing required values and unknown supplied values are errors; string and number types are not implicitly coerced.
