@@ -18,7 +18,8 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from copy import deepcopy
 from typing import Any
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -26,6 +27,15 @@ from mu.spec_yaml import load_spec_yaml
 from mu.http_headers import request_headers
 from mu.hardware import ComputeDevice
 from mu.pipelines import _render
+
+
+class _SafeRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and urlsplit(req.full_url)[:2] != urlsplit(newurl)[:2]:
+            for name in ("Authorization", "Cookie", "X-mu-assignment-version"):
+                redirected.remove_header(name)
+        return redirected
 
 
 class RuntimeError(ValueError):
@@ -405,6 +415,10 @@ def run_action(
                 return (path if path.is_absolute() else workdir / path).resolve()
             destination = file_path("response_file") if "response_file" in values else None
             headers = request_headers(values.get("header", {}))
+            server = context.get("session", {}).get("server")
+            assignment = context.get("request", {}).get("assignmentVersion")
+            if server and assignment is not None and urlsplit(values["url"])[:2] == urlsplit(server)[:2]:
+                headers["X-Mu-Assignment-Version"] = str(assignment)
             with ExitStack() as resources:
                 if "body_file" in values:
                     source = file_path("body_file")
@@ -419,7 +433,7 @@ def run_action(
                 req = Request(values["url"], data=payload, headers=headers, method=str(values.get("method", "get")).upper())
                 http_error = None
                 try:
-                    response = urlopen(req, timeout=timeout)
+                    response = build_opener(_SafeRedirect()).open(req, timeout=timeout)
                 except HTTPError as exc:
                     response = exc
                     http_error = exc

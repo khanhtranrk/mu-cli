@@ -530,7 +530,9 @@ def master_flow_run(
                         if item["requestId"] in seen:
                             raise ValueError("server reclaimed a request already seen in this flow; narrow --by-status")
                         seen.add(item["requestId"])
-                        metadata = {"requestId": item["requestId"], "specSlug": item["specSlug"]}
+                        metadata = {"requestId": item["requestId"], "specSlug": item["specSlug"], "assignmentVersion": item.get("assignmentVersion")}
+                        if not isinstance(metadata["assignmentVersion"], int) or isinstance(metadata["assignmentVersion"], bool) or metadata["assignmentVersion"] < 1:
+                            raise ValueError("claim response requires a positive assignmentVersion; update MasterFlow")
                         if item["specSlug"] != spec_slug:
                             raise ValueError("claim returned a different specSlug")
                         parsed.append((item["pipelineName"], item["payload"], metadata))

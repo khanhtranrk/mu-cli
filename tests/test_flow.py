@@ -124,7 +124,7 @@ class FlowTests(unittest.TestCase):
                 "params": {"name": {"type": "string"}}, "nodes": [{"name": "save",
                 "before_run": [write("{session[working_dir]}/{params[name]}.json", "{request[requestId]}"), notify("node")]}]}}}
         events, selections = [], []
-        batches = [[{"requestId": str(i), "specSlug": "demo", "pipelineName": "demo", "payload": {"name": str(i)}}] for i in (1, 2)] + [[]]
+        batches = [[{"requestId": str(i), "specSlug": "demo", "pipelineName": "demo", "assignmentVersion": 1, "payload": {"name": str(i)}}] for i in (1, 2)] + [[]]
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass

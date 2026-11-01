@@ -320,3 +320,9 @@ snake_case names (`command`, `create_dir`, `write_json_from_context`,
 ## Reusable routines and file inspection
 
 `execute_routine` and `inspect_file` also support `save_state`. See [Routines](09-routines.md) for the complete schema, isolated context, returns and dynamic payload keys.
+
+## MasterFlow storage transfers
+
+For the S3 artifact protocol, use the upload-url response's `method`, `uploadUrl` and `headers` directly in a send_http_request action. Upload raw `body_file` bytes; a successful PUT may have an empty response. Complete with requestId/uploadId/name, without a storageId. For downloads, request download-url first using worker auth, then fetch its URL with a separate action without the worker Authorization header. The generic action supports these flows without provider-specific SDKs.
+
+Mu includes the claimed request's assignmentVersion in X-Mu-Assignment-Version automatically for request-context HTTP actions targeting the configured MasterFlow origin. It is not sent to other origins. Cross-origin redirects strip Authorization, Cookie and assignment headers. See [MasterFlow CLI](07-master-flow-and-cli.md) and the CPU-only master-flow-artifacts example. Source hashing does not imply the storage provider verified a cryptographic checksum; use an explicit downloaded-file comparison when required.

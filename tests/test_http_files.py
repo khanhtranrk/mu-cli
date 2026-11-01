@@ -19,6 +19,7 @@ class HttpFileTests(unittest.TestCase):
         self.uploads = []
         uploads = self.uploads
 
+        test_case = self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
@@ -29,7 +30,11 @@ class HttpFileTests(unittest.TestCase):
                 self.end_headers()
                 self.wfile.write(json.dumps({'storageId': 'file'}).encode())
 
+            do_PUT = do_POST
+
             def do_GET(self):
+                if self.path == '/redirect':
+                    self.send_response(302); self.send_header('Location', test_case.redirect_target); self.end_headers(); return
                 if self.path == '/error':
                     self.send_response(401)
                     self.end_headers()
@@ -91,6 +96,32 @@ class HttpFileTests(unittest.TestCase):
         result = self.action(method='post', body={'message': 'hello'})
         self.assertEqual(json.loads(self.uploads[0][0]), {'message': 'hello'})
         self.assertEqual(result['body'], {'storageId': 'file'})
+
+    def test_assignment_header_and_cross_origin_credential_stripping(self):
+        self.context = {'session': {'server': self.url}, 'request': {'assignmentVersion': 7}}
+        self.action(method='post', body={'status': 'processing'}, header={'Authorization': 'Bearer worker'})
+        self.assertEqual(self.uploads[-1][1]['X-Mu-Assignment-Version'], '7')
+        captured = []
+        class Storage(BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                captured.append(dict(self.headers)); self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+            def do_PUT(self):
+                captured.append(dict(self.headers)); self.rfile.read(int(self.headers['Content-Length'])); self.send_response(204); self.end_headers()
+        external = ThreadingHTTPServer(('127.0.0.1', 0), Storage)
+        threading.Thread(target=external.serve_forever, daemon=True).start()
+        self.addCleanup(external.server_close); self.addCleanup(external.shutdown)
+        target = f'http://127.0.0.1:{external.server_port}'
+        self.redirect_target = target
+        self.action(url=self.url+'/redirect', header={'Authorization': 'Bearer worker', 'Cookie': 'secret'})
+        self.assertNotIn('Authorization', captured[-1]); self.assertNotIn('Cookie', captured[-1])
+        self.assertNotIn('X-Mu-Assignment-Version', captured[-1])
+        (self.root/'file').write_bytes(b'bytes')
+        self.context['actions']['issue'] = {'body': {'url': target, 'method': 'PUT', 'headers': {'Content-Type': 'text/plain'}}}
+        result = self.action(url='{actions[issue][body][url]}', method='{actions[issue][body][method]}', header='{actions[issue][body][headers]}', body_file='file')
+        self.assertEqual(result['status_code'], 204); self.assertIsNone(result['body'])
+        self.assertNotIn('Authorization', captured[-1]); self.assertNotIn('X-Mu-Assignment-Version', captured[-1])
+        self.assertEqual(captured[-1]['Content-Length'], '5')
 
 
 if __name__ == '__main__':
