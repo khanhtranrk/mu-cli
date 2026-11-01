@@ -4,6 +4,8 @@ This directory is reserved for cross-repository architecture, integration contra
 
 ## Canonical references
 
+- [Coordinated multi-storage cutover](storage-migration.md)
+
 - [MU CLI specification and execution](https://github.com/khanhtranrk/mu-cli/blob/master/docs/spec-format/README.md)
 - [MU CLI README](https://github.com/khanhtranrk/mu-cli/blob/master/README.md)
 - [MasterFlow architecture and data model](https://github.com/khanhtranrk/mu-masterflow/blob/main/docs/architecture.md)
