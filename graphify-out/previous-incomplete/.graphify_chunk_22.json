@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "mu_masterflow_src_tauri_icons_square89x89logo_mu_app_icon",
+      "label": "MU App Icon",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square89x89logo_interlocking_loop_mark",
+      "label": "Interlocking Loop Mark",
+      "file_type": "concept",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square89x89logo_teal_and_gold_palette",
+      "label": "Teal and Gold Palette",
+      "file_type": "concept",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "mu_masterflow_src_tauri_icons_square89x89logo_mu_app_icon",
+      "target": "mu_masterflow_src_tauri_icons_square89x89logo_interlocking_loop_mark",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mu_masterflow_src_tauri_icons_square89x89logo_mu_app_icon",
+      "target": "mu_masterflow_src_tauri_icons_square89x89logo_teal_and_gold_palette",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "coverage": {
+    "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square89x89Logo.png": 1
+  }
+}

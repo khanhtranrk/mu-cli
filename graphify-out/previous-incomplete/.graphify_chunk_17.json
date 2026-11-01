@@ -1,0 +1,107 @@
+{
+  "nodes": [
+    {
+      "id": "mu_masterflow_src_tauri_icons_square284x284logo_abstract_circular_logo",
+      "label": "Abstract Circular Logo",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square284x284logo_golden_arc",
+      "label": "Golden Circular Arc",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square284x284logo_cyan_arc",
+      "label": "Cyan Circular Arc",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square284x284logo_golden_circle",
+      "label": "Golden Circle",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mu_masterflow_src_tauri_icons_square284x284logo_cyan_circle",
+      "label": "Cyan Circle",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "mu_masterflow_src_tauri_icons_square284x284logo_abstract_circular_logo",
+      "target": "mu_masterflow_src_tauri_icons_square284x284logo_golden_arc",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mu_masterflow_src_tauri_icons_square284x284logo_abstract_circular_logo",
+      "target": "mu_masterflow_src_tauri_icons_square284x284logo_cyan_arc",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mu_masterflow_src_tauri_icons_square284x284logo_abstract_circular_logo",
+      "target": "mu_masterflow_src_tauri_icons_square284x284logo_golden_circle",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mu_masterflow_src_tauri_icons_square284x284logo_abstract_circular_logo",
+      "target": "mu_masterflow_src_tauri_icons_square284x284logo_cyan_circle",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "coverage": {
+    "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square284x284Logo.png": 1
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "src_tauri_icons_square44x44logo_mu_app_icon",
+      "label": "MU App Icon",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "src_tauri_icons_square44x44logo_interlocking_ring_motif",
+      "label": "Interlocking Ring Motif",
+      "file_type": "concept",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "src_tauri_icons_square44x44logo_teal_and_gold_palette",
+      "label": "Teal-and-Gold Palette",
+      "file_type": "concept",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_tauri_icons_square44x44logo_mu_app_icon",
+      "target": "src_tauri_icons_square44x44logo_interlocking_ring_motif",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "src_tauri_icons_square44x44logo_mu_app_icon",
+      "target": "src_tauri_icons_square44x44logo_teal_and_gold_palette",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "coverage": {
+    "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/Square44x44Logo.png": 0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "id": "mu_masterflow_src_tauri_icons_icon_abstract_mu_logo",
+      "label": "Abstract MU Logo",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/icon.png",
+      "source_location": "Centered graphic on black background",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "coverage": {
+    "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/icon.png": 0
+  }
+}

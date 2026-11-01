@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "id": "mu_masterflow_src_tauri_icons_32x32_interlocking_loop_icon",
+      "label": "Interlocking Loop Icon",
+      "file_type": "image",
+      "source_file": "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/32x32.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "coverage": {
+    "/home/dkta/Projects/mu/mu-masterflow/src-tauri/icons/32x32.png": 1
+  }
+}
