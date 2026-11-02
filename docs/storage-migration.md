@@ -9,3 +9,7 @@ The initial development cutover backfilled 89 legacy artifact references without
 A disposable CLI request verified real private R2 upload, finalization and download. Unsigned access failed; deleting its artifact record stopped new URL issuance and retained the physical file. Only disposable test requests/specs were archived and their tokens revoked. After configuring bucket CORS, preflight succeeded for both local browser origins at port 4175 and rejected an unlisted origin. A browser at `http://127.0.0.1:4175` then uploaded directly, finalized through Convex and downloaded matching bytes successfully. Supabase and native Tauri transfer verification remain separate checks.
 
 When moving Convex servers, transfer the database and the storage encryption key separately. External object locations and stable connection IDs remain unchanged. Preserve the old Convex files until a deliberate physical migration has been verified.
+
+## Artifact/File identity upgrade
+
+Creation Spaces phase 2 adds independent Artifact/File identity and ownership while preserving worker output-key payloads. Use the canonical [MasterFlow Artifact ownership migration](../mu-masterflow/docs/artifact-ownership.md#metadata-migration); track cross-repository delivery in the [upgrade tracker](creation-spaces-upgrade.md). This metadata backfill does not move or delete physical files.
