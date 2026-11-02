@@ -47,5 +47,7 @@ Run Python/uv commands inside `mu-cli/` and Bun/Convex/Tauri commands inside `mu
   [CLI CEL Specs](mu-cli/docs/spec-format/11-cel.md) and
   [MasterFlow CEL integration](mu-masterflow/docs/spec-cel.md). Both submodules
   carry an identical CEL conformance fixture; update and validate both together.
+  CEL is the only Spec expression engine; omitted declarations also mean `cel-v1`.
+  Do not restore the Python-format renderer or removed migration UI/CLI.
 - The prior development reset is historical authorization, not blanket permission
   for later resets. Verify the target and current user scope before deleting data.

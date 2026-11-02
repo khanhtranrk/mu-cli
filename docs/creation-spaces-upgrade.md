@@ -1,6 +1,6 @@
 # Creation Spaces upgrade tracker
 
-Status: phases 1–5 delivered; an explicitly authorized dev-only cleanup on 2026-11-03 supersedes their Artifact backward-compatibility layers. Current implementation details are canonical in the submodule documents linked below.
+Status: phases 1–5 delivered; an explicitly authorized dev-only cleanup on 2026-11-03 supersedes their Artifact backward-compatibility layers. A later CEL-only cutover supersedes the dual-engine/migration behavior described in the historical phase-5 notes. Current implementation details are canonical in the submodule documents linked below.
 
 ## Confirmed decisions
 
@@ -130,9 +130,9 @@ model, so no legacy Artifact migration/adapter layer is retained.
   [worker context](../mu-cli/docs/spec-format/07-master-flow-and-cli.md).
   Submodule changes are committed/pushed before updating this parent’s gitlinks.
 
-## CEL migration classification fix
+## Historical CEL migration fix (tooling now removed)
 
-The migration visitor now distinguishes Spec identifiers from JSON data fields,
+The former migration visitor distinguished Spec identifiers from JSON data fields,
 including fields named `name`, `type`, etc. Dynamic keys convert only in the HTTP
 body/JSON-content regions whose runtime renders keys. Eight shared fixtures keep
 CLI/MasterFlow behavior aligned; dynamic structural keys, key collisions and
@@ -145,3 +145,29 @@ syntax validators/editor checks without running workloads or changing saved Spec
 Verification for this fix: 127 Bun, 51 Node and 45 Python tests passed (one existing
 conditional Node skip); frontend/backend typechecks and Vite build passed. No
 media/model workloads executed, and no stored Spec or Request was migrated.
+
+## CEL-only cutover — 2026-11-03
+
+The user explicitly chose to remove the old expression engine. Both submodules
+now use CEL exclusively; omitted declarations select `cel-v1`, and other engines
+are rejected. Legacy renderers, migration CLI/module/fixtures and Preview CEL
+migration UI are removed. Worker bootstrap advertises CEL only; claim requires
+`expressionEngine: cel-v1`. Creation Spaces remain organizational only.
+
+Canonical CLI docs, all eight bundled example Specs, the authoring skill/template,
+MasterFlow docs and agent guides now describe CEL. The complete CPU documentation
+example was executed successfully; media/GPU workloads were not executed.
+
+The existing self-hosted dev backend (`http://127.0.0.1:3210`) was backed up, all
+13 stored Specs (including 12 archived ones) were explicitly rewritten to CEL,
+and functions synchronized. Snapshot comparison verified that only Spec YAML
+changed; every other table, including Requests and Registry snapshots, is unchanged.
+No reset, storage operation or schema migration was performed.
+
+Validation: 43 Python CPU-only tests, 176 Bun tests and 51 standalone Node tests
+passed; one existing DST test was skipped in each JS runner. Frontend/backend
+typechecks, Vite build, example YAML/editor checks and shared fixture parity passed.
+The existing Vite chunk-size advisory remains. Update/restart running workers to
+use the new contract. Follow canonical [CLI CEL](../mu-cli/docs/spec-format/11-cel.md)
+and [MasterFlow CEL](../mu-masterflow/docs/spec-cel.md) docs; historical dual-engine
+and migration sections above no longer describe supported behavior.
