@@ -129,3 +129,19 @@ model, so no legacy Artifact migration/adapter layer is retained.
   [Request storage protocol](../mu-masterflow/docs/request-artifacts.md), and
   [worker context](../mu-cli/docs/spec-format/07-master-flow-and-cli.md).
   Submodule changes are committed/pushed before updating this parent’s gitlinks.
+
+## CEL migration classification fix
+
+The migration visitor now distinguishes Spec identifiers from JSON data fields,
+including fields named `name`, `type`, etc. Dynamic keys convert only in the HTTP
+body/JSON-content regions whose runtime renders keys. Eight shared fixtures keep
+CLI/MasterFlow behavior aligned; dynamic structural keys, key collisions and
+unsupported braces still block migration. The UI labels review notes separately.
+Whole-document syntax validation has its own bounded budget, preserving runtime
+limits. The current media example with both song-with-cover pipeline variants
+converts 317 placeholders to identical CLI/TypeScript candidates and passes both
+syntax validators/editor checks without running workloads or changing saved Specs.
+
+Verification for this fix: 127 Bun, 51 Node and 45 Python tests passed (one existing
+conditional Node skip); frontend/backend typechecks and Vite build passed. No
+media/model workloads executed, and no stored Spec or Request was migrated.
