@@ -32,3 +32,20 @@ The submodules own their detailed API, CLI, database and UI documentation. The p
 ## Development commands
 
 Run Python/uv commands inside `mu-cli/` and Bun/Convex/Tauri commands inside `mu-masterflow/`. The workspace root intentionally has no combined build or test command.
+
+
+## Current integration contracts
+
+- The five-phase Creation Spaces roadmap and the subsequent dev-only Artifact
+  cleanup are recorded in [docs/creation-spaces-upgrade.md](docs/creation-spaces-upgrade.md).
+- Current Artifact/Storage/Product behavior is canonical in
+  [MasterFlow Artifact ownership](mu-masterflow/docs/artifact-ownership.md),
+  [storage protocol](mu-masterflow/docs/request-artifacts.md), and
+  [Products/Trash](mu-masterflow/docs/products-trash.md). There is one canonical
+  Artifact table; do not bring back removed legacy adapters/backfills.
+- The CEL engine/worker contract is canonical in
+  [CLI CEL Specs](mu-cli/docs/spec-format/11-cel.md) and
+  [MasterFlow CEL integration](mu-masterflow/docs/spec-cel.md). Both submodules
+  carry an identical CEL conformance fixture; update and validate both together.
+- The prior development reset is historical authorization, not blanket permission
+  for later resets. Verify the target and current user scope before deleting data.
