@@ -1,6 +1,6 @@
 # Creation Spaces upgrade tracker
 
-Status: phases 1, 2, 3 and 4 implemented and verified locally on 2026-11-02. This is a staged implementation, not a declaration that the entire redesign is finished.
+Status: phases 1–5 implemented and verified locally; final phase delivered on 2026-11-03. The staged roadmap is complete within the documented bounded CEL profile and rollout limits.
 
 ## Confirmed decisions
 
@@ -16,11 +16,14 @@ Status: phases 1, 2, 3 and 4 implemented and verified locally on 2026-11-02. Thi
 | 2 | Separate Artifact/Physical File, ownership links, idempotent metadata backfill and legacy API adapter, Copy/Share/Clone | Implemented; verified locally |
 | 3 | Products, file protection, orphan Trash representatives, restore and retryable physical purge | Implemented; verified locally |
 | 4 | Typed Registry definitions, CEL evaluation and request snapshots, registry editing and parameter references | Implemented; verified locally |
-| 5 | Versioned CEL Spec engine in both CLI and MasterFlow, migration tooling and cross-runtime conformance | Not implemented |
+| 5 | Versioned CEL Spec engine in both CLI and MasterFlow, migration tooling and cross-runtime conformance | Implemented; verified locally |
 
 Phase 1 deliberately starts with usable organization/navigation. Phase 2 changes storage identity while preserving worker payloads and physical bytes; the Spec expression engine is unchanged.
 
 ## Ownership of documentation
+
+Phase 5: [MasterFlow CEL integration](../mu-masterflow/docs/spec-cel.md) and
+[canonical CLI CEL execution/migration](../mu-cli/docs/spec-format/11-cel.md).
 
 Phase 4: [MasterFlow Registry/CEL and input snapshots](../mu-masterflow/docs/registry-cel.md).
 
@@ -34,7 +37,7 @@ Existing expression behavior remains canonical in [CLI templates](../mu-cli/docs
 
 ## Later-phase integration contracts
 
-The target behavior is recorded in the [canonical MasterFlow design](../mu-masterflow/docs/creation-spaces.md#target-architecture-for-later-phases). Registry/CEL inputs and snapshots are delivered in phase 4; versioned CEL Spec execution remains phase 5. Artifact ownership/reuse was delivered in phase 2 and Products/Trash in phase 3.
+The target behavior is recorded in the [canonical MasterFlow design](../mu-masterflow/docs/creation-spaces.md#target-architecture-for-later-phases). Registry/CEL inputs and snapshots are delivered in phase 4; versioned CEL Spec execution is delivered in phase 5. Artifact ownership/reuse was delivered in phase 2 and Products/Trash in phase 3.
 
 - Preserve existing worker output keys and assignment/reset guards through adapters when Artifact identity becomes independent.
 - Introduce typed Registry and request snapshots before switching Spec execution to CEL.
@@ -83,4 +86,15 @@ The target behavior is recorded in the [canonical MasterFlow design](../mu-maste
 - Authenticated local smoke used a disposable, worker-unassigned Spec/Space/Session/Request. It verified save, CEL resolution, stable snapshots after parent edits, frozen Request edits and explicit refresh. The Request was soft-deleted; Spec/Session/Space were archived afterward. No workload executed and no storage bytes were touched.
 - MasterFlow: 57 Bun tests pass; 52 Node tests pass with one existing conditional DST skip. Frontend/backend TypeScript and Vite build pass (existing bundle-size advisory). CLI: 4 focused Python rendering/parameter tests pass, including typed Registry-derived payload handoff.
 - Browser fixtures verified Space/Request Registry editors, missing-key error recovery, typed input preview/submission, light/dark themes and 390 px layout. These are fixture UI checks, not authenticated desktop E2E or native Tauri verification.
-- Phase 5 remains unimplemented: versioned CEL Spec execution in both runtimes, Spec migration tooling and cross-runtime language conformance. Existing Spec defaults/actions/conditions and Python-format templates are unchanged.
+- At the phase-4 delivery, phase 5 remained unimplemented. Phase 5 is now delivered below; existing Specs retain their legacy default unless explicitly migrated.
+
+## Phase 5 verification and integration
+
+- Both submodules implement explicit `cel-v1` / `python-format-v1` engine contracts. Omitted engines remain legacy; unknown versions fail closed. Creation Spaces remain organizational only; captured Registry values are isolated per Request. No existing Spec/Request is auto-converted.
+- CLI owns execution, bounded interpreter/profile adapters, CEL conditions and once-only rendering. MasterFlow owns diagnostics, conservative migration preview into a YAML draft, stale-draft save protection and worker engine compatibility checks at bootstrap and atomic claim.
+- Migration CLI writes a new candidate only; ambiguous braces/structural names/context-dependent shared preparation require manual conversion. Canonical behavior/limits: [CLI CEL guide](../mu-cli/docs/spec-format/11-cel.md), [MasterFlow integration](../mu-masterflow/docs/spec-cel.md).
+- Identical 63-case JSON conformance fixtures are committed in both independent submodules. Workspace `cmp` confirms byte parity; language-specific suites consume their local copy.
+- MasterFlow: 126 Bun tests, 52 Node tests passed; one existing conditional DST test skipped. Frontend/backend TypeScript and Vite build passed (existing bundle-size advisory). CLI: 41 CPU-only tests passed, including actual HTTP master-flow batches with capability negotiation, captured Registry handoff, workloads/routines/lifecycle/conditions and migration overwrite protection.
+- Self-hosted local development backend `http://127.0.0.1:3210` synchronized successfully. Private metadata snapshots outside Git before/after synchronization confirmed all 706 application documents across 20 tables are identical. No schema backfill, stored Spec conversion or physical storage operation ran in this phase.
+- Header migration controls were verified by server-rendered component tests and editor/model diagnostics. Authenticated desktop/browser E2E and native Tauri build were not exercised in phase 5.
+- Commit/push each changed submodule first, then commit the integration gitlinks in this parent. Graphify outputs remain ignored and local-only.
