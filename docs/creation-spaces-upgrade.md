@@ -1,6 +1,6 @@
 # Creation Spaces upgrade tracker
 
-Status: phases 1, 2 and 3 implemented and verified locally on 2026-11-02. This is a staged implementation, not a declaration that the entire redesign is finished.
+Status: phases 1, 2, 3 and 4 implemented and verified locally on 2026-11-02. This is a staged implementation, not a declaration that the entire redesign is finished.
 
 ## Confirmed decisions
 
@@ -15,12 +15,14 @@ Status: phases 1, 2 and 3 implemented and verified locally on 2026-11-02. This i
 | 1 | Spaces/Sessions CRUD, optional Request association, independent navigation, recent items, preserve Spec workflows | Implemented; verified locally |
 | 2 | Separate Artifact/Physical File, ownership links, idempotent metadata backfill and legacy API adapter, Copy/Share/Clone | Implemented; verified locally |
 | 3 | Products, file protection, orphan Trash representatives, restore and retryable physical purge | Implemented; verified locally |
-| 4 | Typed Registry definitions, CEL evaluation and request snapshots, registry editing and parameter references | Not implemented |
+| 4 | Typed Registry definitions, CEL evaluation and request snapshots, registry editing and parameter references | Implemented; verified locally |
 | 5 | Versioned CEL Spec engine in both CLI and MasterFlow, migration tooling and cross-runtime conformance | Not implemented |
 
 Phase 1 deliberately starts with usable organization/navigation. Phase 2 changes storage identity while preserving worker payloads and physical bytes; the Spec expression engine is unchanged.
 
 ## Ownership of documentation
+
+Phase 4: [MasterFlow Registry/CEL and input snapshots](../mu-masterflow/docs/registry-cel.md).
 
 Phase 3: [MasterFlow Products and Trash](../mu-masterflow/docs/products-trash.md).
 
@@ -32,7 +34,7 @@ Existing expression behavior remains canonical in [CLI templates](../mu-cli/docs
 
 ## Later-phase integration contracts
 
-The target behavior is recorded in the [canonical MasterFlow design](../mu-masterflow/docs/creation-spaces.md#target-architecture-for-later-phases). Registry/CEL remain work for phases 4–5; Artifact ownership/reuse was delivered in phase 2 and Products/Trash in phase 3.
+The target behavior is recorded in the [canonical MasterFlow design](../mu-masterflow/docs/creation-spaces.md#target-architecture-for-later-phases). Registry/CEL inputs and snapshots are delivered in phase 4; versioned CEL Spec execution remains phase 5. Artifact ownership/reuse was delivered in phase 2 and Products/Trash in phase 3.
 
 - Preserve existing worker output keys and assignment/reset guards through adapters when Artifact identity becomes independent.
 - Introduce typed Registry and request snapshots before switching Spec execution to CEL.
@@ -70,4 +72,15 @@ The target behavior is recorded in the [canonical MasterFlow design](../mu-maste
 - 43 Bun tests pass (13 new Product/Trash cases), frontend/backend typechecks and Vite build pass. Node regressions: 50 passed, one existing conditional DST skip. Byte deletion and ambiguous-failure retries were verified using a local S3 fixture and a disposable Convex test blob.
 - Local authenticated CLI smoke verified disposable Product create/save/publish, immutable manifest reads and download URL issuance without transferring bytes; release removed and Product/Space archived afterward.
 - Browser fixtures verified Product draft selection, release manifests and Trash destinations, including a 390 px layout. Authenticated desktop E2E and native Tauri build were not exercised.
-- Registry/CEL snapshots (phase 4) and versioned CEL Specs (phase 5) remain unimplemented.
+- At the phase-3 delivery, Registry/CEL snapshots (phase 4) and versioned CEL Specs (phase 5) remained unimplemented. Phase 4 is now delivered below; phase 5 remains future work.
+
+## Phase 4 verification and integration
+
+- Typed Registry definitions and revision-checked editors are implemented for Space, Session and Request. The bounded `mu-registry-cel-v1` profile uses a pinned CEL interpreter, explicit namespaces, cycle/type/missing-key diagnostics and typed whole-value or scalar interpolated parameter references.
+- New Requests retain submitted definitions/templates plus resolved payload and ancestor snapshots. Waiting edits retain captured ancestors; explicit revision-checked refresh uses current ancestry. Reset/retry and association moves retain existing snapshots. Creation Spaces remain organizational, with the existing shared access policy.
+- MasterFlow owns schema/evaluation/UI. CLI runtime and worker claim/report fields are unchanged; workers receive resolved JSON only. CLI documentation and a parameter handoff regression test record this boundary. Canonical details, limits and compatibility: [Registry/CEL](../mu-masterflow/docs/registry-cel.md).
+- Local development schema/functions synchronized to `http://127.0.0.1:3210`; no production target was used. No backfill or automatic re-evaluation ran. Private before/after metadata snapshots outside Git confirmed that all original 101 Requests, 12 Specs, 6 Spaces, 4 Sessions, 93 Files, 95 output bindings, 112 Artifact records, 77 ownership links and 16 Trash entries were preserved.
+- Authenticated local smoke used a disposable, worker-unassigned Spec/Space/Session/Request. It verified save, CEL resolution, stable snapshots after parent edits, frozen Request edits and explicit refresh. The Request was soft-deleted; Spec/Session/Space were archived afterward. No workload executed and no storage bytes were touched.
+- MasterFlow: 57 Bun tests pass; 52 Node tests pass with one existing conditional DST skip. Frontend/backend TypeScript and Vite build pass (existing bundle-size advisory). CLI: 4 focused Python rendering/parameter tests pass, including typed Registry-derived payload handoff.
+- Browser fixtures verified Space/Request Registry editors, missing-key error recovery, typed input preview/submission, light/dark themes and 390 px layout. These are fixture UI checks, not authenticated desktop E2E or native Tauri verification.
+- Phase 5 remains unimplemented: versioned CEL Spec execution in both runtimes, Spec migration tooling and cross-runtime language conformance. Existing Spec defaults/actions/conditions and Python-format templates are unchanged.
