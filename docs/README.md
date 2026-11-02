@@ -15,3 +15,5 @@ This directory is reserved for cross-repository architecture, integration contra
 - [MasterFlow development](https://github.com/khanhtranrk/mu-masterflow/blob/main/docs/development.md)
 
 When changing shared YAML semantics or worker HTTP contracts, check both repositories for compatibility and update the relevant canonical docs rather than copying them here.
+
+- [Creation Spaces upgrade tracker](creation-spaces-upgrade.md): confirmed decisions, implementation phases and verification status.
