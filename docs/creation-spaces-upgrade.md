@@ -1,6 +1,6 @@
 # Creation Spaces upgrade tracker
 
-Status: phases 1–5 implemented and verified locally; final phase delivered on 2026-11-03. The staged roadmap is complete within the documented bounded CEL profile and rollout limits.
+Status: phases 1–5 delivered; an explicitly authorized dev-only cleanup on 2026-11-03 supersedes their Artifact backward-compatibility layers. Current implementation details are canonical in the submodule documents linked below.
 
 ## Confirmed decisions
 
@@ -39,7 +39,7 @@ Existing expression behavior remains canonical in [CLI templates](../mu-cli/docs
 
 The target behavior is recorded in the [canonical MasterFlow design](../mu-masterflow/docs/creation-spaces.md#target-architecture-for-later-phases). Registry/CEL inputs and snapshots are delivered in phase 4; versioned CEL Spec execution is delivered in phase 5. Artifact ownership/reuse was delivered in phase 2 and Products/Trash in phase 3.
 
-- Preserve existing worker output keys and assignment/reset guards through adapters when Artifact identity becomes independent.
+- Preserve existing worker output keys and assignment/reset guards through derived transport views while keeping Artifact identity independent.
 - Introduce typed Registry and request snapshots before switching Spec execution to CEL.
 - Keep current worker `session` context distinct from Creation Session; update both repos and canonical Spec docs for the versioned language change.
 - Products protect their referenced files; physical deletion is an explicit Trash operation, never an effect of organization archival.
@@ -98,3 +98,34 @@ The target behavior is recorded in the [canonical MasterFlow design](../mu-maste
 - Self-hosted local development backend `http://127.0.0.1:3210` synchronized successfully. Private metadata snapshots outside Git before/after synchronization confirmed all 706 application documents across 20 tables are identical. No schema backfill, stored Spec conversion or physical storage operation ran in this phase.
 - Header migration controls were verified by server-rendered component tests and editor/model diagnostics. Authenticated desktop/browser E2E and native Tauri build were not exercised in phase 5.
 - Commit/push each changed submodule first, then commit the integration gitlinks in this parent. Graphify outputs remain ignored and local-only.
+
+## Post-roadmap dev cleanup — 2026-11-03
+
+The user explicitly authorized deleting development data in favor of a clean
+model, so no legacy Artifact migration/adapter layer is retained.
+
+- MasterFlow now has one canonical `artifacts` table, `physicalFiles`, and N–N
+  `artifactOwners`. Request output keys/node placement live on ownership links;
+  Request/node metadata arrays are derived reads, never stored copies.
+- Removed old Artifact output bindings, native Convex-file handlers, backfill/
+  migration scripts and obsolete catalog/link/URL APIs. Operational receipts are
+  `storageUploads` / `storageClones`; orphan purge is tracked by `fileTrash`.
+- CLI now retains claimed output metadata in `request.artifacts` for Copy/Share
+  inputs. The S3 execution-slot protocol remains independent of canonical IDs.
+- Local self-hosted dev target: `http://127.0.0.1:3210`. Schema/functions synced;
+  reset/import removed 684 old business/run/Artifact documents. Database has 18
+  tables and 22 retained configuration documents: 13 Specs, 7 worker tokens, one
+  storage connection and one storage settings row, all matching the decoded documents
+  in the pre-reset snapshot exactly. Old table names
+  `artifactRecords`, `artifactClones`, `artifactTrash`, `artifactUploads` are absent.
+  No bucket objects or physical storage bytes were deleted. Private snapshots
+  remain outside Git.
+- 122 Bun tests and 50 Node tests passed (one existing conditional DST skip),
+  frontend/backend TypeScript and Vite build passed. Nine CLI Flow tests passed,
+  including actual HTTP claim batches carrying derived Artifact inputs under
+  both expression engines. Live authenticated Artifact browse, Specs and storage
+  configuration queries succeeded after reset.
+- Canonical details: [Artifact model](../mu-masterflow/docs/artifact-ownership.md),
+  [Request storage protocol](../mu-masterflow/docs/request-artifacts.md), and
+  [worker context](../mu-cli/docs/spec-format/07-master-flow-and-cli.md).
+  Submodule changes are committed/pushed before updating this parent’s gitlinks.
