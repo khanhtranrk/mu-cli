@@ -6,11 +6,11 @@
 | --- | --- |
 | Runtime and identity | Bun/TypeScript; one configured Unit per worker, multiple configured/discovered GPU devices; `src/config.ts` |
 | Work source | Authorized server Requests; no public local run command; `src/index.ts` |
-| Ephemeral mode | once drains one batch; failed batch returns 6; [CLI](01-cli.md) |
-| Scheduling | Worker-local shared slots and best-fit GPU admission with legacy CPU fallback; [runtime](05-scheduler-runtime.md) |
-| Reporting | Spec-owned in real mode, automatic only in fake mode; [protocol](06-protocol.md) |
-| Configuration | YAML + supported env + flags; [configuration](01-cli.md#configuration) |
-| Recovery | Local exact-Spec checkpoints plus assignment guard; [Phase 3](phase-3.md) |
+| Ephemeral mode | once drains one batch; failed batch returns 6; [CLI](../guides/cli.md) |
+| Scheduling | Worker-local shared slots and best-fit GPU admission with legacy CPU fallback; [runtime](../architecture/scheduler-runtime.md) |
+| Reporting | Spec-owned in real mode, automatic only in fake mode; [protocol](../reference/protocol.md) |
+| Configuration | YAML + supported env + flags; [configuration](../guides/cli.md#configuration) |
+| Recovery | Local exact-Spec checkpoints plus assignment guard; [Phase 3](../tasks/completed/phase-3.md) |
 
 ## Open proposals and verification gaps
 
@@ -28,7 +28,7 @@ and a historical local smoke do not settle hardware or production readiness.
 
 The original architecture requested an audit of Python and MasterFlow before
 porting. The four delivery records now describe implemented work. That old
-assignment and [roadmap](07-migration.md) are reference history; do not restart the
+assignment and [roadmap](../tasks/superseded/migration-roadmap.md) are reference history; do not restart the
 port or assume that every original acceptance goal has been satisfied.
 
 The original non-goals remain useful scope boundaries: no unsolicited MasterFlow

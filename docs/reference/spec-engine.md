@@ -1,8 +1,8 @@
 # 04 — Spec engine
 
 Current implementation is in `src/spec/` and `src/engine/`. The detailed semantics
-and Python comparisons are recorded in [Phase 2](phase-2.md#implemented-semantics),
-with later [scheduling/recovery](phase-3.md) and [artifact integration](phase-4.md).
+and Python comparisons are recorded in [Phase 2](../tasks/completed/phase-2.md#implemented-semantics),
+with later [scheduling/recovery](../tasks/completed/phase-3.md) and [artifact integration](../tasks/completed/phase-4.md).
 
 ## Supported surface
 
@@ -44,4 +44,4 @@ become TypeScript features by being documented there.
 
 Publishing shared packages and replacing MasterFlow validation remain proposals.
 Server Specs are mutable; local recovery pins exact text and rejects changed source,
-without claiming immutable server-side snapshots. See [architecture](02-architecture.md).
+without claiming immutable server-side snapshots. See [architecture](../architecture/overview.md).

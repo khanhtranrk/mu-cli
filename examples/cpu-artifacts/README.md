@@ -9,4 +9,4 @@ it through a signed URL and verifies size/SHA-256. All reports and artifact call
 use existing Spec routines/actions. Completion alone has one bounded idempotent
 retry; the upload is not retried automatically.
 
-See [Phase 4](../../docs/phase-4.md) for setup, test commands and recovery limits.
+See [Phase 4](../../docs/tasks/completed/phase-4.md) for setup, test commands and recovery limits.

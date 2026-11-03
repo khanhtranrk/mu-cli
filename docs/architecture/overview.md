@@ -18,7 +18,7 @@ implementation uses internal modules, not published `@mu/spec`/`@mu/engine` pack
 The engine receives injected effects. Spec parsing has no process execution or
 network authority. The worker connects engine semantics to Bun infrastructure.
 MasterFlow currently retains its own Spec validation; it does not import a shared
-package from this checkout. See [Phase 2 boundaries](phase-2.md#implementation-and-boundaries).
+package from this checkout. See [Phase 2 boundaries](../tasks/completed/phase-2.md#implementation-and-boundaries).
 
 ## Repository boundaries
 
@@ -27,7 +27,8 @@ package from this checkout. See [Phase 2 boundaries](phase-2.md#implementation-a
 - MasterFlow: authoritative Spec YAML storage, Request assignment, server auth,
   durable records, signed URLs and management UI.
 - Legacy CLI: Python compatibility reference; no assumed feature parity.
-- Mu Agent: future/optional project; absent from this checkout.
+- Mu Agent: separate Mastra starter with proposed creative workflows; Mu backend
+  integration is not yet implemented. See its [current implementation](https://github.com/khanhtranrk/mu-agent/blob/master/docs/architecture/current-implementation.md).
 
 ## Proposed shared-package direction
 
@@ -52,5 +53,5 @@ and avoid adding unused plugin abstractions. The proposed dependency direction
 remains CLI → worker → engine → Spec, with concrete effects injected at runtime.
 MasterFlow/agent package consumption is a future proposal, not an existing import.
 
-See [decisions](08-decisions.md), [original roadmap](07-migration.md) and
+See [decisions](../decisions/runtime-decisions.md), [original roadmap](../tasks/superseded/migration-roadmap.md) and
 [the workspace map](https://github.com/khanhtranrk/mu/blob/master/docs/README.md).

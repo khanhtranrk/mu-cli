@@ -2,7 +2,7 @@
 
 Current implementation: `src/scheduler/scheduler.ts`, `src/engine/flow.ts`,
 `src/engine/checkpoint.ts`, `src/runtime/` and `src/state.ts`.
-[Phase 3](phase-3.md) retains detailed delivery and validation evidence.
+[Phase 3](../tasks/completed/phase-3.md) retains detailed delivery and validation evidence.
 
 ## Admission
 
@@ -43,8 +43,8 @@ Actions, HTTP effects and entry finalization may repeat at documented boundaries
 there is no general exactly-once or durable per-action receipt recovery.
 Unknown intake/preparation/hook outcomes still require manual inspection.
 
-See [resume commands and boundaries](phase-3.md#durable-state-and-resume),
-[artifact retry limits](phase-4.md#limits-and-decisions) and [CLI configuration](01-cli.md).
+See [resume commands and boundaries](../tasks/completed/phase-3.md#durable-state-and-resume),
+[artifact retry limits](../tasks/completed/phase-4.md#limits-and-decisions) and [CLI configuration](../guides/cli.md).
 Keep successful-node output files; only declared postconditions verify them.
 Concurrent Requests must use distinct Spec-defined output paths.
 

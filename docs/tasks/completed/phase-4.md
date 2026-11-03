@@ -1,4 +1,6 @@
 ---
+id: MU-CLI-PHASE-4
+title: Phase 4 — MasterFlow and artifact integration
 status: completed
 ---
 
@@ -11,7 +13,7 @@ endpoint, legacy runtime or Spec syntax changes are required.
 
 ## Runnable Spec
 
-[`examples/cpu-artifacts/spec.yaml`](../examples/cpu-artifacts/spec.yaml) uses existing
+[`examples/cpu-artifacts/spec.yaml`](../../../examples/cpu-artifacts/spec.yaml) uses existing
 actions, routines, conditions and lifecycle hooks, not a second artifact engine.
 Its `demo` pipeline generates a small JSON file with zero workload units. `publish`
 uploads output key `result`; dependent `verify` downloads it and compares size and
@@ -61,8 +63,8 @@ an enabled default storage connection and an authorized request assignment.
   redirects fail instead of appearing successful.
 
 Canonical server contracts remain in
-[storage protocol](../../mu-masterflow/docs/request-artifacts.md) and
-[Artifact ownership](../../mu-masterflow/docs/artifact-ownership.md).
+[storage protocol](../../../../mu-masterflow/docs/reference/request-artifacts.md) and
+[Artifact ownership](../../../../mu-masterflow/docs/architecture/artifact-ownership.md).
 
 ## Validation
 

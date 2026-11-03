@@ -11,7 +11,7 @@ This is the **active Bun + TypeScript CLI/worker** repository, tracked as a subm
 - CLI commands, worker lifecycle, Spec parsing and validation, scheduler, execution actions and subprocess adapters belong here.
 - Convex schemas, server HTTP endpoints, dashboard and Tauri/React UI belong in [mu-masterflow](https://github.com/khanhtranrk/mu-masterflow).
 - Cross-repository decisions and integration documentation belong in the [MU workspace](https://github.com/khanhtranrk/mu).
-- Read the [migration plan](docs/07-migration.md), [architecture](docs/02-architecture.md), [Spec Engine](docs/04-spec-engine.md) and [protocol](docs/06-protocol.md) before changing related behavior.
+- Read the [migration plan](docs/tasks/superseded/migration-roadmap.md), [architecture](docs/architecture/overview.md), [Spec Engine](docs/reference/spec-engine.md) and [protocol](docs/reference/protocol.md) before changing related behavior.
 
 ## Git and development safeguards
 

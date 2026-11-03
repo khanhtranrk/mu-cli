@@ -84,4 +84,4 @@ polling:
 
 Doctor checks local workspace writes, API health and permitted Spec parsing. It
 does not claim or register a unit and cannot prove unit binding without a heartbeat.
-See [scheduler/recovery](05-scheduler-runtime.md) and [integration](phase-4.md).
+See [scheduler/recovery](../architecture/scheduler-runtime.md) and [integration](../tasks/completed/phase-4.md).

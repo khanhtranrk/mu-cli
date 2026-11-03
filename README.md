@@ -1,12 +1,12 @@
 # Mu CLI v2 — Worker-first Architecture
 
-**Status:** Phase 4 validates the real MasterFlow request/artifact lifecycle with CPU workloads, signed S3 transfers and Spec-owned reporting. See [Phase 4 integration and limits](docs/phase-4.md), [Phase 3 scheduler and recovery](docs/phase-3.md) and [Spec engine compatibility](docs/phase-2.md). GPU placement remains CPU-simulation tested; no production deployment is implied.
+**Status:** Phase 4 validates the real MasterFlow request/artifact lifecycle with CPU workloads, signed S3 transfers and Spec-owned reporting. See [Phase 4 integration and limits](docs/tasks/completed/phase-4.md), [Phase 3 scheduler and recovery](docs/tasks/completed/phase-3.md) and [Spec engine compatibility](docs/tasks/completed/phase-2.md). GPU placement remains CPU-simulation tested; no production deployment is implied.
 **Stack:** Bun + TypeScript (strict).  
 **Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
 
 This is the **active CLI development repository** and a Git submodule of the [MU workspace](https://github.com/khanhtranrk/mu). The previous Python runtime is preserved separately in [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy) for compatibility and migration reference.
 
-For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/07-migration.md) before editing.
+For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/tasks/superseded/migration-roadmap.md) before editing.
 
 ## Design principles
 
@@ -22,14 +22,14 @@ For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/07-
 The [documentation index](docs/README.md) distinguishes current references, completed
 delivery records and the original migration proposal.
 
-- [01 — CLI contract](docs/01-cli.md): commands, flags, configuration and exit codes.
-- [02 — Architecture](docs/02-architecture.md): current modules, repository boundaries and proposed shared packages.
-- [03 — Worker lifecycle](docs/03-worker.md): identity, claim, heartbeat, once/daemon and shutdown.
-- [04 — Spec Engine](docs/04-spec-engine.md): validation, execution context, actions, conditions and events.
-- [05 — Scheduler and runtime](docs/05-scheduler-runtime.md): device capacity, subprocess, failure and resume.
-- [06 — Data Center protocol](docs/06-protocol.md): API boundary, permissions and persistence.
-- [07 — Original migration roadmap](docs/07-migration.md): historical proposal and acceptance goals, superseded by delivery records.
-- [08 — Decisions](docs/08-decisions.md): implemented decisions and remaining proposals/verification gaps.
+- [01 — CLI contract](docs/guides/cli.md): commands, flags, configuration and exit codes.
+- [02 — Architecture](docs/architecture/overview.md): current modules, repository boundaries and proposed shared packages.
+- [03 — Worker lifecycle](docs/architecture/worker.md): identity, claim, heartbeat, once/daemon and shutdown.
+- [04 — Spec Engine](docs/reference/spec-engine.md): validation, execution context, actions, conditions and events.
+- [05 — Scheduler and runtime](docs/architecture/scheduler-runtime.md): device capacity, subprocess, failure and resume.
+- [06 — Data Center protocol](docs/reference/protocol.md): API boundary, permissions and persistence.
+- [07 — Original migration roadmap](docs/tasks/superseded/migration-roadmap.md): historical proposal and acceptance goals, superseded by delivery records.
+- [08 — Decisions](docs/decisions/runtime-decisions.md): implemented decisions and remaining proposals/verification gaps.
 
 ## Primary usage
 

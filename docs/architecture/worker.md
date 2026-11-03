@@ -1,7 +1,7 @@
 # 03 — Worker lifecycle
 
 Current implementation: `src/worker.ts`, `src/runtime/spec-executor.ts` and
-`src/state.ts`. Historical delivery details are in [Phases 1–4](README.md#delivery-records-and-proposals).
+`src/state.ts`. Historical delivery details are in [Phases 1–4](../README.md#delivery-records-and-proposals).
 
 ## Intake and execution
 
@@ -28,7 +28,7 @@ server Spec snapshot. Local checkpoints retain exact Spec text and execution sta
 
 An execution session is Request-local; it is distinct from a Creation Space Session.
 Runtime `success` is mapped by Spec reporting to API `succeeded`; failure reporting
-uses server statuses such as `process_failed`. See [protocol](06-protocol.md).
+uses server statuses such as `process_failed`. See [protocol](../reference/protocol.md).
 
 ## Shutdown and recovery
 
@@ -41,7 +41,7 @@ Resume verifies saved identity, exact current remote Spec and assignment generat
 Successful nodes are retained and declared postconditions rechecked. Unknown running
 or failed node outcomes require explicit `--retry-incomplete` in an unfinished
 pipeline; external effects may repeat. Unknown preparation/hook outcomes are not
-blindly replayed. See [recovery details](phase-3.md#durable-state-and-resume).
+blindly replayed. See [recovery details](../tasks/completed/phase-3.md#durable-state-and-resume).
 
 A workspace lock prevents two processes sharing local state. After forced loss,
 verify the old worker and children have stopped before removing a stale lock.

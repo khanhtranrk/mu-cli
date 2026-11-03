@@ -1,4 +1,6 @@
 ---
+id: MU-CLI-PHASE-1
+title: Phase 1 — CPU worker foundation
 status: completed
 ---
 
@@ -94,5 +96,5 @@ Phase 2 owns full Spec validation, CEL, context/parameter resolution, lifecycle
 hooks, routines and actual actions. Phase 3 owns DAG/resource scheduling and node
 recovery. Phase 4 owns artifact transfers and real-backend integration. These were
 unimplemented at the Phase 1 delivery; all four deliveries are now recorded in
-[the documentation map](README.md#delivery-records-and-proposals). Draft roadmap numbering in `07-migration.md` predates
+[the documentation map](../../README.md#delivery-records-and-proposals). Draft roadmap numbering in [the original roadmap](../superseded/migration-roadmap.md) predates
 the user's four-phase assignment; this document records the delivered Phase 1.

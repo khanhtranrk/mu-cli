@@ -5,8 +5,8 @@ status: superseded
 # 07 — Migration Plan and Acceptance Tests
 
 This is the original proposed roadmap, not the current task queue. The delivery
-sequence became [Phase 1 foundation](phase-1.md), [Phase 2 engine](phase-2.md),
-[Phase 3 scheduling/recovery](phase-3.md) and [Phase 4 integration](phase-4.md).
+sequence became [Phase 1 foundation](../completed/phase-1.md), [Phase 2 engine](../completed/phase-2.md),
+[Phase 3 scheduling/recovery](../completed/phase-3.md) and [Phase 4 integration](../completed/phase-4.md).
 Its numbering does not map one-to-one to the roadmap below. Preserve the original
 acceptance goals as rationale, not instructions to repeat completed work.
 
@@ -14,7 +14,7 @@ Internal Spec/engine modules, CPU execution, scheduling, guarded recovery and
 artifact integration exist. Published shared packages, replacing MasterFlow
 validation, full parity, Kaggle/live GPU validation and production cutover are not
 established by these deliveries. `docs/current-behavior.md` below was a proposed
-deliverable and does not exist; use the current [documentation map](README.md).
+deliverable and does not exist; use the current [documentation map](../../README.md).
 The Python repository is retained as a migration reference, not proof that all
 cutover acceptance criteria were met. No new assignment is authorized here.
 
