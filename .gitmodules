@@ -1,6 +1,11 @@
 [submodule "mu-cli"]
-	path = mu-cli-legacy
-	url = https://github.com/khanhtran.rk/mu-cli-legacy.git
+    path = mu-cli
+    url = https://github.com/khanhtranrk/mu-cli.git
+
+[submodule "mu-cli-legacy"]
+    path = mu-cli-legacy
+    url = https://github.com/khanhtranrk/mu-cli-legacy.git
+
 [submodule "mu-masterflow"]
-	path = mu-masterflow
-	url = https://github.com/khanhtranrk/mu-masterflow.git
+    path = mu-masterflow
+    url = https://github.com/khanhtranrk/mu-masterflow.git
