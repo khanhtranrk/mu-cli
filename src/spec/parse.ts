@@ -1,0 +1,178 @@
+import { isScalar, parseDocument, Scalar, visit } from "yaml";
+import { validateTemplates } from "./expressions";
+import { mapping, type Spec } from "./types";
+
+const has = (value: object, key: string) => Object.hasOwn(value, key);
+const defaultValue = <Value>(value: unknown, fallback: Value) => value === undefined ? fallback : value;
+const templateValue = (value: unknown) => typeof value === "string" && value.trim().startsWith("${{") && value.trim().endsWith("}}");
+const renderedMapping = (value: unknown, label: string) => { if (!templateValue(value)) mapping(value, label); };
+const renderedList = (value: unknown, label: string) => { if (!templateValue(value)) list(value, label); };
+const text = (value: unknown, label: string): string => {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} must be a non-empty string`);
+  return value;
+};
+const list = (value: unknown, label: string): unknown[] => {
+  if (!Array.isArray(value)) throw new Error(`${label} must be a list`);
+  return value;
+};
+const literalName = (value: unknown, label: string) => {
+  const name = text(value, label);
+  if (/[{}]/.test(name)) throw new Error(`${label} must be a literal name`);
+  return name;
+};
+
+function parameters(value: unknown, label: string): void {
+  for (const [name, raw] of Object.entries(mapping(defaultValue(value, {}), label))) {
+    const declaration = mapping(raw, `${label}.${name}`);
+    if (declaration.type !== undefined && !["string", "number", "boolean", "array", "object"].includes(String(declaration.type))) throw new Error(`${label}.${name}: invalid parameter type`);
+  }
+}
+
+function condition(value: unknown, label: string): void {
+  if (value == null) return;
+  const item = mapping(value, label);
+  const operator = item.operator;
+  if (operator === "and" || operator === "or") list(defaultValue(item.props, []), label + ".props").forEach(child => condition(child, label + ".props"));
+  else if (operator === "cel") {
+    const source = text(item.expression, label + ".expression").trim();
+    if (!source.startsWith("${{") || !source.endsWith("}}")) throw new Error(`${label}: CEL condition requires a whole-value template`);
+    if (has(item, "expected") && typeof item.expected !== "boolean") throw new Error(`${label}.expected must be boolean`);
+  } else if (["file_exists", "folder_exists", "path_exists"].includes(String(operator))) text(item.path, label + ".path");
+  else if (operator === "exit_code") {
+    if (!templateValue(item.target) && !list(item.target, label + ".target").length) throw new Error(`${label}.target cannot be empty`);
+    if (has(item, "expected") && (typeof item.expected !== "number" || !Number.isInteger(item.expected))) throw new Error(`${label}.expected must be an integer`);
+  } else if (operator === "action_state" || operator === "node_state") {
+    if (!templateValue(item.target)) {
+      const target = list(item.target, label + ".target");
+      if (!target.length || !target.every(key => typeof key === "string" && key)) throw new Error(`${label}.target requires string keys`);
+    }
+    if (!has(item, "expected")) throw new Error(`${label}.expected is required`);
+  } else if (operator === "node_status") {
+    if (item.node !== undefined) text(item.node, label + ".node");
+  } else throw new Error(`${label}: unknown condition operator`);
+}
+
+export function parseSpec(source: string): Spec {
+  const document = parseDocument(source, { uniqueKeys: true, version: "1.1", schema: "yaml-1.1" });
+  if (document.errors.length) throw new Error("Invalid Spec YAML/JSON");
+  visit(document, { Pair(_key, pair) {
+    if (isScalar(pair.key) && pair.key.source === "on" && typeof pair.key.value === "boolean") pair.key = new Scalar("on");
+  } });
+  const root = mapping(document.toJS({ maxAliasCount: 100 }), "Spec");
+  if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
+  if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
+  validateTemplates(root);
+  const workloads = mapping(defaultValue(root.workloads, {}), "workloads");
+  const routines = mapping(defaultValue(root.routines, {}), "routines");
+  const pipelines = mapping(defaultValue(root.pipeline, {}), "pipeline");
+
+  function common(item: Record<string, unknown>, label: string): void {
+    if (has(item, "ignore_error") && typeof item.ignore_error !== "boolean") throw new Error(`${label}.ignore_error must be boolean`);
+    if (item.context !== undefined) {
+      renderedMapping(item.context, label + ".context");
+      if (!templateValue(item.context)) {
+        const context = mapping(item.context);
+        if (["CreationSpace", "Session", "Request", "__mu_expression_engine"].some(key => has(context, key))) throw new Error(`${label}.context cannot override captured Registry scopes`);
+      }
+    }
+    for (const key of ["skip_if", "precondition", "postcondition"]) condition(item[key], label + "." + key);
+  }
+
+  function actions(value: unknown, label: string, allowWorkload = false): void {
+    list(defaultValue(value, []), label).forEach((raw, index) => {
+      const item = mapping(raw, `${label}[${index}]`);
+      const path = `${label}[${index}]`;
+      common(item, path);
+      if (has(item, "action") || has(item, "save_response_to_context")) throw new Error(`${path}: removed action declaration key`);
+      const type = item.type;
+      if (has(item, "save_state")) {
+        if (!["execute_command", "send_http_request", "inspect_file", "execute_routine"].includes(String(type))) throw new Error(`${path}: save_state not supported`);
+        text(item.save_state, path + ".save_state");
+      }
+      if (type === "execute_workload" || type === "execute_routine") {
+        const key = type === "execute_workload" ? "workload" : "routine";
+        const name = literalName(item[key], path + "." + key);
+        if (type === "execute_workload" && !allowWorkload) throw new Error(`${path}: execute_workload only allowed in node before_run/run/after_run`);
+        if (!has(type === "execute_workload" ? workloads : routines, name)) throw new Error(`${path}: undefined ${key} ${name}`);
+        if (type === "execute_workload") mapping(defaultValue(item.args, {}), path + ".args");
+        else renderedMapping(defaultValue(item.args, {}), path + ".args");
+      } else if (type === "execute_command") {
+        text(item.target, path + ".target"); renderedList(defaultValue(item.args, []), path + ".args"); renderedMapping(defaultValue(item.env, {}), path + ".env");
+      } else if (type === "create_dir" || type === "write_json") text(item.path, path + ".path");
+      else if (type === "inspect_file") text(item.target, path + ".target");
+      else if (type === "send_http_request") {
+        text(item.url, path + ".url"); renderedMapping(defaultValue(item.header, {}), path + ".header");
+        if (has(item, "body") && has(item, "body_file")) throw new Error(`${path}: body and body_file are mutually exclusive`);
+        for (const key of ["body_file", "response_file"]) if (has(item, key)) text(item[key], path + "." + key);
+        if (has(item, "timeout") && !templateValue(item.timeout) && (typeof item.timeout !== "number" || !Number.isFinite(item.timeout) || item.timeout <= 0)) throw new Error(`${path}.timeout must be positive`);
+      } else throw new Error(`${path}: unknown action type`);
+    });
+  }
+
+  function events(value: unknown, label: string, nodeScope = false): void {
+    for (const raw of list(defaultValue(value, []), label)) {
+      const hook = mapping(raw, label);
+      const allowed = nodeScope ? ["node_started", "node_finished"] : ["node_started", "node_finished", "pipeline_started", "pipeline_finished"];
+      if (!allowed.includes(String(hook.on))) throw new Error(`${label}: invalid event name`);
+      actions(list(hook.do, label + ".do"), label + ".do");
+    }
+  }
+
+  for (const [name, raw] of Object.entries(workloads)) {
+    literalName(name, "workload name");
+    const item = mapping(raw, "workload " + name);
+    parameters(item.params, `workloads.${name}.params`);
+    text(item.target, `workloads.${name}.target`);
+    renderedList(defaultValue(item.args, []), `workloads.${name}.args`); renderedList(defaultValue(item.device_args, []), `workloads.${name}.device_args`);
+    renderedMapping(defaultValue(item.env, {}), `workloads.${name}.env`);
+    if (item.units !== undefined && (typeof item.units !== "number" || !Number.isFinite(item.units) || item.units < 0)) throw new Error(`workloads.${name}.units must be finite and non-negative`);
+  }
+  const routineEdges = new Map<string, string[]>();
+  for (const [name, raw] of Object.entries(routines)) {
+    literalName(name, "routine name");
+    const item = mapping(raw, "routine " + name);
+    parameters(item.params, `routines.${name}.params`);
+    const children = list(item.actions, `routines.${name}.actions`);
+    actions(children, `routines.${name}.actions`);
+    routineEdges.set(name, children.map(child => mapping(child)).filter(child => child.type === "execute_routine").map(child => String(child.routine)));
+  }
+  checkCycles(routineEdges, "routine");
+  for (const [name, raw] of Object.entries(mapping(defaultValue(root.entries, {}), "entries"))) {
+    if (!["direct_flow", "master_flow"].includes(name)) throw new Error("Unknown entry name");
+    const entry = mapping(raw, `entries.${name}`);
+    for (const phase of ["initialization", "finalization"]) actions(entry[phase], `entries.${name}.${phase}`);
+  }
+  events(root.events, "events");
+  for (const [name, raw] of Object.entries(pipelines)) {
+    const item = mapping(raw, `pipeline.${name}`);
+    parameters(item.params, `pipeline.${name}.params`);
+    if (item.context !== undefined) common({ context: item.context }, `pipeline.${name}`);
+    actions(item.prepare, `pipeline.${name}.prepare`); events(item.events, `pipeline.${name}.events`);
+    const edges = new Map<string, string[]>();
+    for (const rawNode of list(defaultValue(item.nodes, []), `pipeline.${name}.nodes`)) {
+      const node = mapping(rawNode, "node");
+      const nodeName = literalName(node.name, "node.name");
+      if (edges.has(nodeName)) throw new Error("Node names must be unique");
+      const dependencies = list(defaultValue(node.depends_on, []), "depends_on").map(dependency => literalName(dependency, "depends_on"));
+      edges.set(nodeName, dependencies);
+      common(node, `node.${nodeName}`);
+      for (const phase of ["before_run", "run", "after_run", "finally"]) actions(node[phase], `node.${nodeName}.${phase}`, phase !== "finally");
+      events(node.events, `node.${nodeName}.events`, true);
+    }
+    checkCycles(edges, `pipeline.${name} dependency`);
+  }
+  return { ...root, pipeline: pipelines } as unknown as Spec;
+}
+
+function checkCycles(edges: Map<string, string[]>, label: string): void {
+  const visited = new Set<string>(), visiting = new Set<string>();
+  function visit(name: string): void {
+    if (visiting.has(name)) throw new Error(`${label} cycle at ${name}`);
+    if (visited.has(name)) return;
+    if (!edges.has(name)) throw new Error(`${label}: unknown dependency ${name}`);
+    visiting.add(name);
+    for (const dependency of edges.get(name)!) visit(dependency);
+    visiting.delete(name); visited.add(name);
+  }
+  for (const name of edges.keys()) visit(name);
+}

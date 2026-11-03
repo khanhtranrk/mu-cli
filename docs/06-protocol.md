@@ -1,5 +1,13 @@
 # 06 — Data Center Integration and Security
 
+The implemented Phase 1 client and verified differences from the draft below are
+recorded in [Phase 1 contracts](phase-1.md#verified-contracts-and-mismatches).
+In particular, `/api/requests/update` does not exist; report requires the claimed
+assignment generation, and both claim and Spec retrieval require CEL negotiation.
+
+[Phase 2](phase-2.md#reporting-compatibility) preserves Spec-owned reporting for
+real execution; automatic request reports remain confined to explicit fake mode.
+
 ## Known/proposed endpoints to reconcile
 
 The following routes reflect previously discussed Mu contracts, **not a verified current OpenAPI specification**:

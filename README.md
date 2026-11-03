@@ -1,6 +1,6 @@
 # Mu CLI v2 — Worker-first Architecture
 
-**Status:** Bun/TypeScript migration in progress. The documents describe target behavior; verify code before claiming a feature is implemented.  
+**Status:** Phase 2 CPU Spec execution is implemented and tested: YAML/JSON, bounded CEL, actions, routines, lifecycle and events. `worker once/start` execute the remote Spec; reporting remains Spec-defined. GPU scheduling and node resume remain pending. See [Phase 2 usage, compatibility and limits](docs/phase-2.md). Other architecture documents describe target behavior.
 **Stack:** Bun + TypeScript (strict).  
 **Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
 

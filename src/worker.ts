@@ -1,0 +1,127 @@
+import type { WorkerConfig } from "./config";
+import type { DataCenterClient, ClaimedRequest, Report } from "./api";
+import type { RequestExecutor } from "./runtime/types";
+import { StateStore, type Checkpoint } from "./state";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+
+export class Worker {
+  private store: StateStore;
+  private sources = new Map<string, string>();
+  private seen = new Set<string>();
+  constructor(private config: WorkerConfig, private api: DataCenterClient, private executor: RequestExecutor) {
+    const scope = createHash("sha256").update(config.server + "\n" + config.unitId).digest("hex");
+    this.store = new StateStore(join(config.workspace, scope));
+  }
+
+  private async deliver(state: Checkpoint): Promise<void> {
+    if (!state.report) throw new Error("Checkpoint has no report");
+    await this.api.report(state.report, state.request.assignmentVersion);
+    await this.store.save({ ...state, phase: "reported" });
+  }
+
+  private async recover(): Promise<void> {
+    for (const state of await this.store.load()) {
+      if (state.phase === "reported") continue;
+      if (state.reporting === "spec") {
+        await this.store.save({ ...state, phase: "reported" });
+        console.warn("Recovered an unfinished Spec assignment without replaying actions or reports; inspect/reset it in MasterFlow");
+        continue;
+      }
+      if (state.phase !== "terminal") {
+        state.phase = "terminal";
+        state.report = { id: state.request.requestId, status: "process_failed" };
+        await this.store.save(state);
+      }
+      await this.deliver(state);
+    }
+  }
+
+  private async execute(request: ClaimedRequest, signal: AbortSignal): Promise<boolean> {
+    const state: Checkpoint = { request, phase: "executing", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) };
+    await this.store.save(state);
+    if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request.assignmentVersion);
+    let failed = false;
+    try {
+      signal.throwIfAborted();
+      const source = this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      await this.executor.execute(source, request, signal);
+    } catch { failed = true; }
+    const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded" };
+    const terminal: Checkpoint = this.executor.reporting === "spec" ? { ...state, phase: "reported", report } : { ...state, phase: "terminal", report };
+    await this.store.save(terminal);
+    if (this.executor.reporting !== "spec") await this.deliver(terminal);
+    return !failed;
+  }
+
+  async run(mode: "once" | "start", signal: AbortSignal): Promise<number> {
+    if (!this.config.fake && this.executor.reporting !== "spec") throw new Error("Fake execution requires --fake");
+    if (!this.config.specs.length) throw new Error("At least one --spec is required; the API cannot enumerate allowed specs");
+    await this.api.health();
+    await this.api.heartbeat("online");
+    let heartbeatError: unknown;
+    let heartbeatPending = Promise.resolve();
+    let heartbeatBusy = false;
+    const timer = setInterval(() => {
+      if (heartbeatBusy) return;
+      heartbeatBusy = true;
+      heartbeatPending = this.api.heartbeat("online").catch(error => { heartbeatError = error; }).finally(() => { heartbeatBusy = false; });
+    }, this.config.heartbeatInterval * 1000);
+    let failed = false;
+    let completed = false;
+    let primaryError: unknown;
+    try {
+      await this.recover();
+      if (this.executor.prepare) for (const slug of this.config.specs) {
+        signal.throwIfAborted();
+        const source = await this.api.spec(slug);
+        this.sources.set(slug, source);
+        await this.executor.prepare(source, slug, signal);
+      }
+      do {
+        const batch: ClaimedRequest[] = [];
+        for (const spec of this.config.specs) {
+          if (signal.aborted || heartbeatError || batch.length >= this.config.maxClaim) break;
+          const claimed = await this.api.claim(spec, this.config.maxClaim - batch.length);
+          for (const request of claimed) {
+            const assignment = request.requestId + ":" + request.assignmentVersion;
+            if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
+            this.seen.add(assignment);
+            await this.store.save({ request, phase: "claimed", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
+          }
+          batch.push(...claimed);
+        }
+        if (heartbeatError) throw heartbeatError;
+        for (const request of batch) {
+          if (!await this.execute(request, signal)) failed = true;
+        }
+        if (heartbeatError) throw heartbeatError;
+        if (mode === "once" || signal.aborted) break;
+        await new Promise<void>(resolve => {
+          const done = () => { clearTimeout(timeout); signal.removeEventListener("abort", done); resolve(); };
+          const timeout = setTimeout(done, this.config.pollInterval * 1000);
+          signal.addEventListener("abort", done, { once: true });
+          if (signal.aborted) done();
+        });
+      } while (!signal.aborted);
+      completed = true;
+      return signal.aborted ? 130 : failed ? 6 : 0;
+    } catch (error) {
+      primaryError = error;
+      if (signal.aborted) return 130;
+      throw error;
+    } finally {
+      clearInterval(timer);
+      await heartbeatPending;
+      let cleanupError: unknown;
+      try { await this.executor.finalize?.(!completed || failed || signal.aborted); }
+      catch (error) { cleanupError = error; }
+      try { await this.api.heartbeat("offline"); }
+      catch (error) { cleanupError ??= error; }
+      if (cleanupError) {
+        if (!primaryError && !failed && !signal.aborted) throw cleanupError;
+        console.warn("Worker cleanup failed; original execution outcome retained");
+      }
+    }
+  }
+}

@@ -3,15 +3,18 @@
   "type": "module",
   "private": true,
   "bin": {
-    "mu": "./src/index.ts" 
+    "mu": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "bun check"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
   },
-  "peerDependencies": {
-    "typescript": "^7"
+  "dependencies": {
+    "@marcbachmann/cel-js": "8.0.0",
+    "yaml": "2.9.1"
   }
 }

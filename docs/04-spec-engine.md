@@ -1,5 +1,9 @@
 # 04 — Shared Spec and Engine
 
+Implemented CPU semantics and verified corrections to this target design are in
+[Phase 2](phase-2.md). Actual events are pipeline/node started/finished; condition
+operators use snake_case and do not include `not`. Reporting is Spec-defined.
+
 ## Package responsibilities
 
 `@mu/spec` provides a **single canonical** parser, schema, validator, normalizer and TypeScript types for Spec YAML. It must not read the network or spawn processes.
