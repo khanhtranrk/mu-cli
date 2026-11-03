@@ -1,0 +1,17 @@
+{
+  "name": "mu-cli",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "mu": "./src/index.ts" 
+  },
+  "scripts": {
+    "typecheck": "bun check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}
