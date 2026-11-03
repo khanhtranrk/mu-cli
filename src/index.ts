@@ -18,8 +18,16 @@ program
   .description("MU CLI v2 — CPU/GPU Spec worker")
   .version("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)")
   .configureHelp({ optionTerm: (o) => o.flags })
-  .allowUnknownOption(false)
-  .allowExcessArguments(true);
+  .exitOverride((err) => {
+    if (err && err.exitCode !== undefined) {
+      throw err;
+    }
+  })
+  .allowExcessArguments(true)
+  .enablePositionalOptions(true);
+
+// Store exit code from command handlers
+let commandExitCode = 0;
 
 // Helper to convert Commander options to flags format expected by loadConfig
 function optionsToFlags(options: Record<string, unknown>): Record<string, string | string[] | boolean> {
@@ -59,12 +67,14 @@ program
     
     if (!group || group === "help" || group === "--help") {
       console.log("MU CLI v2 — CPU/GPU Spec worker\nmu worker once|start --spec <slug> [--fake] [options]\nmu worker doctor|info [--json] [options]\nmu config show [options]\nmu config init [--output mu.yaml] [--force]\nmu version\nOptions: --config --server --token --unit-id --spec (repeatable)\n         --workspace --max-claim --poll-interval --heartbeat-interval\n         --device FAMILY,INDEX,MAX_UNITS (repeatable) --concurrency (1-32)\n         --shutdown-timeout --resume [--retry-incomplete]");
-      process.exit(0);
+      commandExitCode = 0;
+      return;
     }
     
     if (group === "version") {
       console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)");
-      process.exit(0);
+      commandExitCode = 0;
+      return;
     }
     
     if (group === "config" && command === "init") {
@@ -75,12 +85,14 @@ program
       } finally {
         await file.close();
       }
-      process.exit(0);
+      commandExitCode = 0;
+      return;
     }
     
     if (!(group === "worker" && ["once", "start", "doctor", "info"].includes(command ?? "")) && !(group === "config" && command === "show")) {
       console.error("Unknown command; use mu help");
-      process.exit(2);
+      commandExitCode = 2;
+      return;
     }
     
     const config = await loadConfig(flags);
@@ -89,7 +101,8 @@ program
     
     if (command === "info" || command === "show") {
       console.log(JSON.stringify({ ...config, token: "[REDACTED]", devices: [{ family: "cpu", index: 0 }, ...config.devices] }, null, 2));
-      process.exit(0);
+      commandExitCode = 0;
+      return;
     }
     
     await mkdir(config.workspace, { recursive: true, mode: 0o700 });
@@ -103,7 +116,8 @@ program
       if (!config.specs.length) throw new Error("doctor requires --spec to verify token authorization");
       for (const slug of config.specs) parseSpec(await api.spec(slug));
       console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, claims: 0 }));
-      process.exit(0);
+      commandExitCode = 0;
+      return;
     }
     
     const lockPath = join(config.workspace, "worker.lock");
@@ -115,53 +129,29 @@ program
     try {
       const executor = config.fake ? new FakeExecutor() : new SpecExecutor(config, new BunEffects());
       const exitCode = await new Worker(config, api, executor).run(command as "once" | "start", controller.signal);
-      process.exit(exitCode);
+      commandExitCode = exitCode;
     } finally {
       process.off("SIGINT", stop); process.off("SIGTERM", stop);
       await lock.close(); await unlink(lockPath);
     }
   });
-
-async function runWorker(flags: Record<string, string | string[] | boolean>, mode: "once" | "start"): Promise<void> {
-  let configured = false;
-  try {
-    const config = await loadConfig(flags);
-    configured = true;
-    config.devices ??= config.fake ? [] : await detectDevices();
-    await mkdir(config.workspace, { recursive: true, mode: 0o700 });
-    const api = new DataCenterClient(config);
-    const lockPath = join(config.workspace, "worker.lock");
-    const lock = await open(lockPath, "wx", 0o600);
-    const controller = new AbortController();
-    const stop = () => controller.abort();
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
-    try {
-      const executor = config.fake ? new FakeExecutor() : new SpecExecutor(config, new BunEffects());
-      const exitCode = await new Worker(config, api, executor).run(mode, controller.signal);
-      process.exit(exitCode);
-    } finally {
-      process.off("SIGINT", stop); process.off("SIGTERM", stop);
-      await lock.close(); await unlink(lockPath);
-    }
-  } catch (error) {
-    if (error instanceof ApiError) { console.error(error.message); process.exit([401, 403].includes(error.status) ? 3 : 4); }
-    console.error(error instanceof Error && !error.message.includes("ENOENT") && !error.message.includes("EEXIST") ? error.message : "Local file unavailable or worker workspace locked");
-    process.exit(configured ? 5 : 2);
-  }
-}
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
-  // Override Commander's exit behavior to return exit codes instead of exiting
-  program.exitOverride((err) => {
-    if (err) {
-      throw err;
+  commandExitCode = 0;
+  
+  // Check for unknown commands before Commander parsing
+  if (args.length > 0 && args[0] !== "help" && args[0] !== "--help" && args[0] !== "version") {
+    const validGroups = ["worker", "config"];
+    const [group] = args;
+    if (group && !validGroups.includes(group)) {
+      console.error("Unknown command; use mu help");
+      return 2;
     }
-  });
+  }
   
   try {
     await program.parseAsync(args);
-    return 0;
+    return commandExitCode;
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
