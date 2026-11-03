@@ -1,3 +1,7 @@
+---
+status: completed
+---
+
 # Phase 1 — CPU worker foundation
 
 Historical Phase 1 delivery. [Phase 2](phase-2.md) now adds real CPU Spec execution
@@ -29,7 +33,7 @@ No new Spec syntax is introduced; any workload definitions in fetched YAML are
 ignored in fake mode. CEL capability negotiation is sent solely to access the
 current API in this explicitly selected harness mode; CEL evaluation is unavailable.
 
-## Current behavior
+## Behavior at Phase 1 delivery (fake mode)
 
 - CLI flags override environment, then YAML, then defaults. Tokens come from
   `MU_WORKER_TOKEN` or `--token`; show/info redact them. Configuration initialization
@@ -88,6 +92,7 @@ verification is performed. This does not establish Python runtime parity.
 
 Phase 2 owns full Spec validation, CEL, context/parameter resolution, lifecycle
 hooks, routines and actual actions. Phase 3 owns DAG/resource scheduling and node
-recovery. Phase 4 owns artifact transfers and real-backend integration. These are
-intentionally unimplemented. Draft roadmap numbering in `07-migration.md` predates
+recovery. Phase 4 owns artifact transfers and real-backend integration. These were
+unimplemented at the Phase 1 delivery; all four deliveries are now recorded in
+[the documentation map](README.md#delivery-records-and-proposals). Draft roadmap numbering in `07-migration.md` predates
 the user's four-phase assignment; this document records the delivered Phase 1.

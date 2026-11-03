@@ -1,3 +1,7 @@
+---
+status: completed
+---
+
 # Phase 4 — MasterFlow and artifact integration
 
 The CPU-only path is validated against current MasterFlow source (`17a9433`):

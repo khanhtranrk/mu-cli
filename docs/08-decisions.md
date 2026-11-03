@@ -1,27 +1,36 @@
-# 08 — Open Decisions and Assumptions
+# 08 — Decisions and remaining questions
 
-| Topic | Proposed default | Needs confirmation |
-|---|---|---|
-| Primary runtime | Bun + TypeScript | Kaggle smoke test |
-| Worker process identity | One CLI process = one Unit | Multiple devices per Unit allowed? |
-| Production Spec source | Data Center only | Local debug fixture runner internal |
-| Ephemeral mode | `worker once` processes one batch | Exit code on partial failure |
-| Shared package split | `@mu/spec` and `@mu/engine` | Repo/workspace publishing strategy |
-| Scheduler location | Local worker node scheduler | Exact resource/priority policy |
-| API ownership | Server controls claim/auth; worker reports | `update` vs `report` semantics |
-| Workload dependencies | External subprocess initially | Registry manifest later |
-| Configuration | YAML + env + CLI | Config discovery paths |
-| Spec schema versions | Explicit and immutable per request | Migration strategy for old Specs |
+## Implemented decisions
 
-## Non-goals for first port
+| Topic | Current decision / evidence |
+| --- | --- |
+| Runtime and identity | Bun/TypeScript; one configured Unit per worker, multiple configured/discovered GPU devices; `src/config.ts` |
+| Work source | Authorized server Requests; no public local run command; `src/index.ts` |
+| Ephemeral mode | once drains one batch; failed batch returns 6; [CLI](01-cli.md) |
+| Scheduling | Worker-local shared slots and best-fit GPU admission with legacy CPU fallback; [runtime](05-scheduler-runtime.md) |
+| Reporting | Spec-owned in real mode, automatic only in fake mode; [protocol](06-protocol.md) |
+| Configuration | YAML + supported env + flags; [configuration](01-cli.md#configuration) |
+| Recovery | Local exact-Spec checkpoints plus assignment guard; [Phase 3](phase-3.md) |
 
-- Rewriting Mu MasterFlow UI.
-- Introducing a general agent framework.
-- Replacing Python inference libraries with TypeScript.
-- Redesigning existing Spec YAML and status enums.
-- Building a universal workload package manager.
-- Refactoring the entire database.
+## Open proposals and verification gaps
 
-## First agent assignment
+- Shared Spec/engine package publishing and versioning across independently versioned repositories.
+- Migrating MasterFlow validation after demonstrated parity; no shared package consumption yet.
+- Immutable server Spec snapshots, lease/reclaim and arbitrary assignment inspection.
+- Durable action receipt recovery/receiver idempotency beyond bounded completion retry.
+- Live CUDA/ROCm, Kaggle, Windows process-tree cleanup and production verification.
+- Workload package registry/model installation, outside the first port's scope.
 
-> Audit the current Python Mu CLI and TypeScript Mu MasterFlow implementations. Compare actual behavior with this draft. Produce a discrepancy report and a migration plan. Do not implement the port until the architecture and compatibility matrix are reviewed.
+These are questions and limits, not approved implementation tasks. CPU simulation
+and a historical local smoke do not settle hardware or production readiness.
+
+## Historical initial assignment
+
+The original architecture requested an audit of Python and MasterFlow before
+porting. The four delivery records now describe implemented work. That old
+assignment and [roadmap](07-migration.md) are reference history; do not restart the
+port or assume that every original acceptance goal has been satisfied.
+
+The original non-goals remain useful scope boundaries: no unsolicited MasterFlow
+UI rewrite, agent framework, TypeScript inference rewrite, YAML/status redesign,
+universal package manager or database refactor.

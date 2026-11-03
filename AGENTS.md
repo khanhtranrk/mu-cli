@@ -4,7 +4,7 @@
 
 This is the **active Bun + TypeScript CLI/worker** repository, tracked as a submodule in [MU](https://github.com/khanhtranrk/mu). It replaces the historical Python worker in [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy). The legacy repository is a compatibility reference, not the default target for new features.
 
-**Migration is in progress.** The documents in `docs/` describe proposed contracts and architecture; verify the current code before claiming a command, action, scheduler behavior or API is implemented. Do not assume feature parity with Python.
+**Migration is in progress.** The [documentation map](docs/README.md) separates current implementation, completed delivery records and proposals; verify the current code before claiming a command, action, scheduler behavior or API is implemented. Do not assume feature parity with Python.
 
 ## Work ownership
 

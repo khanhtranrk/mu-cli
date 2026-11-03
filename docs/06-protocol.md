@@ -1,50 +1,39 @@
-# 06 — Data Center Integration and Security
+# 06 — Data Center protocol
 
-The implemented Phase 1 client and verified differences from the draft below are
-recorded in [Phase 1 contracts](phase-1.md#verified-contracts-and-mismatches).
-In particular, `/api/requests/update` does not exist; report requires the claimed
-assignment generation, and both claim and Spec retrieval require CEL negotiation.
+MasterFlow owns the server contract. Use its
+[worker hooks](https://github.com/khanhtranrk/mu-masterflow/blob/master/docs/worker-hooks.md),
+[storage protocol](https://github.com/khanhtranrk/mu-masterflow/blob/master/docs/request-artifacts.md)
+and [Artifact identity](https://github.com/khanhtranrk/mu-masterflow/blob/master/docs/artifact-ownership.md)
+for payloads, limits and authorization. CLI adapters live in `src/api.ts`,
+`src/artifacts.ts` and `src/runtime/effects.ts`.
 
-[Phase 2](phase-2.md#reporting-compatibility) preserves Spec-owned reporting for
-real execution; automatic request reports remain confined to explicit fake mode.
+## Implemented worker integration
 
-[Phase 3 recovery](phase-3.md#durable-state-and-resume) verifies the saved assignment
-with an id-only report and its generation header before resuming. This existing
-route validates authorization without changing request/node status or appending logs;
-it does not expose server node states or provide an assignment lease.
+- Connect to the HTTP site origin, not the Convex client/API origin.
+- Bootstrap allowed Spec YAML with CEL capability headers; claim using the loaded
+  engine and explicit Spec slug after token-bound heartbeat.
+- Carry the returned assignment generation on Request-context reports/artifact calls.
+- Real execution reports through Spec actions/hooks. `/api/requests/update` does
+  not exist; use the documented report route. Fake mode alone reports automatically.
+- Upload raw bytes to signed storage, complete the server receipt and retrieve signed
+  download URLs. `/download` returns URL JSON, not proxied bytes. Never forward worker
+  credentials to storage. HTTP `artifactId` denotes an output key, not a canonical ID.
+- Retry completion once with identical details only for the bounded uncertain/transient
+  cases in [Phase 4](phase-4.md#preserved-contracts); claim and PUT are not blindly retried.
 
-## Known/proposed endpoints to reconcile
+The CPU integration suite loads real sibling HTTP handlers/schema when
+`MU_MASTERFLOW_SOURCE` is supplied; otherwise those tests skip. See
+[Phase 4 validation](phase-4.md#validation). Historical live smoke results do not
+prove current provider configuration, GPU execution or production readiness.
 
-Current artifact receipts, signed transfers and executable CPU round-trip are
-verified in [Phase 4](phase-4.md#preserved-contracts). Use that contract rather than
-the historical draft table below; `/download` returns URL JSON, not raw bytes.
+## Authorization and recovery limits
 
-The following routes reflect previously discussed Mu contracts, **not a verified current OpenAPI specification**:
+Worker tokens do not grant owner administration, arbitrary Request inspection,
+Request creation or artifact deletion. The server controls assignment atomically.
+There is no assignment lease, immutable server Spec snapshot or node-state download.
+Recovery uses local pinned state, exact current Spec text and the existing id-only
+report guard; see [Phase 3](phase-3.md#protocol-limits-and-decisions).
 
-| Method | Route | Purpose |
-|---|---|---|
-| POST | `/api/requests/claim` | Claim eligible Requests (`unitId`, `specSlug`, `maxCount`) |
-| POST | `/api/requests/update` | Report Request/node progress |
-| POST | `/api/requests/report` | Report Request status/state from Spec-defined action where applicable |
-| POST | `/api/units/heartbeat` | Report Unit status/devices |
-| GET | `/api/specs/{slug}` | Retrieve Spec |
-| POST | `/api/requests/artifacts/upload-url` | Obtain authorized signed upload URL |
-| GET | `/api/requests/artifacts/download` | Obtain authorized artifact download |
-
-**Important:** `/api/requests/report` may be intentionally exposed for explicit Spec actions rather than automatically called inside engine logic. Preserve this boundary after inspecting existing code. `update` versus `report` ownership must be resolved before coding.
-
-## Worker credential policy
-
-- Worker may access only Requests it is authorized to process.
-- Worker may submit artifacts and report authorized progress; no artifact deletion, no unrestricted Convex access.
-- Owner administration is authenticated separately (e.g., Clerk); worker token must never grant owner powers.
-- Agent credentials are distinct: read-only Specs/Requests/Artifacts/Products/Creation Spaces, create Requests only; no Storage or Units/Workers access, no execution/report privileges.
-- Signed upload/download URLs should be scoped, expiring, and never printed in normal logs.
-
-## Reliability contract
-
-Specify timeouts, retry/backoff, idempotency keys, error schema, pagination/batch limits, lease expiration and stale worker recovery. Heartbeats and reporting should be independent of long-running subprocess completion.
-
-## Compatibility checklist
-
-Verify server request/response schemas from the actual current code before implementing TS clients. Do not infer that endpoint names, status values or authentication mechanisms remain unchanged after recent refactors.
+Agent-specific credentials/permissions, lease expiration, broader retry policies
+and distributed reconciliation remain design proposals. No available Mu Agent API
+is asserted by this document.

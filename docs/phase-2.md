@@ -1,3 +1,7 @@
+---
+status: completed
+---
+
 # Phase 2 — CPU Spec engine
 
 Historical Phase 2 delivery. [Phase 3](phase-3.md) now adds shared CPU/GPU
@@ -18,7 +22,7 @@ MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker start --config mu.yaml
 Without `--fake`, workers now execute the fetched Spec. `--fake` retains the
 explicit Phase 1 simulation. There is still no public local `mu run` command.
 Use CPU-only Specs with workload `units: 0` (also the omitted default).
-Any node referencing a GPU workload is rejected before claiming work, including
+At Phase 2 delivery, any node referencing a GPU workload was rejected before claiming work, including
 conditional workload actions. Unused GPU workload declarations are harmless.
 
 ## Implementation and boundaries
@@ -102,7 +106,7 @@ handled and warns that the owner must inspect/reset the assignment in MasterFlow
 The original unknown-outcome limitations remain: no server lease/reclaim or
 arbitrary assignment-inspection endpoint is available.
 
-## Verified limits and remaining work
+## Limits at Phase 2 delivery (superseded where noted)
 
 CPU nodes/requests remain serial. GPU admission/capacity, concurrent scheduling,
 node checkpoint/resume and durable external-effect delivery belong to Phase 3.

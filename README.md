@@ -19,16 +19,19 @@ For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/07-
 
 ## Documentation map
 
+The [documentation index](docs/README.md) distinguishes current references, completed
+delivery records and the original migration proposal.
+
 - [01 — CLI contract](docs/01-cli.md): commands, flags, configuration and exit codes.
-- [02 — Architecture](docs/02-architecture.md): packages, dependency direction and project tree.
+- [02 — Architecture](docs/02-architecture.md): current modules, repository boundaries and proposed shared packages.
 - [03 — Worker lifecycle](docs/03-worker.md): identity, claim, heartbeat, once/daemon and shutdown.
 - [04 — Spec Engine](docs/04-spec-engine.md): validation, execution context, actions, conditions and events.
 - [05 — Scheduler and runtime](docs/05-scheduler-runtime.md): device capacity, subprocess, failure and resume.
 - [06 — Data Center protocol](docs/06-protocol.md): API boundary, permissions and persistence.
-- [07 — Migration and testing](docs/07-migration.md): phased plan and acceptance tests.
-- [08 — Open decisions](docs/08-decisions.md): unresolved design questions and explicit defaults.
+- [07 — Original migration roadmap](docs/07-migration.md): historical proposal and acceptance goals, superseded by delivery records.
+- [08 — Decisions](docs/08-decisions.md): implemented decisions and remaining proposals/verification gaps.
 
-## Proposed primary usage
+## Primary usage
 
 ```bash
 mu config init

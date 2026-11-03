@@ -1,57 +1,47 @@
-# 04 — Shared Spec and Engine
+# 04 — Spec engine
 
-Implemented CPU semantics and verified corrections to this target design are in
-[Phase 2](phase-2.md). Actual events are pipeline/node started/finished; condition
-operators use snake_case and do not include `not`. Reporting is Spec-defined.
+Current implementation is in `src/spec/` and `src/engine/`. The detailed semantics
+and Python comparisons are recorded in [Phase 2](phase-2.md#implemented-semantics),
+with later [scheduling/recovery](phase-3.md) and [artifact integration](phase-4.md).
 
-## Package responsibilities
+## Supported surface
 
-`@mu/spec` provides a **single canonical** parser, schema, validator, normalizer and TypeScript types for Spec YAML. It must not read the network or spawn processes.
+- YAML/JSON parsing and declaration/DAG validation; pinned YAML 1.1 scalar behavior.
+- CEL is the only expression engine, including omitted declarations. Whole-value
+  expressions preserve JSON types; supplied payloads are literal, not rerendered.
+- Strict string/number/boolean/array/object parameters, defaults and isolated contexts.
+- Actions: `execute_command`, `execute_workload`, `execute_routine`, `create_dir`,
+  `write_json`, `inspect_file`, `send_http_request`.
+- Conditions: `and`, `or`, `cel`, `file_exists`, `folder_exists`, `path_exists`,
+  `exit_code`, `action_state`, `node_state`, `node_status`. There is no `not` operator.
+- Events: `pipeline_started`, `pipeline_finished`, `node_started`, `node_finished`.
+  Hook failures warn without changing execution outcomes; workload placement is restricted.
 
-`@mu/engine` provides execution semantics: dependency graph, node eligibility, conditions, action dispatch, events, context and state transitions. Its dependencies are injected interfaces, not concrete Bun/Convex APIs.
+Entry initialization/finalization and lazy pipeline preparation are distinct from
+Request execution. Successful preparation is shared per Flow/pipeline; Request,
+node, routine and hook contexts are isolated. Captured uppercase Registry roots
+are immutable; lowercase `session` is worker runtime context.
 
-## Conceptual interfaces (illustrative; not frozen API)
+Node order is context → skip/precondition → before/run/after → postcondition →
+finally, followed by terminal event handling. Dependency failure blocks dependent
+execution. Runtime states are `running`, `success`, `failed`; server status mapping
+belongs to Spec reporting hooks. See Phase 2 for skip, ignore_error and cleanup nuances.
 
-```ts
-interface EnginePorts {
-  actions: ActionExecutor;
-  state: ExecutionStateStore;
-  clock: Clock;
-  logger: Logger;
-}
+## Effects and reporting
 
-interface ActionExecutor {
-  execute(action: ActionDefinition, context: ActionContext): Promise<ActionResult>;
-}
+The parser cannot launch processes. Engine effects are injected through
+`src/engine/ports.ts`; Bun adapters own actual processes, files and HTTP.
+Commands use argv without an implicit shell. Reporting, notification and artifact
+operations remain Spec-defined actions; importing the engine grants no server authority.
 
-interface ExecutionStateStore {
-  load(requestId: string): Promise<ExecutionSnapshot>;
-  save(requestId: string, patch: ExecutionPatch): Promise<void>;
-}
-```
+## Compatibility and remaining design
 
-## Action registry
+The shared 63-case CEL fixture is byte-identical across active CLI, legacy CLI and
+MasterFlow. This proves fixture consistency, not full runtime parity. The
+[Python format guide](https://github.com/khanhtranrk/mu-cli-legacy/blob/master/docs/spec-format/README.md)
+remains a migration reference; Python CLI forms and extra legacy actions do not
+become TypeScript features by being documented there.
 
-Handlers own only their action implementation. Proposed initial actions to preserve if present in existing Python engine:
-
-- `execute_command`: subprocess command, stdout/stderr/exit handling.
-- `send_http_request`: HTTP method/headers/body, timeout and response persistence.
-- `execute_workload`: resolve and launch a named workload.
-
-Support existing reusable defined actions and action-level options only after verifying their actual syntax. Do not invent new YAML fields during migration.
-
-## Conditions and events
-
-Preserve existing logical operators (`and`, `or`, `not`) and leaf checks (`file-exists`, `node_status`) where implemented. Event hooks (`on: execute_node`, `on: action`) must be audited for actual implementation status before porting; proposals are not automatically existing behavior.
-
-## Execution context
-
-Scope variables explicitly; distinguish immutable request input, ephemeral action/node state, persisted request variables and artifacts. Existing precedence (Creation Space → Session → Request → pipeline/action context) must be documented with concrete examples and verified before implementation.
-
-## Shared does not mean universally executable
-
-MasterFlow may parse/validate or simulate safely; Mu Agent may inspect Specs to create Requests. Only the Worker receives process execution capabilities. Backend permissions remain enforced independently of package imports.
-
-## Versioning
-
-Every saved Spec should have an identifiable schema version and ideally a stable content hash/snapshot. Do not reinterpret in-progress Requests using a newer schema silently.
+Publishing shared packages and replacing MasterFlow validation remain proposals.
+Server Specs are mutable; local recovery pins exact text and rejects changed source,
+without claiming immutable server-side snapshots. See [architecture](02-architecture.md).

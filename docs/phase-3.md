@@ -1,3 +1,7 @@
+---
+status: completed
+---
+
 # Phase 3 — Local scheduler and node recovery
 
 Phase 3 of the user's four-phase plan. Subsequent artifact receipts and real-backend

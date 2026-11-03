@@ -1,46 +1,55 @@
-# 05 — Scheduler and Execution Runtime
+# 05 — Scheduler and recovery
 
-Implemented behavior, legacy CPU fallback, capacity configuration and guarded
-node recovery are documented in [Phase 3](phase-3.md). The remaining sections are
-the target design; authoritative server node-state download is not currently an API.
+Current implementation: `src/scheduler/scheduler.ts`, `src/engine/flow.ts`,
+`src/engine/checkpoint.ts`, `src/runtime/` and `src/state.ts`.
+[Phase 3](phase-3.md) retains detailed delivery and validation evidence.
 
-## Scheduling scope
+## Admission
 
-Data Center decides which Requests are claimable; local Worker Scheduler decides which **nodes of already-claimed Requests** can execute on available devices.
+The server selects Requests; the local worker schedules nodes of already-claimed
+Requests. One shared scheduler covers all Requests/Specs in a SpecExecutor.
+All admitted nodes consume an execution slot (`concurrency` 1–32, default 32).
+CPU nodes request zero GPU units and may pass queued GPU work.
 
-Node eligibility = dependencies satisfied + condition permits + required resources available + no conflicting in-flight execution. Priority policy must preserve the Python implementation unless explicitly changed.
+Devices have `{family, index, maxUnits}`. Node demand is the maximum workload units
+across before/run/after actions, including conditional calls. Best-fit placement
+uses the smallest available fitting capacity with declaration-order ties. A fitting
+but busy GPU queues work; no GPU with sufficient total capacity triggers the retained
+Python CPU fallback. Reservations last through finally, terminal hooks and durable
+completion checkpointing. Units are a capacity heuristic, not guaranteed VRAM usage.
 
-## Resource model
+Omitted devices invoke bounded NVIDIA/AMD discovery; explicit `devices: []` disables
+probes. Discovery uses the legacy ceil(VRAM / 4 GiB) heuristic. Scheduling tests use
+synthetic devices/effects; live GPU placement and Kaggle are not established.
 
-A device is described by `{ family, index, maxUnits }`. A node/workload declares resource requirements. Unit capacity is a **configured heuristic**, not an automatically reliable VRAM measurement. CPU steps may run immediately when eligible; GPU workloads queue behind capacity constraints.
+## Process effects
 
-Do not accidentally introduce uncontrolled concurrency when migrating Python `asyncio` to Bun. Define concurrency limits and resource acquisition/release tests.
+Bun adapters launch argv subprocesses without an implicit shell and cancel POSIX
+process groups. Cleanup attempts have bounded budgets; forced kernel loss cannot
+guarantee finally or terminal delivery. Windows process-tree behavior is unverified.
+The actual injected interface is `src/engine/ports.ts`, rather than the original
+proposal's illustrative ProcessRunner API.
 
-## ProcessRunner abstraction
+## Checkpoints and resume
 
-```ts
-interface ProcessRunner {
-  run(command: string[], options: {
-    cwd?: string;
-    env?: Record<string, string>;
-    timeoutMs?: number;
-    signal?: AbortSignal;
-    onStdout?: (chunk: Uint8Array) => void;
-    onStderr?: (chunk: Uint8Array) => void;
-  }): Promise<{ exitCode: number; signal?: string }>;
-}
-```
+Private atomic checkpoints retain exact Spec text, assignment identity, contexts
+and node outcomes. Dependency success is exposed after durable completion.
+Resume checks exact remote Spec and the existing id-only report assignment guard;
+it does not download authoritative server node states or obtain a lease.
 
-Bun implementation uses `Bun.spawn`, streaming logs without buffering unbounded output. Avoid shell interpolation for untrusted parameters; prefer argument arrays. Explicitly test process-tree cleanup, timeout, cancellation, and non-zero exit behavior on Kaggle.
+Successful nodes are skipped after declared postconditions are rechecked. Unknown
+running/failed nodes require explicit whole-node retry in an unfinished pipeline.
+Actions, HTTP effects and entry finalization may repeat at documented boundaries;
+there is no general exactly-once or durable per-action receipt recovery.
+Unknown intake/preparation/hook outcomes still require manual inspection.
 
-## Failure and resume
+See [resume commands and boundaries](phase-3.md#durable-state-and-resume),
+[artifact retry limits](phase-4.md#limits-and-decisions) and [CLI configuration](01-cli.md).
+Keep successful-node output files; only declared postconditions verify them.
+Concurrent Requests must use distinct Spec-defined output paths.
 
-- A node is successful only after required postconditions and durable reporting policy are met.
-- Persist checkpoints/outputs needed to avoid recomputing expensive lyrics/transcript steps.
-- Retry must not duplicate non-idempotent external actions or artifacts; use stable artifact IDs and idempotency keys where supported.
-- On restart, fetch authoritative states, reconcile with local files/artifact metadata, and resume eligible work.
-- Distinguish execution failure, artifact upload failure, report failure and worker interruption.
+## Remaining proposals
 
-## Observability
-
-Structured logs should include `unitId`, `requestId`, `nodeId`, `actionType`, duration, exit status and correlation ID. Redact secrets, signed URLs and sensitive input data. Use `debug` for verbose command logs.
+Receiver-side idempotency, richer structured observability and server-assisted
+reconciliation may improve recovery, but are not current protocol guarantees or
+assigned implementation work. Historical target designs must not override these limits.

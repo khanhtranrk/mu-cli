@@ -1,50 +1,48 @@
-# 03 — Worker Runtime
+# 03 — Worker lifecycle
 
-## Worker responsibilities
+Current implementation: `src/worker.ts`, `src/runtime/spec-executor.ts` and
+`src/state.ts`. Historical delivery details are in [Phases 1–4](README.md#delivery-records-and-proposals).
 
-1. Load validated config and credentials.
-2. Discover physical devices and report configured capacity.
-3. Authenticate and identify Unit with Data Center.
-4. Maintain heartbeat independently of long-running workloads.
-5. Claim only authorized Requests and fetch their Specs/previous states.
-6. Create request-scoped execution sessions and submit eligible nodes to local scheduler.
-7. Persist progress and report statuses; upload artifacts via server-authorized signed URLs.
-8. Handle interruption, recovery and graceful shutdown.
+## Intake and execution
 
-## Modes
+The worker loads configuration, discovers or accepts configured devices, bootstraps
+permitted Specs, maintains heartbeats and claims waiting Requests for explicit Spec
+slugs. The server binds token/unit identity and supplies assignment generations.
+The local scheduler executes eligible nodes across claimed Requests and Specs.
 
-- `start`: repeated claim cycles; poll when idle; respond to SIGINT/SIGTERM.
-- `once`: claim once, drain that batch, exit; suitable for ephemeral Kaggle/Colab kernels.
+`once` claims at most one global batch and drains it. `start` repeats the cycle.
+`once --resume` processes recorded recovery work without claiming a new batch;
+`start --resume` drains recovery before normal claiming.
 
-## State machine (conceptual)
+Real execution preserves Spec-owned reporting through HTTP actions/routines/events;
+there is no automatic status reporter. A Spec without reporting can finish locally
+while its server Request remains possessed. `--fake` is a separate serial simulation
+that claims real work and sends request-level reports.
 
-```text
-BOOTING → CONNECTING → READY → CLAIMING → EXECUTING → REPORTING
-                        ↑            │            │
-                        └─ IDLE ◀─────┘            ├─ SHUTTING_DOWN
-                                                   └─ DEGRADED / RETRY
-```
+## Identity and durable state
 
-Worker state is **not** Request status. Existing Request statuses (`waiting`, `possessed`, `processing`, `process_failed`, `artifact_available`, `retrieve_artifact_failed`, `succeeded`) must be inventoried and mapped, not replaced silently.
+Claims include Request ID, pipeline, payload, assignment version, derived output
+metadata and optional frozen Registry values. They do not provide a server lease,
+arbitrary assignment inspection, authoritative node-state download or immutable
+server Spec snapshot. Local checkpoints retain exact Spec text and execution state.
 
-## Claiming and ownership
+An execution session is Request-local; it is distinct from a Creation Space Session.
+Runtime `success` is mapped by Spec reporting to API `succeeded`; failure reporting
+uses server statuses such as `process_failed`. See [protocol](06-protocol.md).
 
-- Server is authoritative for claims and ownership/lease semantics.
-- A claim response must carry request ID, Spec identifier/version, and required resume metadata.
-- Do not steal in-progress requests; use server-supported exclusion/lease protocol.
-- Worker must not create new Requests as part of ordinary execution unless separately authorized by future policy.
-- Unit identity and token must be bound by the server; user-supplied `--unit-id` is not proof of authorization.
+## Shutdown and recovery
 
-## Graceful shutdown
+Signals stop intake/admission, cancel subprocess groups, attempt cleanup/finalization
+and persist progress within the documented budgets. Kernel loss may bypass cleanup.
+There is no server lease to reclaim stranded work automatically; lost claim responses
+can require owner inspection/reset.
 
-1. Stop claiming.
-2. Stop scheduling new nodes.
-3. Signal running processes and wait up to `shutdownTimeout`.
-4. Persist/report best-effort final states.
-5. Exit with appropriate code; rely on server lease/recovery for ungraceful kernel loss.
+Resume verifies saved identity, exact current remote Spec and assignment generation.
+Successful nodes are retained and declared postconditions rechecked. Unknown running
+or failed node outcomes require explicit `--retry-incomplete` in an unfinished
+pipeline; external effects may repeat. Unknown preparation/hook outcomes are not
+blindly replayed. See [recovery details](phase-3.md#durable-state-and-resume).
 
-Kaggle can terminate the kernel without delivering usable signals. Durable checkpointing is mandatory; graceful shutdown is only best effort.
-
-## Execution session
-
-A session is per Request: `requestId`, immutable Spec snapshot/version, parameters, scoped variables, node states, artifact references, cancellation signal and logging correlation ID. Do not confuse this internal execution session with the Mu Creation Space Session entity.
+A workspace lock prevents two processes sharing local state. After forced loss,
+verify the old worker and children have stopped before removing a stale lock.
+Separate workspaces do not constitute a multi-host lease.

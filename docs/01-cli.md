@@ -1,107 +1,87 @@
-# 01 — CLI Contract
+# 01 — CLI and configuration
 
-Implemented Phase 3 options and recovery behavior: [scheduler and resume](phase-3.md).
-`--device FAMILY,INDEX,MAX_UNITS`, `--concurrency`, `--shutdown-timeout`,
-`--resume` and explicit `--retry-incomplete` are available; other proposed options
-below still require verification against the CLI help.
+Current implementation: `src/index.ts` and `src/config.ts`.
 
-## Command tree
+## Commands
 
 ```text
-mu
-├── worker
-│   ├── start       Run continuously: claim → execute → repeat
-│   ├── once        Claim one batch, process it, then exit
-│   ├── doctor      Check environment and server reachability
-│   └── info        Display resolved worker/device information
-├── config
-│   ├── init        Generate example configuration
-│   └── show        Print resolved configuration (redacted)
-├── version         Print CLI, engine, and protocol versions
-└── help
+mu worker start|once     Execute authorized server work
+mu worker doctor        Check workspace, health and scoped Spec access; no claim
+mu worker info          Print resolved configuration and devices, token redacted
+mu config init          Write example YAML; --output PATH, --force to overwrite
+mu config show          Print resolved configuration, token redacted
+mu version              Print the CLI version and capability summary
+mu help                 Print usage
 ```
 
-No `mu run <file.yaml>` production command. Test harnesses may execute local fixtures internally without contacting the server.
+There is no public local `mu run` command. `once` drains one batch (possibly several
+Requests); `start` repeats claim cycles. Both execute Specs unless `--fake` is
+explicitly selected. Fake mode claims real Requests and reports simulated results.
+Real execution leaves reporting to Spec actions/hooks.
 
-## `mu worker start`
-
-Long-running worker. Authenticate, detect devices, report heartbeat, claim eligible requests, execute and report, then poll again.
-
-```bash
-MU_WORKER_TOKEN='...' mu worker start   --server https://mu.example.com   --unit-id local-gpu-0   --spec music-generation   --max-claim 5   --poll-interval 15
+```sh
+MU_WORKER_TOKEN='YOUR_TOKEN' mu worker once --config ./mu.yaml --spec your-spec
 ```
 
-## `mu worker once`
+## Configuration
 
-Claim **one batch**, not necessarily one request; process it until completed, terminally failed, or interrupted. No further claim cycle. Appropriate for Kaggle/Colab sessions.
+CLI flags override supported environment variables, then YAML, then defaults.
+Configuration uses `--config`, then `MU_CONFIG`, then `./mu.yaml`. An explicitly
+selected missing file fails; an absent implicit `mu.yaml` is allowed. Tokens come
+from `MU_WORKER_TOKEN` or `--token`, never YAML. Prefer the environment to avoid
+putting tokens in process arguments.
 
-```bash
-MU_WORKER_TOKEN='...' mu worker once --config ./mu.yaml --max-claim 10
-```
+| Flag | YAML / environment | Default or constraint |
+| --- | --- | --- |
+| `--server` | `server.url` / `MU_SERVER_URL` | Required HTTP site origin, no path/query/credentials |
+| `--unit-id` | `worker.unitId` / `MU_UNIT_ID` | Required; server token binding must match |
+| `--spec` (repeatable) | `worker.specs` | Explicit list needed to claim; doctor requires a Spec |
+| `--workspace` | `runtime.workspace` | `.mu` |
+| `--max-claim` | `worker.maxClaim` | 1; integer 1–100 across the batch |
+| `--poll-interval` | `polling.interval` | 15 seconds, positive |
+| `--heartbeat-interval` | `polling.heartbeatInterval` | 30 seconds, positive |
+| `--device FAMILY,INDEX,MAX_UNITS` (repeatable) | `runtime.devices` | Positive capacity; family cuda/rocm (`nvidia` CLI alias) |
+| `--concurrency` | `runtime.concurrency` | 32; integer 1–32 |
+| `--shutdown-timeout` | `runtime.shutdownTimeout` | 30 seconds, positive |
+| `--resume` | CLI only | Resume recorded work; see recovery guide |
+| `--retry-incomplete` | CLI only | Requires --resume; whole-node effects may repeat |
+| `--fake` | CLI only | Off; simulation over real assignments |
 
-If the server returns no work, exit successfully unless configured otherwise in a future extension. A single batch may contain multiple requests; resource scheduling still governs concurrent execution.
-
-## Common worker options
-
-| Option | Type | Purpose | Proposed default |
-|---|---|---|---|
-| `--config <path>` | path | Configuration YAML | `./mu.yaml` if present |
-| `--server <url>` | URL | Data Center API base | config/env required |
-| `--token <value>` | secret | Worker bearer credential; **discouraged on CLI** | `MU_WORKER_TOKEN` |
-| `--unit-id <id>` | string | Stable server-known Unit ID | required/config |
-| `--spec <slug>` | repeatable | Allowed Spec filter for claim | server-authorized set |
-| `--max-claim <n>` | positive int | Maximum requests claimed in batch | 1 |
-| `--poll-interval <seconds>` | positive number | Idle polling cadence (`start`) | 15 |
-| `--heartbeat-interval <seconds>` | positive number | Unit heartbeat cadence | 30 |
-| `--workspace <path>` | path | Local temporary workspace | platform-specific |
-| `--shutdown-timeout <seconds>` | positive number | Graceful shutdown budget | 30 |
-| `--log-level <level>` | enum | `debug/info/warn/error` | info |
-| `--json` | boolean | Machine-readable output for info/doctor | false |
-
-`--token` is included for compatibility convenience, but environment variables or a secrets provider should be preferred: command-line tokens can leak through process listings and logs.
-
-## Auxiliary commands
-
-- `mu worker doctor [--config ...] [--json]`: verify Bun, config, writable workspace, API connectivity/auth, device detection and essential executables. No claim or execution.
-- `mu worker info [--config ...] [--json]`: display unit ID, mode, detected devices and configuration summary. No secrets.
-- `mu config init [--output mu.yaml] [--force]`: create a template; refuse overwrite without `--force`.
-- `mu config show [--config ...] [--json]`: resolved configuration, secrets always redacted.
-- `mu version [--json]`: CLI version, shared Spec/Engine versions, protocol version.
-
-## Configuration precedence
-
-`explicit CLI flags > environment variables > config YAML > built-in defaults`. Validate at startup and report field-specific errors. Never print bearer credentials.
+Omitted devices trigger bounded hardware discovery; `runtime.devices: []` disables
+probes and selects CPU-only placement. `info`, `show` and successful `doctor` print
+JSON even without `--json`; `version` prints text. The parser accepts `--json`, but
+there is no distinct JSON version payload. `--log-level`, logging YAML settings
+and `MU_LOG_LEVEL` are not implemented configuration options.
 
 ```yaml
 server:
-  url: https://mu.example.com
+  url: http://127.0.0.1:3211
 worker:
-  unitId: kaggle-t4-01
-  mode: once
-  specs: [music-generation]
-  maxClaim: 10
+  unitId: cpu-worker
+  specs: [your-spec]
+  maxClaim: 1
 runtime:
-  workspace: /kaggle/working/mu
+  workspace: .mu
+  devices: []
+  concurrency: 2
   shutdownTimeout: 30
 polling:
   interval: 15
   heartbeatInterval: 30
-logging:
-  level: info
 ```
 
-Suggested environment variables: `MU_SERVER_URL`, `MU_WORKER_TOKEN`, `MU_UNIT_ID`, `MU_CONFIG`, `MU_LOG_LEVEL`.
-
-## Proposed process exit codes
+## Exit codes and diagnostics
 
 | Code | Meaning |
-|---|---|
-| 0 | Normal shutdown / batch drained / no work |
-| 2 | Invalid CLI arguments or configuration |
-| 3 | Authentication or authorization failure |
-| 4 | Server connection / protocol failure |
-| 5 | Worker infrastructure failure |
-| 6 | Batch ended with failed requests (policy to finalize) |
-| 130 | Interrupted (SIGINT convention) |
+| --- | --- |
+| 0 | Success, no work or normal shutdown |
+| 2 | Argument/configuration error before configuration succeeds |
+| 3 | HTTP 401/403 |
+| 4 | Other API HTTP errors, including authorization refusals returned as 400 |
+| 5 | Infrastructure, transport or local-state failure after configuration |
+| 6 | Batch execution failure |
+| 130 | Graceful interruption |
 
-Exit-code policy must be confirmed with existing notebooks and automation before freezing.
+Doctor checks local workspace writes, API health and permitted Spec parsing. It
+does not claim or register a unit and cannot prove unit binding without a heartbeat.
+See [scheduler/recovery](05-scheduler-runtime.md) and [integration](phase-4.md).
