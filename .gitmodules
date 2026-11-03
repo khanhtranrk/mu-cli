@@ -9,3 +9,4 @@
 [submodule "mu-masterflow"]
     path = mu-masterflow
     url = https://github.com/khanhtranrk/mu-masterflow.git
+	branch = master
