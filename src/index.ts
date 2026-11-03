@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { Command, CommanderError } from "commander";
 import { mkdir, open, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { DataCenterClient, ApiError } from "./api";
@@ -10,46 +11,76 @@ import { parseSpec } from "./spec/parse";
 import { Worker } from "./worker";
 import { detectDevices } from "./runtime/devices";
 
-const help = `MU CLI v2 — CPU/GPU Spec worker
-mu worker once|start --spec <slug> [--fake] [options]
-mu worker doctor|info [--json] [options]
-mu config show [options]
-mu config init [--output mu.yaml] [--force]
-mu version
-Options: --config --server --token --unit-id --spec (repeatable)
-         --workspace --max-claim --poll-interval --heartbeat-interval
-         --device FAMILY,INDEX,MAX_UNITS (repeatable) --concurrency (1-32)
-         --shutdown-timeout --resume [--retry-incomplete]
-Fake mode claims real requests and reports simulated results. No Spec actions run.`;
+type Flags = Record<string, string | string[] | boolean>;
 
-export async function main(args = process.argv.slice(2)): Promise<number> {
-  const [group, command, ...options] = args;
-  if (!group || group === "help" || group === "--help") { console.log(help); return 0; }
-  if (group === "version") { console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)"); return 0; }
-  const flags: Record<string, string | string[] | boolean> = {};
-  const booleans = new Set(["fake", "json", "force", "resume", "retry-incomplete"]);
-  const values = new Set(["config", "server", "token", "unit-id", "spec", "workspace", "max-claim", "poll-interval", "heartbeat-interval", "output", "device", "concurrency", "shutdown-timeout"]);
+// Commander owns syntax; loadConfig retains configuration precedence and validation.
+function options(command: Command): Command {
+  const repeat = (value: string, previous: string[] = []) => [...previous, value];
+  return command
+    .option("--config <path>", "Configuration YAML path")
+    .option("--server <url>", "Data Center HTTP site origin")
+    .option("--token <token>", "Worker token (prefer MU_WORKER_TOKEN)")
+    .option("--unit-id <id>", "Worker unit identity")
+    .option("--spec <slug>", "Authorized Spec slug (repeatable)", repeat)
+    .option("--workspace <path>", "Worker state directory")
+    .option("--max-claim <count>", "Batch limit (integer 1–100)")
+    .option("--poll-interval <seconds>", "Positive polling interval")
+    .option("--heartbeat-interval <seconds>", "Positive heartbeat interval")
+    .option("--device <family,index,max_units>", "GPU capacity (repeatable; cuda/rocm/nvidia)", repeat)
+    .option("--concurrency <count>", "Concurrent nodes (integer 1–32)")
+    .option("--shutdown-timeout <seconds>", "Positive shutdown budget")
+    .option("--resume", "Resume recorded work")
+    .option("--retry-incomplete", "Retry incomplete work; requires --resume")
+    .option("--fake", "Claim real requests and simulate results without Spec actions")
+    .option("--json", "JSON output (info/show/doctor already use JSON)")
+    .option("--output <path>", "Configuration init destination (default: mu.yaml)")
+    .option("--force", "Overwrite configuration on init");
+}
+
+export async function main(args = Bun.argv.slice(2)): Promise<number> {
+  let result = 0;
+  const program = new Command().name("mu").description("MU CLI v2 — CPU/GPU Spec worker").exitOverride().addHelpCommand(true);
+  const route = (command: Command, run: (flags: Flags) => Promise<number>) => {
+    options(command).action(async (parsed: Flags) => {
+      const flags = Object.fromEntries(Object.entries(parsed).map(([key, value]) =>
+        [key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`), value]));
+      result = await run(flags);
+    });
+  };
+  const worker = program.command("worker").description("Execute and inspect authorized server work");
+  route(worker.command("once").description("Drain one batch"), flags => runWorker("once", flags));
+  route(worker.command("start").description("Continuously claim and execute work"), flags => runWorker("start", flags));
+  route(worker.command("doctor").description("Check workspace, health and scoped Spec access"), flags => runWorker("doctor", flags));
+  route(worker.command("info").description("Print resolved configuration and devices"), flags => runWorker("info", flags));
+  const config = program.command("config").description("Manage worker configuration");
+  route(config.command("init").description("Write example YAML"), initConfig);
+  route(config.command("show").description("Print resolved configuration"), flags => runWorker("show", flags));
+  program.command("version").description("Print CLI version and capabilities").action(() => {
+    console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)");
+  });
+  program.action(() => program.outputHelp());
+  try { await program.parseAsync(args, { from: "user" }); }
+  catch (error) {
+    if (error instanceof CommanderError) return error.exitCode === 0 ? 0 : 2;
+    console.error(error instanceof Error ? error.message : "CLI failed");
+    return 2;
+  }
+  return result;
+}
+
+async function initConfig(flags: Flags): Promise<number> {
+  try {
+    const path = typeof flags.output === "string" ? flags.output : "mu.yaml";
+    const file = await open(path, flags.force ? "w" : "wx", 0o600);
+    try { await file.writeFile("server:\n  url: http://127.0.0.1:3211\nworker:\n  unitId: disposable-cpu\n  specs: [disposable-cpu]\n  maxClaim: 1\nruntime:\n  workspace: .mu\npolling:\n  interval: 15\n  heartbeatInterval: 30\n"); }
+    finally { await file.close(); }
+    return 0;
+  } catch { console.error("Local file unavailable"); return 2; }
+}
+
+async function runWorker(command: "once" | "start" | "doctor" | "info" | "show", flags: Flags): Promise<number> {
   let configured = false;
   try {
-    for (let index = 0; index < options.length; index++) {
-      const option = options[index]!;
-      const name = option.slice(2);
-      if (!option.startsWith("--")) throw new Error("Expected an option");
-      if (booleans.has(name)) { flags[name] = true; continue; }
-      if (!values.has(name)) throw new Error("Unknown option");
-      const value = options[++index];
-      if (!value || value.startsWith("--")) throw new Error("Option requires a value");
-      if (name === "spec" || name === "device") flags[name] = [...(flags[name] as string[] ?? []), value];
-      else flags[name] = value;
-    }
-    if (group === "config" && command === "init") {
-      const path = typeof flags.output === "string" ? flags.output : "mu.yaml";
-      const file = await open(path, flags.force ? "w" : "wx", 0o600);
-      try { await file.writeFile("server:\n  url: http://127.0.0.1:3211\nworker:\n  unitId: disposable-cpu\n  specs: [disposable-cpu]\n  maxClaim: 1\nruntime:\n  workspace: .mu\npolling:\n  interval: 15\n  heartbeatInterval: 30\n"); }
-      finally { await file.close(); }
-      return 0;
-    }
-    if (!(group === "worker" && ["once", "start", "doctor", "info"].includes(command ?? "")) && !(group === "config" && command === "show")) throw new Error("Unknown command; use mu help");
     const config = await loadConfig(flags);
     configured = true;
     config.devices ??= config.fake ? [] : await detectDevices();
@@ -80,8 +111,11 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       return await new Worker(config, api, executor).run(command as "once" | "start", controller.signal);
     }
     finally {
-      process.off("SIGINT", stop); process.off("SIGTERM", stop);
-      await lock.close(); await unlink(lockPath);
+      try {
+        try { await lock.close(); } finally { await unlink(lockPath); }
+      } finally {
+        process.off("SIGINT", stop); process.off("SIGTERM", stop);
+      }
     }
   } catch (error) {
     if (error instanceof ApiError) { console.error(error.message); return [401, 403].includes(error.status) ? 3 : 4; }
