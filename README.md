@@ -1,8 +1,12 @@
 # Mu CLI v2 — Worker-first Architecture
 
-**Status:** Draft v0.1 — design proposal, not an assertion of current implementation.  
+**Status:** Bun/TypeScript migration in progress. The documents describe target behavior; verify code before claiming a feature is implemented.  
 **Stack:** Bun + TypeScript (strict).  
 **Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
+
+This is the **active CLI development repository** and a Git submodule of the [MU workspace](https://github.com/khanhtranrk/mu). The previous Python runtime is preserved separately in [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy) for compatibility and migration reference.
+
+For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/07-migration.md) before editing.
 
 ## Design principles
 
