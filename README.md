@@ -1,39 +1,36 @@
-# MU
+# Mu CLI v2 — Worker-first Architecture
 
-MU is a workspace for the MU pipeline system. It brings together the Python execution worker and the MasterFlow desktop/backend while keeping each component in its own Git repository.
+**Status:** Draft v0.1 — design proposal, not an assertion of current implementation.  
+**Stack:** Bun + TypeScript (strict).  
+**Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
 
-## Repositories
+## Design principles
 
-| Directory | Responsibility | Documentation |
-| --- | --- | --- |
-| [mu-cli](https://github.com/khanhtranrk/mu-cli) | Python CLI, pipeline execution, GPU-aware scheduling, actions, conditions, and master-flow worker integration. The executable is named `mu`. | [CLI README](https://github.com/khanhtranrk/mu-cli/blob/master/README.md), [spec reference](https://github.com/khanhtranrk/mu-cli/blob/master/docs/spec-format/README.md) |
-| [mu-masterflow](https://github.com/khanhtranrk/mu-masterflow) | Tauri/React desktop UI, Convex backend, specs, requests, units, notifications, and worker HTTP endpoints. | [MasterFlow README](https://github.com/khanhtranrk/mu-masterflow/blob/main/README.md), [agent guide](https://github.com/khanhtranrk/mu-masterflow/blob/main/AGENT.md) |
+1. **Server-first:** production requests/specs originate from Mu Data Center. No public `mu run <spec>` mode.
+2. **Single source of truth:** shared Spec parsing/validation/semantics, no duplicated Python/TypeScript validators.
+3. **Separation of concerns:** CLI → Worker → Engine → Execution adapters; server handles assignment and authorization.
+4. **Explicit capability boundaries:** importing the engine does not grant execution or data-access privileges.
+5. **Resumability:** persist durable progress before considering work complete; ephemeral in-memory state is disposable.
+6. **Minimal migration risk:** characterize Python behavior before porting, do not change YAML semantics implicitly.
 
-## Clone
+## Documentation map
+
+- [01 — CLI contract](docs/01-cli.md): commands, flags, configuration and exit codes.
+- [02 — Architecture](docs/02-architecture.md): packages, dependency direction and project tree.
+- [03 — Worker lifecycle](docs/03-worker.md): identity, claim, heartbeat, once/daemon and shutdown.
+- [04 — Spec Engine](docs/04-spec-engine.md): validation, execution context, actions, conditions and events.
+- [05 — Scheduler and runtime](docs/05-scheduler-runtime.md): device capacity, subprocess, failure and resume.
+- [06 — Data Center protocol](docs/06-protocol.md): API boundary, permissions and persistence.
+- [07 — Migration and testing](docs/07-migration.md): phased plan and acceptance tests.
+- [08 — Open decisions](docs/08-decisions.md): unresolved design questions and explicit defaults.
+
+## Proposed primary usage
 
 ```bash
-git clone --recurse-submodules https://github.com/khanhtranrk/mu.git
-cd mu
+mu config init
+mu worker doctor
+mu worker once --config ./mu.yaml
+mu worker start --config ./mu.yaml
 ```
 
-For an existing checkout:
-
-```bash
-git submodule update --init --recursive
-```
-
-## Update submodules
-
-```bash
-git submodule update --remote --merge
-# Review changes, then commit updated submodule pointers in the parent repository.
-git status
-```
-
-Normal `git pull` in the parent does not automatically advance submodules to the latest upstream commits. To check out exactly the commits recorded by this workspace, use `git submodule update --init --recursive`.
-
-## Development
-
-Read [AGENTS.md](AGENTS.md) before cross-repository changes and [docs/README.md](docs/README.md) for shared documentation conventions. Run development commands from the relevant submodule directory, not the workspace root.
-
-The submodules are independent projects with independent commits, branches, and dependencies. For changes spanning both, commit and push changes in the affected submodules first, then update the parent workspace's submodule pointers.
+**Out of scope for v0.1:** full workload package registry, model installation, agent orchestration, new Spec syntax, automatic server-side scheduling redesign.
