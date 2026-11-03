@@ -42,7 +42,9 @@ test("real CLI loads Spec, initializes before claiming, executes CPU workload an
     return Response.json({ ok: true });
   } });
   try {
-    const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
+    const configPath = join(configuration.workspace, "cli-config.json");
+    await Bun.write(configPath, JSON.stringify({ runtime: { devices: [] } }));
+    const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
     expect(await child.exited).toBe(0);
     expect(paths.indexOf("/api/notifications/send")).toBeLessThan(paths.indexOf("/api/requests/claim"));
     expect(reports).toEqual([
@@ -73,9 +75,9 @@ test("Spec without reporting hooks sends no implicit reports", async () => {
   expect(paths.indexOf("/api/specs/cpu")).toBeLessThan(paths.indexOf("/api/requests/claim"));
 });
 
-test("invalid or GPU Specs fail before assignment", async () => {
+test("invalid Specs fail before assignment", async () => {
   const configuration = await config();
-  for (const source of ["pipeline: {p: {nodes: [{name: n, run: {workload: w}}]}}", "workloads: {w: {target: bun, units: 1}}\npipeline: {p: {nodes: [{name: n, run: [{type: execute_workload, workload: w}]}]}}"] ) {
+  for (const source of ["pipeline: {p: {nodes: [{name: n, run: {workload: w}}]}}"] ) {
     let claims = 0;
     const transport = (async (url: string | URL | Request) => {
       const path = new URL(String(url)).pathname;

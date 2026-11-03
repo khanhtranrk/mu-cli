@@ -4,6 +4,7 @@ import type { RequestExecutor } from "./runtime/types";
 import { StateStore, type Checkpoint } from "./state";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { RecoveryError } from "./engine/checkpoint";
 
 export class Worker {
   private store: StateStore;
@@ -20,10 +21,25 @@ export class Worker {
     await this.store.save({ ...state, phase: "reported" });
   }
 
-  private async recover(): Promise<void> {
+  private async recover(signal: AbortSignal): Promise<{ failed: boolean; resumed: boolean }> {
+    const resumable: Checkpoint[] = [];
     for (const state of await this.store.load()) {
+      this.seen.add(state.request.requestId + ":" + state.request.assignmentVersion);
       if (state.phase === "reported") continue;
       if (state.reporting === "spec") {
+        if (state.execution?.stage === "finished") { await this.store.save({ ...state, phase: "reported" }); continue; }
+        if (state.source !== undefined || state.execution) {
+          if (!this.config.resume) throw new RecoveryError("Unfinished Spec assignment found; use --resume to continue persisted nodes");
+          if (this.executor.reporting !== "spec" || !state.source || state.execution?.version !== 1 || state.execution.stage !== "nodes") throw new RecoveryError("Unknown intake/prepare/lifecycle outcome; inspect/reset the request in MasterFlow");
+          if (Object.values(state.execution.states).includes("running") && !this.config.retryIncomplete) throw new RecoveryError("Incomplete nodes require --resume --retry-incomplete; their external effects may repeat");
+          if (!this.config.specs.includes(state.request.specSlug)) throw new RecoveryError("Recovered assignment requires its --spec filter");
+          const source = this.sources.get(state.request.specSlug) ?? await this.api.spec(state.request.specSlug);
+          if (source !== state.source) throw new RecoveryError("Remote Spec changed since checkpoint; inspect/reset the request");
+          this.sources.set(state.request.specSlug, source);
+          await this.api.verifyAssignment(state.request);
+          resumable.push(state);
+          continue;
+        }
         await this.store.save({ ...state, phase: "reported" });
         console.warn("Recovered an unfinished Spec assignment without replaying actions or reports; inspect/reset it in MasterFlow");
         continue;
@@ -35,18 +51,37 @@ export class Worker {
       }
       await this.deliver(state);
     }
+    const outcomes = await Promise.allSettled(resumable.map(state => this.execute(state.request, signal, state)));
+    const error = outcomes.find(result => result.status === "rejected");
+    if (error?.status === "rejected") throw error.reason;
+    return { failed: outcomes.some(result => result.status === "fulfilled" && !result.value), resumed: resumable.length > 0 };
   }
 
-  private async execute(request: ClaimedRequest, signal: AbortSignal): Promise<boolean> {
-    const state: Checkpoint = { request, phase: "executing", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) };
+  private async execute(request: ClaimedRequest, signal: AbortSignal, recovered?: Checkpoint): Promise<boolean> {
+    const state: Checkpoint = { ...recovered, request, phase: "executing", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) };
+    state.source ??= this.sources.get(request.specSlug);
     await this.store.save(state);
     if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request.assignmentVersion);
     let failed = false;
+    let executionError: unknown;
+    let writes = Promise.resolve();
     try {
       signal.throwIfAborted();
       const source = this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
-      await this.executor.execute(source, request, signal);
-    } catch { failed = true; }
+      await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
+        snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
+        save: snapshot => {
+          const saved: Checkpoint = { ...state, source, execution: snapshot };
+          writes = writes.then(async () => { await this.store.save(saved); Object.assign(state, saved); });
+          return writes;
+        },
+      } : undefined);
+    } catch (error) { failed = true; executionError = error; }
+    await writes;
+    if (this.executor.reporting === "spec" && state.execution?.stage !== "finished") {
+      if (!signal.aborted && executionError) throw executionError;
+      return false;
+    }
     const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded" };
     const terminal: Checkpoint = this.executor.reporting === "spec" ? { ...state, phase: "reported", report } : { ...state, phase: "terminal", report };
     await this.store.save(terminal);
@@ -71,7 +106,9 @@ export class Worker {
     let completed = false;
     let primaryError: unknown;
     try {
-      await this.recover();
+      const recovery = await this.recover(signal);
+      failed ||= recovery.failed;
+      if (mode === "once" && this.config.resume) { completed = true; return signal.aborted ? 130 : failed ? 6 : 0; }
       if (this.executor.prepare) for (const slug of this.config.specs) {
         signal.throwIfAborted();
         const source = await this.api.spec(slug);
@@ -87,14 +124,17 @@ export class Worker {
             const assignment = request.requestId + ":" + request.assignmentVersion;
             if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
             this.seen.add(assignment);
-            await this.store.save({ request, phase: "claimed", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
+            await this.store.save({ request, phase: "claimed", source: this.sources.get(request.specSlug), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
           }
           batch.push(...claimed);
         }
         if (heartbeatError) throw heartbeatError;
-        for (const request of batch) {
-          if (!await this.execute(request, signal)) failed = true;
-        }
+        if (this.executor.concurrent) {
+          const results = await Promise.allSettled(batch.map(request => this.execute(request, signal)));
+          const error = results.find(result => result.status === "rejected");
+          if (error?.status === "rejected") throw error.reason;
+          failed ||= results.some(result => result.status === "fulfilled" && !result.value);
+        } else for (const request of batch) if (!await this.execute(request, signal)) failed = true;
         if (heartbeatError) throw heartbeatError;
         if (mode === "once" || signal.aborted) break;
         await new Promise<void>(resolve => {

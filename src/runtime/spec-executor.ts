@@ -3,22 +3,26 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ClaimedRequest } from "../api";
 import type { WorkerConfig } from "../config";
-import { Flow, nodeUnits } from "../engine/flow";
+import { Flow } from "../engine/flow";
 import type { Effects } from "../engine/ports";
 import { parseSpec } from "../spec/parse";
 import type { RequestExecutor } from "./types";
+import { Scheduler } from "../scheduler/scheduler";
+import { RecoveryError, type ExecutionPersistence, type ExecutionSnapshot } from "../engine/checkpoint";
+import { mapping, type Context } from "../spec/types";
 
 export class SpecExecutor implements RequestExecutor {
   readonly reporting = "spec";
+  readonly concurrent = true;
+  private scheduler: Scheduler;
   private flows = new Map<string, { source: string; flow: Flow }>();
-  constructor(private config: WorkerConfig, private effects: Effects) {}
+  constructor(private config: WorkerConfig, private effects: Effects) {
+    this.scheduler = new Scheduler(config.devices ?? [], config.concurrency ?? 32, message => effects.warning(message));
+  }
 
-  async prepare(source: string, slug: string, signal: AbortSignal): Promise<void> {
+  async prepare(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
     if (this.flows.has(slug)) return;
     const spec = parseSpec(source);
-    for (const pipeline of Object.values(spec.pipeline)) for (const node of pipeline.nodes ?? []) {
-      if (nodeUnits(spec, node) > 0) throw new Error("Phase 2 supports CPU-only Specs; GPU admission requires Phase 3");
-    }
     const scope = createHash("sha256").update(this.config.server + "\n" + this.config.unitId + "\n" + slug).digest("hex");
     const cwd = join(this.config.workspace, "runs", scope), cache = join(homedir(), ".cache");
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
@@ -26,29 +30,58 @@ export class SpecExecutor implements RequestExecutor {
       sys: { cache_dir: cache, models: await this.effects.discoverModels(cache) },
       session: {
         working_dir: cwd, output_dir: join(cwd, "output"), cache_dir: join(cwd, "cache"),
-        unit_name: this.config.unitId, unit_id: this.config.unitId, unit_type: "bun-cpu",
+        unit_name: this.config.unitId, unit_id: this.config.unitId, unit_type: this.config.devices?.length ? "bun-gpu" : "bun-cpu",
         server: this.config.server, token: this.config.token,
       },
     };
-    const flow = new Flow(spec, base, this.effects);
+    const flow = new Flow(spec, base, this.effects, "master_flow", this.scheduler, (this.config.shutdownTimeout ?? 30) * 1000);
     this.flows.set(slug, { source, flow });
-    await flow.initialize(signal);
+    if (restored) flow.restore(restored);
+    else await flow.initialize(signal);
   }
 
-  async execute(source: string, request: ClaimedRequest, signal: AbortSignal): Promise<void> {
-    await this.prepare(source, request.specSlug, signal);
+  async execute(source: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence): Promise<void> {
+    const snapshot = persistence?.snapshot ? this.hydrate(persistence.snapshot) : undefined;
+    if (snapshot && (snapshot.version !== 1 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
+    if (snapshot) {
+      const metadata = mapping(snapshot.context.request);
+      if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
+    }
+    await this.prepare(source, request.specSlug, signal, snapshot);
     const prepared = this.flows.get(request.specSlug)!;
     if (source !== prepared.source) throw new Error("Spec changed within the current worker invocation");
+    if (snapshot) prepared.flow.restore(snapshot);
     await prepared.flow.execute({
       pipelineName: request.pipelineName, payload: request.payload,
       metadata: { requestId: request.requestId, specSlug: request.specSlug, assignmentVersion: request.assignmentVersion, artifacts: request.artifacts, registryContext: request.registryContext ?? {} },
       registryContext: request.registryContext,
-    }, signal);
+    }, signal, persistence ? {
+      snapshot, retryIncomplete: persistence.retryIncomplete,
+      save: value => persistence.save(this.sanitize(value)),
+    } : undefined);
+  }
+
+  private sanitize(snapshot: ExecutionSnapshot): ExecutionSnapshot {
+    const result = structuredClone(snapshot);
+    for (const context of [result.base, result.prepared, result.context, ...Object.values(result.nodeContexts ?? {})]) if (context && context.session) delete mapping(context.session).token;
+    return result;
+  }
+
+  private hydrate(snapshot: ExecutionSnapshot): ExecutionSnapshot {
+    const result = structuredClone(snapshot);
+    for (const context of [result.base, result.prepared, result.context, ...Object.values(result.nodeContexts ?? {})]) {
+      if (context && context.session) {
+        const session: Context = mapping(context.session);
+        if (session.server !== this.config.server || session.unit_id !== this.config.unitId) throw new RecoveryError("Checkpoint worker identity does not match configuration");
+        session.token = this.config.token;
+      }
+    }
+    return result;
   }
 
   async finalize(failed: boolean): Promise<void> {
     let error: unknown;
-    const cleanup = AbortSignal.timeout(30_000);
+    const cleanup = AbortSignal.timeout((this.config.shutdownTimeout ?? 30) * 1000);
     for (const { flow } of this.flows.values()) {
       try { await flow.finalize(failed, cleanup); }
       catch (caught) { error ??= caught; }

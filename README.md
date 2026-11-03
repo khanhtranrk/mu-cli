@@ -1,6 +1,6 @@
 # Mu CLI v2 — Worker-first Architecture
 
-**Status:** Phase 2 CPU Spec execution is implemented and tested: YAML/JSON, bounded CEL, actions, routines, lifecycle and events. `worker once/start` execute the remote Spec; reporting remains Spec-defined. GPU scheduling and node resume remain pending. See [Phase 2 usage, compatibility and limits](docs/phase-2.md). Other architecture documents describe target behavior.
+**Status:** Phase 4 validates the real MasterFlow request/artifact lifecycle with CPU workloads, signed S3 transfers and Spec-owned reporting. See [Phase 4 integration and limits](docs/phase-4.md), [Phase 3 scheduler and recovery](docs/phase-3.md) and [Spec engine compatibility](docs/phase-2.md). GPU placement remains CPU-simulation tested; no production deployment is implied.
 **Stack:** Bun + TypeScript (strict).  
 **Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
 

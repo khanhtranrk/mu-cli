@@ -8,8 +8,9 @@ import { BunEffects } from "./runtime/effects";
 import { SpecExecutor } from "./runtime/spec-executor";
 import { parseSpec } from "./spec/parse";
 import { Worker } from "./worker";
+import { detectDevices } from "./runtime/devices";
 
-const help = `MU CLI v2 — CPU Spec worker
+const help = `MU CLI v2 — CPU/GPU Spec worker
 mu worker once|start --spec <slug> [--fake] [options]
 mu worker doctor|info [--json] [options]
 mu config show [options]
@@ -17,15 +18,17 @@ mu config init [--output mu.yaml] [--force]
 mu version
 Options: --config --server --token --unit-id --spec (repeatable)
          --workspace --max-claim --poll-interval --heartbeat-interval
+         --device FAMILY,INDEX,MAX_UNITS (repeatable) --concurrency (1-32)
+         --shutdown-timeout --resume [--retry-incomplete]
 Fake mode claims real requests and reports simulated results. No Spec actions run.`;
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
   const [group, command, ...options] = args;
   if (!group || group === "help" || group === "--help") { console.log(help); return 0; }
-  if (group === "version") { console.log("mu-cli 0.2.0-phase2 (cel-v1; CPU-only)"); return 0; }
+  if (group === "version") { console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)"); return 0; }
   const flags: Record<string, string | string[] | boolean> = {};
-  const booleans = new Set(["fake", "json", "force"]);
-  const values = new Set(["config", "server", "token", "unit-id", "spec", "workspace", "max-claim", "poll-interval", "heartbeat-interval", "output"]);
+  const booleans = new Set(["fake", "json", "force", "resume", "retry-incomplete"]);
+  const values = new Set(["config", "server", "token", "unit-id", "spec", "workspace", "max-claim", "poll-interval", "heartbeat-interval", "output", "device", "concurrency", "shutdown-timeout"]);
   let configured = false;
   try {
     for (let index = 0; index < options.length; index++) {
@@ -36,7 +39,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       if (!values.has(name)) throw new Error("Unknown option");
       const value = options[++index];
       if (!value || value.startsWith("--")) throw new Error("Option requires a value");
-      if (name === "spec") flags.spec = [...(flags.spec as string[] ?? []), value];
+      if (name === "spec" || name === "device") flags[name] = [...(flags[name] as string[] ?? []), value];
       else flags[name] = value;
     }
     if (group === "config" && command === "init") {
@@ -49,8 +52,9 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     if (!(group === "worker" && ["once", "start", "doctor", "info"].includes(command ?? "")) && !(group === "config" && command === "show")) throw new Error("Unknown command; use mu help");
     const config = await loadConfig(flags);
     configured = true;
+    config.devices ??= config.fake ? [] : await detectDevices();
     if (command === "info" || command === "show") {
-      console.log(JSON.stringify({ ...config, token: "[REDACTED]", devices: [{ family: "cpu", index: 0 }] }, null, 2));
+      console.log(JSON.stringify({ ...config, token: "[REDACTED]", devices: [{ family: "cpu", index: 0 }, ...config.devices] }, null, 2));
       return 0;
     }
     await mkdir(config.workspace, { recursive: true, mode: 0o700 });
@@ -62,7 +66,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       await api.health();
       if (!config.specs.length) throw new Error("doctor requires --spec to verify token authorization");
       for (const slug of config.specs) parseSpec(await api.spec(slug));
-      console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "cpu-spec", claims: 0 }));
+      console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, claims: 0 }));
       return 0;
     }
     const lockPath = join(config.workspace, "worker.lock");

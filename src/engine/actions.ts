@@ -56,10 +56,18 @@ export class Actions {
         }
         case "execute_workload": {
           const workload = this.spec.workloads![action.workload!]!;
-          if ((workload.units ?? 0) > 0) throw new Error("GPU workload admission requires Phase 3");
           const local = { ...context, params: paramsFor(workload.params, values.args ?? {}, context, "workload " + action.workload) };
+          delete (local as Context).schedule;
+          const placement = mapping(mapping(context.node ?? {}).device ?? {});
+          const gpu = (workload.units ?? 0) > 0 && placement.family !== "cpu" && placement.index != null;
           const target = render(workload.target, local), args = render(workload.args ?? [], local);
           if (typeof target !== "string" || !target || !Array.isArray(args)) throw new Error("Workload requires target and argv list");
+          if (gpu) {
+            (local as Context).schedule = { device_family: placement.family, device_index: placement.index };
+            const deviceArgs = render(workload.device_args ?? [], local);
+            if (!Array.isArray(deviceArgs)) throw new Error("device_args must resolve to a list");
+            args.push(...deviceArgs);
+          }
           const process = await this.effects.process([target, ...args.map(value => argumentText(value))], environment(render(workload.env ?? {}, local)), cwd, signal);
           if (process.returncode !== 0) throw new Error(`Workload exited with status ${process.returncode}`);
           break;
@@ -98,7 +106,7 @@ export class Actions {
             ...(values.response_file === undefined ? {} : { responseFile: this.effects.path(String(values.response_file), cwd) }),
           };
           Object.assign(result, await this.effects.http(options, signal));
-          if (Number(result.status_code) >= 400) throw new Error(`HTTP ${result.status_code}`);
+          if (Number(result.status_code) >= 300) throw new Error(`HTTP ${result.status_code}`);
           break;
         }
       }

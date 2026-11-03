@@ -177,7 +177,9 @@ test("CLI subprocess completes worker flow over loopback HTTP and doctor never c
     return Response.json({ ok: true });
   } });
   try {
-    const options = ["--server", server.url.origin, "--unit-id", "cpu", "--spec", "test", "--workspace", setup.config.workspace];
+    const configPath = join(setup.config.workspace, "cli-config.json");
+    await Bun.write(configPath, JSON.stringify({ runtime: { devices: [] } }));
+    const options = ["--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "test", "--workspace", setup.config.workspace];
     const run = (command: string[]) => Bun.spawn(["bun", "src/index.ts", ...command, ...options], {
       cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe",
     });

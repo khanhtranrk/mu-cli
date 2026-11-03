@@ -1,5 +1,10 @@
 # 01 — CLI Contract
 
+Implemented Phase 3 options and recovery behavior: [scheduler and resume](phase-3.md).
+`--device FAMILY,INDEX,MAX_UNITS`, `--concurrency`, `--shutdown-timeout`,
+`--resume` and explicit `--retry-incomplete` are available; other proposed options
+below still require verification against the CLI help.
+
 ## Command tree
 
 ```text

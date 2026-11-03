@@ -2,12 +2,15 @@ import { mkdir, open, readdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { ClaimedRequest, Report } from "./api";
+import type { ExecutionSnapshot } from "./engine/checkpoint";
 
 export interface Checkpoint {
   request: ClaimedRequest;
   phase: "claimed" | "executing" | "terminal" | "reported";
   report?: Report;
   reporting?: "spec";
+  source?: string;
+  execution?: ExecutionSnapshot;
 }
 
 export class StateStore {

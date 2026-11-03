@@ -1,4 +1,5 @@
 import { object, type WorkerConfig } from "./config";
+import { parseArtifacts, type ArtifactMetadata } from "./artifacts";
 
 export interface ClaimedRequest {
   requestId: string;
@@ -6,14 +7,14 @@ export interface ClaimedRequest {
   specSlug: string;
   pipelineName: string;
   payload: unknown;
-  artifacts: unknown[];
+  artifacts: ArtifactMetadata[];
   registryContext?: unknown;
 }
-export type RequestStatus = "processing" | "process_failed" | "succeeded";
+export type RequestStatus = "processing" | "process_failed" | "artifact_available" | "retrieve_artifact_failed" | "succeeded";
 export interface Report {
   id: string;
-  status: RequestStatus;
-  node_states?: Record<string, { status: "running" | "failed" | "succeeded"; reason?: string; device?: { family: string; index: number } }>;
+  status?: RequestStatus;
+  node_states?: Record<string, { status?: "queue" | "running" | "failed" | "succeeded"; reason?: string; device?: { family: string; index: number }; artifacts?: ArtifactMetadata[]; logs?: string[] }>;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number) { super(`Data Center HTTP ${status}`); }
@@ -45,8 +46,8 @@ export class DataCenterClient {
   async health(): Promise<void> { await this.call("/api/health"); }
   async heartbeat(status: "online" | "offline"): Promise<void> {
     const result = object(await (await this.call("/api/units/heartbeat", {
-      unitId: this.config.unitId, unitType: this.config.fake ? "bun-cpu-fake" : "bun-cpu", workingDir: this.config.workspace,
-      devices: [{ family: "cpu", index: 0 }], status,
+      unitId: this.config.unitId, unitType: this.config.fake ? "bun-cpu-fake" : this.config.devices?.length ? "bun-gpu" : "bun-cpu", workingDir: this.config.workspace,
+      devices: [{ family: "cpu", index: 0 }, ...(this.config.devices ?? []).map(({ family, index }) => ({ family, index }))], status,
     })).json());
     if (result.ok !== true) throw new Error("Invalid heartbeat response");
   }
@@ -60,12 +61,15 @@ export class DataCenterClient {
       const item = object(value);
       if (typeof item.requestId !== "string" || !item.requestId || item.specSlug !== specSlug ||
           typeof item.pipelineName !== "string" || !item.pipelineName ||
-          !Number.isSafeInteger(item.assignmentVersion) || Number(item.assignmentVersion) < 1 || !Array.isArray(item.artifacts)) throw new Error("Invalid claimed assignment");
-      return item as unknown as ClaimedRequest;
+          !Number.isSafeInteger(item.assignmentVersion) || Number(item.assignmentVersion) < 1 || !Object.hasOwn(item, "payload")) throw new Error("Invalid claimed assignment");
+      return { ...item, artifacts: parseArtifacts(item.artifacts) } as unknown as ClaimedRequest;
     });
   }
   async report(report: Report, assignment: number): Promise<void> {
     const result = object(await (await this.call("/api/requests/report", report, assignment)).json());
     if (result.ok !== true) throw new Error("Invalid report response");
+  }
+  async verifyAssignment(request: ClaimedRequest): Promise<void> {
+    await this.report({ id: request.requestId }, request.assignmentVersion);
   }
 }

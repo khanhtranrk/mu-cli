@@ -97,16 +97,29 @@ export class BunEffects implements Effects {
   }
 
   async http(options: HttpOptions, signal: AbortSignal): Promise<Context> {
+    if (options.bodyFile === undefined) return this.transfer(options, signal);
+    const source = await open(options.bodyFile, "r");
+    try {
+      const before = await source.stat({ bigint: true });
+      if (!before.isFile()) throw new Error("HTTP body_file must be a regular file");
+      const result = await this.transfer(options, signal, { body: Bun.file(source.fd), size: Number(before.size) });
+      const after = await source.stat({ bigint: true }), current = await stat(options.bodyFile, { bigint: true });
+      const signature = (info: typeof before) => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(":");
+      if (signature(before) !== signature(after) || signature(after) !== signature(current)) throw new Error("Upload source changed during transfer");
+      return result;
+    } finally { await source.close(); }
+  }
+
+  private async transfer(options: HttpOptions, signal: AbortSignal, upload?: { body: Blob; size: number }): Promise<Context> {
     if (!Number.isFinite(options.timeout) || options.timeout <= 0) throw new Error("HTTP timeout must be positive");
     const timeout = AbortSignal.any([signal, AbortSignal.timeout(options.timeout * 1000)]);
-    const headers = new Headers({ "User-Agent": "mu/0.2.0", ...options.headers });
+    const headers = new Headers({ "User-Agent": "mu/0.4.0", ...options.headers });
     let body: string | Blob | undefined;
     if (options.bodyFile !== undefined) {
-      const file = Bun.file(options.bodyFile);
-      if (!await this.exists(options.bodyFile, "file")) throw new Error("HTTP body_file must be a regular file");
-      headers.delete("Transfer-Encoding"); headers.set("Content-Length", String(file.size));
+      if (!upload) throw new Error("Upload source unavailable");
+      headers.delete("Transfer-Encoding"); headers.set("Content-Length", String(upload.size));
       if (!headers.has("Content-Type")) headers.set("Content-Type", "application/octet-stream");
-      body = file;
+      body = upload.body;
     } else if (options.body != null) body = JSON.stringify(options.body);
     let url = new URL(options.url), method = options.method;
     let response: Response | undefined;

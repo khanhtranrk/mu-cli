@@ -8,7 +8,16 @@ assignment generation, and both claim and Spec retrieval require CEL negotiation
 [Phase 2](phase-2.md#reporting-compatibility) preserves Spec-owned reporting for
 real execution; automatic request reports remain confined to explicit fake mode.
 
+[Phase 3 recovery](phase-3.md#durable-state-and-resume) verifies the saved assignment
+with an id-only report and its generation header before resuming. This existing
+route validates authorization without changing request/node status or appending logs;
+it does not expose server node states or provide an assignment lease.
+
 ## Known/proposed endpoints to reconcile
+
+Current artifact receipts, signed transfers and executable CPU round-trip are
+verified in [Phase 4](phase-4.md#preserved-contracts). Use that contract rather than
+the historical draft table below; `/download` returns URL JSON, not raw bytes.
 
 The following routes reflect previously discussed Mu contracts, **not a verified current OpenAPI specification**:
 

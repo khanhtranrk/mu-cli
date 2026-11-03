@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { validateDevices, type Device } from "./scheduler/scheduler";
 
 export interface WorkerConfig {
   server: string;
@@ -10,6 +11,11 @@ export interface WorkerConfig {
   pollInterval: number;
   heartbeatInterval: number;
   fake: boolean;
+  devices?: Device[];
+  concurrency?: number;
+  shutdownTimeout?: number;
+  resume?: boolean;
+  retryIncomplete?: boolean;
 }
 
 export function object(value: unknown): Record<string, unknown> {
@@ -46,6 +52,14 @@ export async function loadConfig(flags: Record<string, string | string[] | boole
   if (!Array.isArray(specs) || !specs.every(value => typeof value === "string" && value.trim())) throw new Error("worker.specs must be a string array");
   const maxClaim = positive(flags["max-claim"] ?? worker.maxClaim ?? 1, "maxClaim");
   if (!Number.isInteger(maxClaim) || maxClaim > 100) throw new Error("maxClaim must be an integer from 1 to 100");
+  const configuredDevices = flags.device === undefined ? runtime.devices : (flags.device as string[]).map(value => {
+    const [family, index, maxUnits, extra] = value.split(",");
+    if (!index || !maxUnits || extra !== undefined) throw new Error("--device requires FAMILY,INDEX,MAX_UNITS");
+    return { family: family === "nvidia" ? "cuda" : family, index: Number(index), maxUnits: Number(maxUnits) };
+  });
+  const concurrency = positive(flags.concurrency ?? runtime.concurrency ?? 32, "concurrency");
+  if (!Number.isInteger(concurrency) || concurrency > 32) throw new Error("concurrency must be an integer from 1 to 32");
+  if (flags["retry-incomplete"] && !flags.resume) throw new Error("--retry-incomplete requires --resume; incomplete actions may repeat external effects");
   return {
     server: url.origin,
     token: required(flags.token ?? env.MU_WORKER_TOKEN, "MU_WORKER_TOKEN"),
@@ -56,5 +70,8 @@ export async function loadConfig(flags: Record<string, string | string[] | boole
     pollInterval: positive(flags["poll-interval"] ?? polling.interval ?? 15, "pollInterval"),
     heartbeatInterval: positive(flags["heartbeat-interval"] ?? polling.heartbeatInterval ?? 30, "heartbeatInterval"),
     fake: flags.fake === true,
+    devices: configuredDevices === undefined ? undefined : validateDevices(configuredDevices), concurrency,
+    shutdownTimeout: positive(flags["shutdown-timeout"] ?? runtime.shutdownTimeout ?? 30, "shutdownTimeout"),
+    resume: flags.resume === true, retryIncomplete: flags["retry-incomplete"] === true,
   };
 }

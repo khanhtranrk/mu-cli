@@ -1,5 +1,9 @@
 # 05 — Scheduler and Execution Runtime
 
+Implemented behavior, legacy CPU fallback, capacity configuration and guarded
+node recovery are documented in [Phase 3](phase-3.md). The remaining sections are
+the target design; authoritative server node-state download is not currently an API.
+
 ## Scheduling scope
 
 Data Center decides which Requests are claimable; local Worker Scheduler decides which **nodes of already-claimed Requests** can execute on available devices.

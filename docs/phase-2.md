@@ -1,5 +1,8 @@
 # Phase 2 — CPU Spec engine
 
+Historical Phase 2 delivery. [Phase 3](phase-3.md) now adds shared CPU/GPU
+admission, concurrent execution and versioned node checkpoints with guarded resume.
+
 This is Phase 2 of the user's four-phase implementation plan. The older numbering
 in `07-migration.md` is a target roadmap, not the delivery status.
 
