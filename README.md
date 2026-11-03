@@ -1,43 +1,87 @@
-# Mu CLI v2 — Worker-first Architecture
+# Mu CLI — Bun/TypeScript Worker
 
-**Status:** Phase 4 validates the real MasterFlow request/artifact lifecycle with CPU workloads, signed S3 transfers and Spec-owned reporting. See [Phase 4 integration and limits](docs/tasks/completed/phase-4.md), [Phase 3 scheduler and recovery](docs/tasks/completed/phase-3.md) and [Spec engine compatibility](docs/tasks/completed/phase-2.md). GPU placement remains CPU-simulation tested; no production deployment is implied.
-**Stack:** Bun + TypeScript (strict).  
-**Primary objective:** Replace the Python orchestrator with a modular worker runtime that receives authorized work from Mu Data Center.
+Mu CLI is the active **Bun + TypeScript** worker and execution runtime for the [MU workspace](https://github.com/khanhtranrk/mu). It claims authorized Requests from Mu Data Center (MasterFlow), evaluates Specs, schedules local CPU/GPU-capable workloads, reports progress through Spec-defined actions, and handles artifact transfers.
 
-This is the **active CLI development repository** and a Git submodule of the [MU workspace](https://github.com/khanhtranrk/mu). The previous Python runtime is preserved separately in [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy) for compatibility and migration reference.
+> **Implementation status:** Phase 1–4 delivery records cover the CLI foundation, Spec engine, scheduler/recovery, and CPU artifact integration. GPU placement has been simulation-tested; live GPU operation and production deployment are **not** verified. This is a migration from [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy), not a claim of full Python feature parity.
 
-For coding agents, read [AGENTS.md](AGENTS.md) and the [migration plan](docs/tasks/superseded/migration-roadmap.md) before editing.
+## Quick start
 
-## Design principles
-
-1. **Server-first:** production requests/specs originate from Mu Data Center. No public `mu run <spec>` mode.
-2. **Single source of truth:** shared Spec parsing/validation/semantics, no duplicated Python/TypeScript validators.
-3. **Separation of concerns:** CLI → Worker → Engine → Execution adapters; server handles assignment and authorization.
-4. **Explicit capability boundaries:** importing the engine does not grant execution or data-access privileges.
-5. **Resumability:** persist durable progress before considering work complete; ephemeral in-memory state is disposable.
-6. **Minimal migration risk:** characterize Python behavior before porting, do not change YAML semantics implicitly.
-
-## Documentation map
-
-The [documentation index](docs/README.md) distinguishes current references, completed
-delivery records and the original migration proposal.
-
-- [01 — CLI contract](docs/guides/cli.md): commands, flags, configuration and exit codes.
-- [02 — Architecture](docs/architecture/overview.md): current modules, repository boundaries and proposed shared packages.
-- [03 — Worker lifecycle](docs/architecture/worker.md): identity, claim, heartbeat, once/daemon and shutdown.
-- [04 — Spec Engine](docs/reference/spec-engine.md): validation, execution context, actions, conditions and events.
-- [05 — Scheduler and runtime](docs/architecture/scheduler-runtime.md): device capacity, subprocess, failure and resume.
-- [06 — Data Center protocol](docs/reference/protocol.md): API boundary, permissions and persistence.
-- [07 — Original migration roadmap](docs/tasks/superseded/migration-roadmap.md): historical proposal and acceptance goals, superseded by delivery records.
-- [08 — Decisions](docs/decisions/runtime-decisions.md): implemented decisions and remaining proposals/verification gaps.
-
-## Primary usage
+Requires [Bun](https://bun.sh/). Run commands from this repository.
 
 ```bash
-mu config init
-mu worker doctor
-mu worker once --config ./mu.yaml
-mu worker start --config ./mu.yaml
+bun install
+bun run typecheck
+bun test
+bun src/index.ts config init
+bun src/index.ts worker doctor --config ./mu.yaml --spec your-spec
+MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config ./mu.yaml
 ```
 
-**Out of scope for v0.1:** full workload package registry, model installation, agent orchestration, new Spec syntax, automatic server-side scheduling redesign.
+The installed command is `mu`; the source entry point is `src/index.ts`. Configure the server URL, unit ID, allowed Spec slugs and device capacity in `mu.yaml`; supply the worker token through `MU_WORKER_TOKEN`, **not** the YAML file. See the [CLI/configuration guide](docs/guides/cli.md) for the exact flags and examples.
+
+Common commands:
+
+```text
+mu config init|show
+mu worker doctor|info|once|start
+mu version
+mu help
+```
+
+There is no public local `mu run <spec>` mode. `worker once` processes a claimed batch; `worker start` continues polling. `--fake` simulates execution but still claims real server Requests.
+
+## Architecture
+
+| Area | Responsibility |
+| --- | --- |
+| `src/index.ts`, `src/config.ts` | CLI, configuration, startup and shutdown |
+| `src/worker.ts`, `src/api.ts` | Server communication, heartbeat and claim loop |
+| `src/spec/` | Spec types, parsing, validation and CEL expressions |
+| `src/engine/` | Actions, conditions, events, DAG execution and checkpoints |
+| `src/runtime/` | Process, filesystem, HTTP and device adapters |
+| `src/scheduler/` | Local capacity admission and scheduling |
+| `src/state.ts`, `src/artifacts.ts` | Recovery state and artifact transfer helpers |
+
+MasterFlow owns authoritative server-side records, authentication, Request assignment and signed artifact URLs. This repository owns worker-side execution. Shared `@mu/spec` / `@mu/engine` packages are **proposals**, not installed dependencies.
+
+## Documentation
+
+Start with the [documentation index](docs/README.md), which distinguishes current behavior from historical delivery notes and proposals.
+
+**Current implementation**
+
+- [CLI commands and configuration](docs/guides/cli.md)
+- [Architecture and repository boundaries](docs/architecture/overview.md)
+- [Worker lifecycle and reporting](docs/architecture/worker.md)
+- [Spec engine and supported syntax](docs/reference/spec-engine.md)
+- [Scheduler, devices and recovery](docs/architecture/scheduler-runtime.md)
+- [Server protocol and artifact integration](docs/reference/protocol.md)
+- [CPU artifact example](examples/cpu-artifacts/README.md)
+
+**Decisions and delivery history**
+
+- [Runtime decisions and open questions](docs/decisions/runtime-decisions.md)
+- [Completed Phase 1](docs/tasks/completed/phase-1.md) · [Phase 2](docs/tasks/completed/phase-2.md) · [Phase 3](docs/tasks/completed/phase-3.md) · [Phase 4](docs/tasks/completed/phase-4.md)
+- [Superseded migration roadmap](docs/tasks/superseded/migration-roadmap.md) — historical reference, **not** a current task list
+- [Creation Spaces integration history](docs/creation-spaces-upgrade.md) · [Storage migration notes](docs/storage-migration.md)
+
+The former numbered flat document layout has been reorganized under `docs/architecture/`, `docs/guides/`, `docs/reference/`, `docs/decisions/` and `docs/tasks/`. Refer to the index for canonical locations.
+
+## Development
+
+```bash
+bun run typecheck
+bun test
+bun run test:integration
+```
+
+Integration tests may require additional local services or fixtures; inspect the relevant test setup before running them. Avoid downloading models or launching costly GPU jobs as routine checks.
+
+Read [AGENTS.md](AGENTS.md) for repository-specific guidance and [the contribution workflow](docs/CONTRIBUTING-WORKFLOW.md) before making changes. Use a topic branch and PR against `master`.
+
+## Related projects
+
+- [MU workspace](https://github.com/khanhtranrk/mu) — cross-repository integration and submodule pins
+- [Mu MasterFlow](https://github.com/khanhtranrk/mu-masterflow) — Data Center, APIs and UI
+- [Mu Agent](https://github.com/khanhtranrk/mu-agent) — separate agent/workflow project
+- [Mu CLI Legacy](https://github.com/khanhtranrk/mu-cli-legacy) — read-only Python migration reference
