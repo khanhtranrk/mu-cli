@@ -12,6 +12,8 @@ mu config init          Write example YAML; --output PATH, --force to overwrite
 mu config show          Print resolved configuration, token redacted
 mu version              Print the CLI version and capability summary
 mu help                 Print usage
+mu worker --help        List worker commands
+mu worker once --help   Show worker options
 ```
 
 There is no public local `mu run` command. `once` drains one batch (possibly several
@@ -24,6 +26,9 @@ MU_WORKER_TOKEN='YOUR_TOKEN' mu worker once --config ./mu.yaml --spec your-spec
 ```
 
 ## Configuration
+
+Commander handles nested command routing, argument errors and generated help.
+Use `--help` on any command or command group.
 
 CLI flags override supported environment variables, then YAML, then defaults.
 Configuration uses `--config`, then `MU_CONFIG`, then `./mu.yaml`. An explicitly
