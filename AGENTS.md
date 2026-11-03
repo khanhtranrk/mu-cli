@@ -15,13 +15,13 @@ This is the **active Bun + TypeScript CLI/worker** repository, tracked as a subm
 
 ## Git and development safeguards
 
-- Use `master` only; do not create or switch to `main`. Check branch, remote and working tree before editing.
+- Keep `master` as integration base. Use topic branches and reviewed PRs per [contribution workflow](docs/CONTRIBUTING-WORKFLOW.md); do not assume `main`.
 - Keep changes small and scoped. Do not rewrite the runtime or database speculatively.
 - Use Bun/TypeScript; Python may be invoked for specific workloads, not as a duplicate orchestration layer.
 - Preserve documented worker/server, CEL/Spec, scheduling and artifact semantics unless explicitly approved. Inspect the legacy implementation to characterize behavior before porting.
 - Avoid expensive GPU, model-download and network workflows as routine tests. Prefer focused CPU-only checks.
 - Do not commit secrets, local environments, generated artifacts or downloaded models.
-- For cross-repository work, commit and push the affected repositories first, then update their gitlink pointers in the parent workspace.
+- For cross-repository work, merge reviewed submodule PRs first, then propose parent gitlink updates in a separate integration PR.
 
 ## Basic validation
 
