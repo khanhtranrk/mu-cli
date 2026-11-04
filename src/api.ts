@@ -7,12 +7,15 @@ export interface ClaimedRequest {
   specSlug: string;
   pipelineName: string;
   payload: unknown;
+  inputs?: unknown;
+  specYaml?: string;
   artifacts: ArtifactMetadata[];
   registryContext?: unknown;
 }
 export type RequestStatus = "processing" | "process_failed" | "succeeded";
 export interface ReportEvent { level: "info" | "warning" | "error"; message: string; details?: object; createdAt: number }
 export interface Report {
+  pipelineState?: {status: string; outputs: Record<string, unknown>};
   events?: ReportEvent[];
   id: string;
   status?: RequestStatus;

@@ -8,10 +8,8 @@ test("fresh CLI process resumes after SIGINT without replaying completed CPU wor
   const statuses: unknown[] = []; let claims = 0;
   const command = (code: string) => ({ type: "execute_command", target: "bun", args: ["-e", code] });
   const count = (name: string) => command(`const file=Bun.file('${name}');await Bun.write(file,String(Number(await file.exists()?await file.text():0)+1));`);
-  const report = (status: string) => ({ type: "send_http_request", url: "${{ session.server }}/api/requests/report", method: "post", header: { Authorization: "Bearer ${{ session.token }}" }, body: { id: "${{ request.requestId }}", status } });
   const source = JSON.stringify({
     entries: { master_flow: { initialization: [count("init-count")], finalization: [count("final-count")] } },
-    events: [{ on: "pipeline_started", do: [report("processing")] }, { on: "pipeline_finished", do: [report("${{ event.pipeline.status == 'success' ? 'succeeded' : 'process_failed' }}")] }],
     pipeline: { p: { prepare: [count("prepare-count")], nodes: [
       { name: "first", run: [count("first-count")] },
       { name: "second", depends_on: ["first"], run: [command("await Bun.write('ready','yes');if(!await Bun.file('continue').exists())await Bun.sleep(60000);await Bun.write('second-output','ok');")] },
@@ -50,7 +48,9 @@ test("fresh CLI process resumes after SIGINT without replaying completed CPU wor
     for (const name of ["init-count", "prepare-count", "first-count"]) expect(await Bun.file(join(run, name)).text()).toBe("1");
     expect(await Bun.file(join(run, "second-output")).text()).toBe("ok");
     expect(claims).toBe(1);
-    expect(statuses).toEqual([{ id: "r", status: "processing" }, { id: "r" }, { id: "r", status: "succeeded" }]);
+    expect(statuses.some((report: any) => report.node_states?.first?.status === "succeeded")).toBe(true);
+    expect(statuses.some((report: any) => report.node_states?.second?.status === "succeeded")).toBe(true);
+    expect(statuses.some((report: any) => report.status === "succeeded" && report.pipelineState?.status === "success")).toBe(true);
   } finally {
     for (const child of children) { if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; }
     server.stop(true); await rm(workspace, { recursive: true, force: true });

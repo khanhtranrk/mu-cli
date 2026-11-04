@@ -13,12 +13,13 @@ export function validateFields(value: unknown, label: string): void {
   }
 }
 
-function validateValue(value: unknown, field: Field, path: string): unknown {
+export function validateValue(value: unknown, field: Field, path: string): unknown {
   const result = jsonValue(value);
   const valid = field.type === "array" ? Array.isArray(result)
     : field.type === "object" || field.type === "artifact" ? result !== null && typeof result === "object" && !Array.isArray(result)
     : typeof result === field.type;
   if (!valid) throw new Error(`${path} must be ${field.type}${result === null ? " (explicit null is not allowed)" : ""}`);
+  if (field.type === "artifact" && (typeof (result as Context).artifactId !== "string" || !(result as Context).artifactId || Object.keys(result as Context).some(key => !["artifactId", "name"].includes(key)))) throw new Error(`${path}: expected canonical Artifact reference`);
   return result;
 }
 

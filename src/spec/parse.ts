@@ -85,9 +85,10 @@ export function parseSpec(source: string): Spec {
       common(item, path);
       if (has(item, "action") || has(item, "save_response_to_context")) throw new Error(`${path}: removed action declaration key`);
       const type = item.type;
-      if (has(item, "save_state")) {
-        if (!["execute_command", "send_http_request", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_state not supported`);
-        text(item.save_state, path + ".save_state");
+      if (has(item, "save_state")) throw new Error(`${path}.save_state was removed; use save_to`);
+      if (has(item, "save_to")) {
+        if (!["execute_workload", "execute_command", "send_http_request", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
+        text(item.save_to, path + ".save_to");
       }
       if (type === "execute_workload" || type === "execute_routine") {
         const key = type === "execute_workload" ? "workload" : "routine";
@@ -98,15 +99,21 @@ export function parseSpec(source: string): Spec {
           if (has(item, "args")) throw new Error(`${path}.args was removed; use with for the Workload CEL context`);
           renderedMapping(defaultValue(item.with, {}), path + ".with");
         }
-        else renderedMapping(defaultValue(item.args, {}), path + ".args");
+        else {
+          if (has(item, "args") || has(item, "inputs")) throw new Error(`${path}: invoke Routine with with`);
+          renderedMapping(defaultValue(item.with, {}), path + ".with");
+        }
       } else if (type === "execute_command") {
         text(item.target, path + ".target"); renderedList(defaultValue(item.args, []), path + ".args"); renderedMapping(defaultValue(item.env, {}), path + ".env");
       } else if (type === "create_dir" || type === "write_json") text(item.path, path + ".path");
       else if (type === "report_request" || type === "report_node") {
         if (has(item, "request_status") || has(item, "request_events")) throw new Error(`${path}: use report_request with status/events for request reporting`);
+        if (has(item, "status")) throw new Error(`${path}.status is owned by the worker`);
         if (has(item, "events")) renderedList(item.events, path + ".events");
       } else if (type === "upload_artifact" || type === "download_artifact") {
-        text(item.artifact_id, path + ".artifact_id"); text(item.target, path + ".target");
+        if (type === "upload_artifact") text(item.artifact_id, path + ".artifact_id");
+        else if (!has(item, "artifact")) throw new Error(`${path}.artifact is required`);
+        text(item.target, path + ".target");
       } else if (type === "inspect_file") text(item.target, path + ".target");
       else if (type === "send_http_request") {
         text(item.url, path + ".url"); renderedMapping(defaultValue(item.header, {}), path + ".header");
@@ -130,6 +137,7 @@ export function parseSpec(source: string): Spec {
     literalName(name, "workload name");
     const item = mapping(raw, "workload " + name);
     inputs(item, `workloads.${name}`);
+    if (has(item, "outputs")) validateFields(item.outputs, `workloads.${name}.outputs`);
     if (has(item, "args")) throw new Error(`workloads.${name}.args was removed; use argv`);
     text(item.target, `workloads.${name}.target`);
     renderedList(defaultValue(item.argv, []), `workloads.${name}.argv`); renderedList(defaultValue(item.device_args, []), `workloads.${name}.device_args`);
@@ -141,6 +149,8 @@ export function parseSpec(source: string): Spec {
     literalName(name, "routine name");
     const item = mapping(raw, "routine " + name);
     inputs(item, `routines.${name}`);
+    if (has(item, "returns")) throw new Error("Routine returns was removed; use outputs");
+    if (has(item, "outputs")) validateFields(item.outputs, `routines.${name}.outputs`);
     const children = list(item.actions, `routines.${name}.actions`);
     actions(children, `routines.${name}.actions`);
     routineEdges.set(name, children.map(child => mapping(child)).filter(child => child.type === "execute_routine").map(child => String(child.routine)));
@@ -155,6 +165,7 @@ export function parseSpec(source: string): Spec {
   for (const [name, raw] of Object.entries(pipelines)) {
     const item = mapping(raw, `pipeline.${name}`);
     inputs(item, `pipeline.${name}`);
+    if (has(item, "outputs")) validateFields(item.outputs, `pipeline.${name}.outputs`);
     if (item.context !== undefined) common({ context: item.context }, `pipeline.${name}`);
     actions(item.prepare, `pipeline.${name}.prepare`); events(item.events, `pipeline.${name}.events`);
     const edges = new Map<string, string[]>();
@@ -166,6 +177,7 @@ export function parseSpec(source: string): Spec {
       edges.set(nodeName, dependencies);
       common(node, `node.${nodeName}`, true);
       inputs(node, `pipeline.${name}.nodes.${nodeName}`);
+      if (has(node, "outputs")) validateFields(node.outputs, `node.${nodeName}.outputs`);
       for (const phase of ["before_run", "run", "after_run", "finally"]) actions(node[phase], `node.${nodeName}.${phase}`, phase !== "finally");
       events(node.events, `node.${nodeName}.events`, true);
     }

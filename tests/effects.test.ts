@@ -25,11 +25,11 @@ test("HTTP action saves typed success/failure results and adds assignment only t
   try {
     const context: Context = { session: { working_dir: setup.cwd, server: server.url.origin }, request: { assignmentVersion: 9 }, node: { name: "render" } };
     const actions = new Actions({ pipeline: {} }, setup.effects);
-    await actions.run({ type: "send_http_request", url: server.url + "ok", method: "post", body: { "${{ node.name }}": { status: "running" } }, save_state: "http", postcondition: { operator: "action_state", target: ["http", "status_code"], expected: 201 } }, context, {}, setup.signal);
-    expect(mapping(mapping(context.actions).http)).toMatchObject({ success: true, status_code: 201, body: { id: "job" } });
+    await actions.run({ type: "send_http_request", url: server.url + "ok", method: "post", body: { "${{ node.name }}": { status: "running" } }, save_to: "http", postcondition: { operator: "action_state", target: ["http", "status_code"], expected: 201 } }, context, {}, setup.signal);
+    expect(mapping(mapping(mapping(context.node).actions).http)).toMatchObject({ success: true, status_code: 201, body: { id: "job" } });
     expect(received[0]).toEqual({ path: "/ok", assignment: "9", body: { render: { status: "running" } } });
-    await actions.run({ type: "send_http_request", url: server.url + "fail", method: "post", body: {}, save_state: "failure", ignore_error: true }, context, {}, setup.signal);
-    expect(mapping(mapping(context.actions).failure)).toMatchObject({ success: false, status_code: 400, body: { id: "job" } });
+    await actions.run({ type: "send_http_request", url: server.url + "fail", method: "post", body: {}, save_to: "failure", ignore_error: true }, context, {}, setup.signal);
+    expect(mapping(mapping(mapping(context.node).actions).failure)).toMatchObject({ success: false, status_code: 400, body: { id: "job" } });
     const externalContext: Context = { session: { working_dir: setup.cwd, server: "http://other.invalid" }, request: { assignmentVersion: 9 } };
     await actions.run({ type: "send_http_request", url: server.url + "ok", method: "post", body: {} }, externalContext, {}, setup.signal);
     expect(received.at(-1)?.assignment).toBeNull();

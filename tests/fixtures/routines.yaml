@@ -1,47 +1,63 @@
 expression_engine: cel-v1
-# Safe local demo: uv run mu run --spec examples/routines/spec.yaml --working_dir /tmp/mu-routines-demo --pipeline demo,examples/routines/input.yaml
 routines:
   inspect_artifact:
     inputs:
-      path: {type: string}
+      path:
+        type: string
+        value: ${{ with.path }}
     actions:
-      - type: inspect_file
-        target: "${{ inputs.path }}"
-        save_state: file_info
-    returns: "${{ actions.file_info }}"
+    - type: inspect_file
+      target: ${{ inputs.path }}
+      save_to: file_info
+    outputs:
+      value:
+        type: object
+        value: ${{ actions.file_info }}
   record_artifact:
     inputs:
-      path: {type: string}
-      logs: {type: array, default: []}
+      path:
+        type: string
+        value: ${{ with.path }}
+      logs:
+        type: array
+        value: "${{ has(with.logs) ? with.logs : [] }}"
+        default: []
     actions:
-      - type: execute_routine
-        routine: inspect_artifact
-        args:
-          path: "${{ inputs.path }}"
-        save_state: inspected
-      - type: write_json
-        path: "${{ session.output_dir }}/manifest.json"
-        content:
-          "${{ node.name }}":
-            file: "${{ actions.inspected.output }}"
-            logs: "${{ inputs.logs }}"
-    returns: "${{ actions.inspected.output }}"
+    - type: execute_routine
+      routine: inspect_artifact
+      save_to: inspected
+      with:
+        path: ${{ inputs.path }}
+    - type: write_json
+      path: ${{ session.output_dir }}/manifest.json
+      content:
+        ${{ node.name }}:
+          file: ${{ actions.inspected.outputs.value }}
+          logs: ${{ inputs.logs }}
+    outputs:
+      value:
+        type: object
+        value: ${{ actions.inspected.outputs.value }}
 pipeline:
   demo:
     inputs: {}
     nodes:
-      - name: artifact-demo
-        run:
-          - type: write_json
-            path: "${{ session.output_dir }}/result.json"
-            content: {message: hello}
-          - type: execute_routine
-            routine: record_artifact
-            args:
-              path: "${{ session.output_dir }}/result.json"
-              logs: [File inspected]
-            save_state: artifact
-        postcondition:
-          operator: action_state
-          target: [artifact, success]
-          expected: true
+    - name: artifact-demo
+      run:
+      - type: write_json
+        path: ${{ session.output_dir }}/result.json
+        content:
+          message: hello
+      - type: execute_routine
+        routine: record_artifact
+        save_to: artifact
+        with:
+          path: ${{ session.output_dir }}/result.json
+          logs:
+          - File inspected
+      postcondition:
+        operator: action_state
+        target:
+        - artifact
+        - success
+        expected: true

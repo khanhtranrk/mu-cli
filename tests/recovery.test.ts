@@ -38,7 +38,7 @@ async function fixture() {
     if (path.endsWith("claim")) return Response.json([request]);
     if (path.endsWith("report")) {
       expect(new Headers(init?.headers).get("X-Mu-Assignment-Version")).toBe("7");
-      expect(body).toEqual({ id: "request" });
+      expect(body.id).toBe("request");
       if (stale) return new Response("stale", { status: 400 });
     }
     return Response.json({ ok: true });
@@ -46,7 +46,7 @@ async function fixture() {
   const api = new DataCenterClient(config, transport);
   const scope = createHash("sha256").update(config.server + "\n" + config.unitId).digest("hex");
   const store = new StateStore(join(workspace, scope));
-  return { config, api, calls, store, changeSpec: () => { remoteSource += "\n"; }, stale: () => { stale = true; } };
+  return { config, api, transport, calls, store, changeSpec: () => { remoteSource += "\n"; }, stale: () => { stale = true; } };
 }
 
 async function interrupted() {
@@ -60,7 +60,7 @@ async function interrupted() {
       return { returncode: 0, stdout: "", stderr: "" };
     }
   }
-  const effects = new Effects(fetch, () => {});
+  const effects = new Effects(setup.transport, () => {});
   expect(await new Worker(setup.config, setup.api, new SpecExecutor(setup.config, effects)).run("once", controller.signal)).toBe(130);
   return { ...setup, seen, effects, continue: () => { interrupt = false; setup.config.resume = true; } };
 }
@@ -84,7 +84,7 @@ test("resume requires explicit retry for uncertain nodes and never replays succe
   for (const label of ["init", "prepare", "first", "third"]) expect(setup.seen.filter(value => value === label)).toHaveLength(1);
   expect(setup.seen.filter(value => value === "second")).toHaveLength(2);
   expect(setup.calls.filter(call => call.path.endsWith("claim"))).toHaveLength(1);
-  expect(setup.calls.filter(call => call.path.endsWith("report"))).toHaveLength(1);
+  expect(setup.calls.filter(call => call.path.endsWith("report") && call.body.status === "succeeded")).toHaveLength(1);
   expect((await setup.store.load())[0]?.phase).toBe("reported");
 });
 
@@ -114,7 +114,7 @@ test("safe node-boundary checkpoint resumes pending dependencies without retry o
   class Effects extends BunEffects {
     override async process(argv: string[]) { seen.push(argv[0]!); return { returncode: 0, stdout: "", stderr: "" }; }
   }
-  const effects = new Effects(fetch, () => {}), executor = new SpecExecutor(setup.config, effects);
+  const effects = new Effects(setup.transport, () => {}), executor = new SpecExecutor(setup.config, effects);
   await executor.prepare(source, "test", controller.signal);
   const executing = executor.execute(source, request, controller.signal, { async save(value) {
     snapshot = value;
@@ -148,7 +148,7 @@ test("resume rechecks completed-node postconditions before continuing and refuse
     override async process() { pendingRuns++; return { returncode: 0, stdout: "", stderr: "" }; }
     override async writeJson(path: string, value: unknown) { writes++; await super.writeJson(path, value); }
   }
-  const effects = new Effects(fetch, () => {}), controller = new AbortController();
+  const effects = new Effects(setup.transport, () => {}), controller = new AbortController();
   const spec = parseSpec(JSON.stringify({ pipeline: { p: { nodes: [
     { name: "a", run: [{ type: "write_json", path: "${{ session.working_dir }}/output.json", content: {} }], postcondition: { operator: "and", props: [{ operator: "file_exists", path: "output.json" }, { operator: "node_state", target: ["status"], expected: "running" }] } },
     { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake" }] },

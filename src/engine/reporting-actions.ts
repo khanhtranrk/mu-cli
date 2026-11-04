@@ -19,7 +19,7 @@ function events(value: unknown): unknown[] | undefined {
 }
 const statuses = ["waiting", "possessed", "processing", "process_failed", "succeeded"];
 
-export async function reportingAction(type: string, values: Context, context: Context, effects: Effects, signal: AbortSignal): Promise<Context> {
+export async function reportingAction(type: string, values: Context, context: Context, effects: Effects, signal: AbortSignal, lifecycle = false): Promise<Context> {
   const session = mapping(context.session), request = mapping(context.request), node = mapping(context.node ?? {});
   const requestId = text(request.requestId, "requestId");
   if (!Number.isSafeInteger(request.assignmentVersion) || Number(request.assignmentVersion) < 1) throw new Error("Missing assignment version");
@@ -28,7 +28,7 @@ export async function reportingAction(type: string, values: Context, context: Co
   const headers = { Authorization: `Bearer ${text(session.token, "session.token")}`, "Content-Type": "application/json", "X-Mu-Assignment-Version": String(request.assignmentVersion) };
   const timeout = values.timeout ?? 120;
   if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) throw new Error("Invalid timeout");
-  const call = async (path: string, body?: unknown, retry = false): Promise<Context> => {
+  const call = async (path: string, body?: unknown, retry = lifecycle): Promise<Context> => {
     for (let attempt = 0; ; attempt++) {
       let response: Context;
       try { response = await effects.http({ url: new URL(path, server).href, method: body === undefined ? "GET" : "POST", headers, body, timeout }, signal); }
@@ -36,10 +36,11 @@ export async function reportingAction(type: string, values: Context, context: Co
       const status = Number(response.status_code);
       if (status >= 200 && status < 300) return mapping(response.body);
       if (retry && attempt === 0 && [500, 502, 503, 504].includes(status)) continue;
-      throw new Error(`Data Center HTTP ${status}`);
+      throw Object.assign(new Error(`Data Center HTTP ${status}`), {status});
     }
   };
   if (type === "report_request" || type === "report_node") {
+    if (!lifecycle && values.status !== undefined) throw new Error("Lifecycle status is owned by the worker");
     if (values.request_status !== undefined || values.request_events !== undefined) throw new Error("Use report_request with status/events for request reporting");
   }
   if (type === "report_request") {
@@ -48,8 +49,10 @@ export async function reportingAction(type: string, values: Context, context: Co
       if (!statuses.slice(2).includes(String(values.status))) throw new Error("Invalid request status");
       body.status = values.status;
     }
+    if (lifecycle && values.pipelineState !== undefined) body.pipelineState = values.pipelineState;
     if (values.events !== undefined) body.events = events(values.events);
-    await call("/api/requests/report", body);
+    const receipt = await call("/api/requests/report", body);
+    if (receipt.ok !== true) throw new Error("Invalid report acknowledgement");
     return {};
   }
   if (type === "report_node") {
@@ -59,12 +62,14 @@ export async function reportingAction(type: string, values: Context, context: Co
       if (!["queue", "running", "failed", "succeeded"].includes(String(values.status))) throw new Error("Invalid node status");
       update.status = values.status;
     }
+    if (lifecycle) for (const key of ["outputs", "skipped", "blocked", "reason"]) if (values[key] !== undefined) update[key] = values[key];
     if (values.events !== undefined) update.events = events(values.events);
     if (Object.keys(update).length) body.node_states = { [text(node.name, "node.name")]: update };
-    await call("/api/requests/report", body);
+    const receipt = await call("/api/requests/report", body);
+    if (receipt.ok !== true) throw new Error("Invalid report acknowledgement");
     return {};
   }
-  const artifactId = text(values.artifact_id, "artifact_id");
+  const artifactId = type === "upload_artifact" ? text(values.artifact_id, "artifact_id") : text(mapping(values.artifact, "artifact").artifactId, "artifact.artifactId");
   const target = effects.path(text(values.target, "target"), text(session.working_dir, "working_dir"));
   if (type === "upload_artifact") {
     const source = await effects.inspect(target);
@@ -80,9 +85,10 @@ export async function reportingAction(type: string, values: Context, context: Co
     if (after.size !== source.size || after.sha256 !== source.sha256) throw new Error("Upload source changed during transfer");
     const nodeName = values.node_name ?? node.name;
     const completed = await call("/api/requests/artifacts/complete", { requestId, uploadId: text(upload.uploadId, "uploadId"), name: source.name, ...(nodeName === undefined ? {} : { nodeName: text(nodeName, "node_name") }), ...(values.label === undefined ? {} : { label: text(values.label, "label") }) }, true);
-    return { artifact: mapping(completed.artifact) };
+    const registered = mapping(completed.artifact);
+    return { artifact: {artifactId: text(registered.artifactId, "canonical artifactId"), name: registered.name} };
   }
-  const download = await call(`/api/requests/artifacts/download-url?requestId=${encodeURIComponent(requestId)}&artifactId=${encodeURIComponent(artifactId)}`);
+  const download = await call(`/api/requests/artifacts/download-url?requestId=${encodeURIComponent(requestId)}&canonicalArtifactId=${encodeURIComponent(artifactId)}`);
   const sha256 = values.sha256 ?? download.sha256;
   if (typeof sha256 !== "string" || !/^[a-f0-9]{64}$/.test(sha256)) throw new Error("Artifact requires an expected SHA-256; supply sha256 for legacy files");
   if (values.sha256 !== undefined && download.sha256 !== undefined && values.sha256 !== download.sha256) throw new Error("Artifact SHA-256 metadata mismatch");

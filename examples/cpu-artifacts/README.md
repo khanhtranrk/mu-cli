@@ -21,3 +21,10 @@ See [Phase 4](../../docs/tasks/completed/phase-4.md) for setup, test commands an
 The Workload explicitly resolves each Input Field from `with`; extra invocation
 keys never become inputs. `argv` uses the resolved Workload `inputs`. See the
 [Field and null semantics](../../docs/reference/spec-engine.md#shared-input-fields).
+
+This example demonstrates typed Routine → Node → Pipeline → Request Outputs.
+Upload returns a canonical Artifact reference; the dependent verify Node downloads
+that object. Worker lifecycle reports are automatic; optional event hooks only
+append messages. Create Request Inputs as Field declarations, for example
+`{"message":{"type":"string","value":"hello"}}`. Required server support is
+tracked by mu-masterflow #11; use its captured Spec/Field contract with this CLI.

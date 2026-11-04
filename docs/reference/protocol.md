@@ -13,8 +13,8 @@ for payloads, limits and authorization. CLI adapters live in `src/api.ts`,
 - Bootstrap allowed Spec YAML with CEL capability headers; claim using the loaded
   engine and explicit Spec slug after token-bound heartbeat.
 - Carry the returned assignment generation on Request-context reports/artifact calls.
-- Real execution reports through Spec actions/hooks. `/api/requests/update` does
-  not exist; use the documented report route. Fake mode alone reports automatically.
+- Real execution reports lifecycle status and typed Outputs automatically. `/api/requests/update` does
+  not exist; use the documented report route. Custom report actions append events independently.
 - Upload raw bytes to signed storage, complete the server receipt and retrieve signed
   download URLs. `/download` returns URL JSON, not proxied bytes. Never forward worker
   credentials to storage. HTTP `artifactId` denotes an output key, not a canonical ID.

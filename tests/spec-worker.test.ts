@@ -16,19 +16,12 @@ async function config(): Promise<WorkerConfig> {
 }
 const request: ClaimedRequest = { requestId: "r1", specSlug: "cpu", pipelineName: "p", assignmentVersion: 12, payload: {}, artifacts: [] };
 
-test("real CLI loads Spec, initializes before claiming, executes CPU workload and reports solely through hooks", async () => {
+test("real CLI loads Spec, initializes after claiming, executes CPU workload and reports without Spec hooks", async () => {
   const configuration = await config();
   const paths: string[] = [], reports: unknown[] = [], notices: unknown[] = [];
-  const report = (status: unknown, nodes?: unknown) => ({ type: "send_http_request", url: "${{ session.server }}/api/requests/report", method: "post", header: { Authorization: "Bearer ${{ session.token }}" }, body: { id: "${{ request.requestId }}", ...(status ? { status } : {}), ...(nodes ? { node_states: nodes } : {}) } });
   const notice = (message: string) => ({ type: "send_http_request", url: "${{ session.server }}/api/notifications/send", method: "post", header: { Authorization: "Bearer ${{ session.token }}" }, body: { title: "CPU worker", message } });
   const source = JSON.stringify({
     entries: { master_flow: { initialization: [notice("initialized")], finalization: [notice("${{ entry.status }}")] } },
-    events: [
-      { on: "pipeline_started", do: [report("processing")] },
-      { on: "node_started", do: [report(null, { "${{ node.name }}": { status: "running" } })] },
-      { on: "node_finished", do: [report(null, { "${{ node.name }}": { status: "${{ node.status == 'success' ? 'succeeded' : 'failed' }}" } })] },
-      { on: "pipeline_finished", do: [report("${{ event.pipeline.status == 'success' ? 'succeeded' : 'process_failed' }}")] },
-    ],
     workloads: { work: { target: "bun", units: 0, argv: ["-e", "await Bun.write('completed', 'ok');"] } },
     pipeline: { p: { nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "work" }] }] } },
   });
@@ -46,12 +39,13 @@ test("real CLI loads Spec, initializes before claiming, executes CPU workload an
     await Bun.write(configPath, JSON.stringify({ runtime: { devices: [] } }));
     const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
     expect(await child.exited).toBe(0);
-    expect(paths.indexOf("/api/notifications/send")).toBeLessThan(paths.indexOf("/api/requests/claim"));
-    expect(reports).toEqual([
+    expect(paths.indexOf("/api/notifications/send")).toBeGreaterThan(paths.indexOf("/api/requests/claim"));
+    expect(reports.map((raw: any) => {const {events, node_states, ...report} = raw; return {...report, ...(node_states ? {node_states: Object.fromEntries(Object.entries(node_states).map(([key, value]: [string, any]) => {const {events, ...node} = value; return [key, node];}))} : {})};})).toEqual([
       { id: "r1", status: "processing" },
+      { id: "r1", node_states: { work: { status: "queue" } } },
       { id: "r1", node_states: { work: { status: "running" } } },
-      { id: "r1", node_states: { work: { status: "succeeded" } } },
-      { id: "r1", status: "succeeded" },
+      { id: "r1", node_states: { work: { status: "succeeded", outputs: {}, skipped: false, blocked: false } } },
+      { id: "r1", status: "succeeded", pipelineState: {status: "success", outputs: {}} },
     ]);
     expect(notices).toEqual([{ title: "CPU worker", message: "initialized" }, { title: "CPU worker", message: "success" }]);
     const runs = await readdir(join(configuration.workspace, "runs"));
@@ -61,7 +55,7 @@ test("real CLI loads Spec, initializes before claiming, executes CPU workload an
   } finally { server.stop(true); }
 });
 
-test("Spec without reporting hooks sends no implicit reports", async () => {
+test("Spec without reporting hooks reports lifecycle automatically", async () => {
   const configuration = await config();
   const paths: string[] = [];
   const transport = (async (url: string | URL | Request) => {
@@ -70,8 +64,8 @@ test("Spec without reporting hooks sends no implicit reports", async () => {
     if (path.endsWith("claim")) return Response.json([request]);
     return Response.json({ ok: true });
   }) as typeof fetch;
-  expect(await new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects())).run("once", new AbortController().signal)).toBe(0);
-  expect(paths.some(path => path.endsWith("report"))).toBe(false);
+  expect(await new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects(transport))).run("once", new AbortController().signal)).toBe(0);
+  expect(paths.some(path => path.endsWith("report"))).toBe(true);
   expect(paths.indexOf("/api/specs/cpu")).toBeLessThan(paths.indexOf("/api/requests/claim"));
 });
 
@@ -85,7 +79,7 @@ test("invalid Specs fail before assignment", async () => {
       if (path.endsWith("claim")) claims++;
       return Response.json({ ok: true });
     }) as typeof fetch;
-    await expect(new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects())).run("once", new AbortController().signal)).rejects.toThrow();
+    await expect(new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects(transport))).run("once", new AbortController().signal)).rejects.toThrow();
     expect(claims).toBe(0);
   }
 });

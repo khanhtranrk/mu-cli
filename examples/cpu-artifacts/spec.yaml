@@ -1,30 +1,11 @@
 expression_engine: cel-v1
-events:
-  - on: pipeline_started
-    do:
-      - type: report_request
-        status: processing
-        events: [{level: info, message: Request started}]
-  - on: node_started
-    do:
-      - type: report_node
-        status: running
-  - on: node_finished
-    do:
-      - type: report_node
-        status: '${{ node.status == "success" ? "succeeded" : "failed" }}'
-        events: [{level: info, message: Node finished}]
-  - on: pipeline_finished
-    do:
-      - type: report_request
-        status: '${{ event.pipeline.status == "success" ? "succeeded" : "process_failed" }}'
 workloads:
   generate:
     units: 0
     inputs:
-      path: {type: string, value: "${{ with.path }}"}
-      message: {type: string, value: "${{ with.message }}"}
-      request_id: {type: string, value: "${{ with.request_id }}"}
+      path: {type: string, value: '${{ with.path }}'}
+      message: {type: string, value: '${{ with.message }}'}
+      request_id: {type: string, value: '${{ with.request_id }}'}
     target: bun
     argv:
       - -e
@@ -32,10 +13,35 @@ workloads:
       - '${{ inputs.path }}'
       - '${{ inputs.message }}'
       - '${{ inputs.request_id }}'
+routines:
+  inspect_result:
+    inputs:
+      path: {type: string, value: '${{ with.path }}'}
+    actions:
+      - type: inspect_file
+        target: '${{ inputs.path }}'
+        save_to: file
+    outputs:
+      size: {type: number, value: '${{ actions.file.size }}'}
+      sha256: {type: string, value: '${{ actions.file.sha256 }}'}
+# Lifecycle status and Outputs are published by the worker, without reporting hooks.
+events:
+  - on: pipeline_started
+    do:
+      - type: report_request
+        events: [{level: info, message: Request started}]
+  - on: node_finished
+    do:
+      - type: report_node
+        events: [{level: info, message: Node finished}]
 pipeline:
   demo:
     inputs:
-      message: {type: string, default: Hello from MU CLI v2}
+      message: {type: string, value: '${{ request.inputs.message }}', default: Hello MU}
+    outputs:
+      published: {type: artifact, value: '${{ pipeline.nodes.publish.outputs.published }}'}
+      size: {type: number, value: '${{ pipeline.nodes.publish.outputs.size }}'}
+      sha256: {type: string, value: '${{ pipeline.nodes.publish.outputs.sha256 }}'}
     nodes:
       - name: publish
         context:
@@ -48,23 +54,28 @@ pipeline:
             workload: generate
             with:
               path: '${{ node.result_path }}'
-              message: '${{ inputs.message }}'
+              message: '${{ pipeline.inputs.message }}'
               request_id: '${{ request.requestId }}'
+          - type: execute_routine
+            routine: inspect_result
+            with: {path: '${{ node.result_path }}'}
+            save_to: inspection
         after_run:
           - type: upload_artifact
             artifact_id: result
-            content_type: application/json
             target: '${{ node.result_path }}'
+            content_type: application/json
             label: CPU smoke output
-            save_state: published
-        postcondition:
-          operator: file_exists
-          path: '${{ node.result_path }}'
+            save_to: uploaded
+        outputs:
+          published: {type: artifact, value: '${{ node.actions.uploaded.artifact }}'}
+          size: {type: number, value: '${{ node.actions.inspection.outputs.size }}'}
+          sha256: {type: string, value: '${{ node.actions.inspection.outputs.sha256 }}'}
       - name: verify
         depends_on: [publish]
         run:
           - type: download_artifact
-            artifact_id: result
+            artifact: '${{ pipeline.nodes.publish.outputs.published }}'
             target: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
         postcondition:
           operator: file_exists

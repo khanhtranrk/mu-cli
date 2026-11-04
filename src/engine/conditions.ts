@@ -43,7 +43,7 @@ export async function condition(item: Condition | undefined | null, context: Con
     case "node_state": {
       const keys = render(item.target, context);
       if (!Array.isArray(keys) || !keys.length || !keys.every(key => typeof key === "string" && key)) throw new Error("State condition requires nonempty string keys");
-      value = context[item.operator === "action_state" ? "actions" : "node"] ?? {};
+      value = (item.operator === "action_state" ? context.node && !context.routine ? mapping(context.node).actions : context.actions : context.node) ?? {};
       for (const key of keys) {
         if (!value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key)) return false;
         value = (value as Context)[key];

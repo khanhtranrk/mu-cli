@@ -14,7 +14,7 @@ const artifact: ArtifactMetadata = { id: "input-key", name: "input.json", handle
 
 test("artifact metadata preserves output keys and rejects removed legacy shapes and duplicate keys", () => {
   expect(parseArtifacts([artifact])).toEqual([artifact]);
-  for (const value of [[{ ...artifact, handler: "convex" }], [{ ...artifact, storageId: "old" }], [artifact, artifact], [{ ...artifact, size: -1 }], [{ ...artifact, objectKey: undefined }], { input: "path" }]) expect(() => parseArtifacts(value)).toThrow();
+  for (const value of [[{ ...artifact, handler: "convex" }], [{ ...artifact, storageId: "old" }], [artifact, artifact], [{ ...artifact, artifactId: 17 }], [{ ...artifact, size: -1 }], [{ ...artifact, objectKey: undefined }], { input: "path" }]) expect(() => parseArtifacts(value)).toThrow();
 });
 
 test("claim validates and preserves copied/shared artifact inputs without fetching or executing them", async () => {
@@ -55,7 +55,7 @@ test("unresolved redirect is a failed action and cannot overwrite an existing do
     const transport = (async () => new Response("redirect missing Location", { status: 302 })) as unknown as typeof fetch;
     const actions = new Actions({ pipeline: {} }, new BunEffects(transport));
     const context: Context = { session: { working_dir: directory } };
-    await expect(actions.run({ type: "send_http_request", url: "http://storage/", response_file: destination, save_state: "download" }, context, {}, new AbortController().signal)).rejects.toThrow("HTTP 302");
+    await expect(actions.run({ type: "send_http_request", url: "http://storage/", response_file: destination, save_to: "download" }, context, {}, new AbortController().signal)).rejects.toThrow("HTTP 302");
     expect(await Bun.file(destination).text()).toBe("keep");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

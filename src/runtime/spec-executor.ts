@@ -1,3 +1,4 @@
+import {reportingAction} from "../engine/reporting-actions";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -15,15 +16,23 @@ export class SpecExecutor implements RequestExecutor {
   readonly reporting = "spec";
   readonly concurrent = true;
   private scheduler: Scheduler;
+  private preparations = new Map<string, Promise<void>>();
   private flows = new Map<string, { source: string; flow: Flow }>();
   constructor(private config: WorkerConfig, private effects: Effects) {
     this.scheduler = new Scheduler(config.devices ?? [], config.concurrency ?? 32, message => effects.warning(message));
   }
 
   async prepare(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
-    if (this.flows.has(slug)) return;
+    const key = slug + ":" + createHash("sha256").update(source).digest("hex");
+    if (!this.preparations.has(key)) this.preparations.set(key, this.prepareFlow(source, slug, signal, restored));
+    return this.preparations.get(key)!;
+  }
+
+  private async prepareFlow(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
+    const flowKey = slug + ":" + createHash("sha256").update(source).digest("hex");
+    if (this.flows.has(flowKey)) return;
     const spec = parseSpec(source);
-    const scope = createHash("sha256").update(this.config.server + "\n" + this.config.unitId + "\n" + slug).digest("hex");
+    const scope = createHash("sha256").update(this.config.server + "\n" + this.config.unitId + "\n" + slug + "\n" + source).digest("hex");
     const cwd = join(this.config.workspace, "runs", scope), cache = join(homedir(), ".cache");
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
     const base = {
@@ -35,24 +44,29 @@ export class SpecExecutor implements RequestExecutor {
       },
     };
     const flow = new Flow(spec, base, this.effects, "master_flow", this.scheduler, (this.config.shutdownTimeout ?? 30) * 1000);
-    this.flows.set(slug, { source, flow });
+    this.flows.set(flowKey, { source, flow });
     if (restored) flow.restore(restored);
     else await flow.initialize(signal);
   }
 
   async execute(source: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence): Promise<void> {
     const snapshot = persistence?.snapshot ? this.hydrate(persistence.snapshot) : undefined;
-    if (snapshot && (snapshot.version !== 1 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
+    if (snapshot && (snapshot.version !== 2 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
     if (snapshot) {
       const metadata = mapping(snapshot.context.request);
       if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
     }
-    await this.prepare(source, request.specSlug, signal, snapshot);
-    const prepared = this.flows.get(request.specSlug)!;
+    const reportContext = {session: {server: this.config.server, token: this.config.token, working_dir: this.config.workspace}, request: {...request}};
+    try { await this.prepare(source, request.specSlug, signal, snapshot); }
+    catch (error) {
+      await reportingAction("report_request", {status: "process_failed", events: [{level: "error", message: "Request initialization failed", details: {message: error instanceof Error ? error.message : "Initialization failed"}, createdAt: Date.now()}]}, reportContext, this.effects, AbortSignal.timeout(10000), true);
+      throw error;
+    }
+    const prepared = this.flows.get(request.specSlug + ":" + createHash("sha256").update(source).digest("hex"))!;
     if (source !== prepared.source) throw new Error("Spec changed within the current worker invocation");
     if (snapshot) prepared.flow.restore(snapshot);
     await prepared.flow.execute({
-      pipelineName: request.pipelineName, payload: request.payload,
+      pipelineName: request.pipelineName, payload: request.inputs ?? request.payload,
       metadata: { requestId: request.requestId, specSlug: request.specSlug, assignmentVersion: request.assignmentVersion, artifacts: request.artifacts, registryContext: request.registryContext ?? {} },
       registryContext: request.registryContext,
     }, signal, persistence ? {
@@ -87,6 +101,7 @@ export class SpecExecutor implements RequestExecutor {
       catch (caught) { error ??= caught; }
     }
     this.flows.clear();
+    this.preparations.clear();
     if (error) throw error;
   }
 }

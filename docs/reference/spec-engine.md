@@ -26,7 +26,7 @@ are immutable; lowercase `session` is worker runtime context.
 Node order is context → skip/precondition → before/run/after → postcondition →
 finally, followed by terminal event handling. Dependency failure blocks dependent
 execution. Runtime states are `running`, `success`, `failed`; server status mapping
-belongs to Spec reporting hooks. See Phase 2 for skip, ignore_error and cleanup nuances.
+belongs to automatic worker reporting. See Phase 2 for skip, ignore_error and cleanup nuances.
 
 ## Effects and reporting
 
@@ -86,8 +86,8 @@ other Fields in the same declaration.
 - Node Fields resolve after Node context and before conditions/actions, with access
   to Pipeline inputs and runtime namespaces. Values are available as `node.inputs`;
   top-level `inputs` continues to refer to Pipeline inputs in Node actions.
-- Routine Fields accept the existing rendered `execute_routine.args` overrides.
-  Routine actions/returns use a private top-level `inputs` object.
+- Routine Fields explicitly select from `execute_routine.with`, like Workloads.
+  Routine actions/outputs use private top-level `inputs` and `actions` objects.
 - Workload Fields have no implicit caller overrides. They explicitly select values
   from `with` or runtime namespaces through their declarations.
 
@@ -171,3 +171,34 @@ MasterFlow currently retains a separate `params`-based editor/Request validator;
 this CLI issue does not migrate that UI, saved Specs, or Convex schema. Coordinate
 the companion migration before using these Specs through its Request editor.
 See the [CPU example](../../examples/cpu-artifacts/spec.yaml).
+
+## Typed Outputs and result capture
+
+Pipeline, Node, Routine and Workload `outputs` use the same Field declarations as
+`inputs`. `save_to` stores an Action result at `node.actions[name]` in Node actions,
+or `actions[name]` inside a Routine/lifecycle context. Routine and Workload results
+contain `outputs`; command/inspect/transfer results keep their documented fields.
+Routine and Workload `with` is an explicit binding context: use Field `value`
+expressions such as `${{ with.path }}`; it is not automatically forwarded to argv.
+Workload output expressions can explicitly read `result.returncode/stdout/stderr`;
+stdout is never guessed or parsed as structured JSON. A side-effect-only Workload
+needs no outputs or adapter.
+
+Node Outputs resolve after finally and postcondition validation. Failed, skipped,
+blocked or ignored-error Nodes do not publish Outputs. Dependents read resolved
+values through `pipeline.nodes[name].outputs`; declare depends_on for every such
+producer. Pipeline Outputs resolve after all Nodes settle successfully, then are
+reported atomically with terminal status. A type/resolution error fails the Node
+or Pipeline. Request Outputs are server-resolved from pipeline.outputs and
+request.inputs using captured declarations.
+
+`request.inputs` contains frozen values; `node.inputs` and `pipeline.inputs` contain
+owner-scoped resolved values. Field expressions render nested objects/lists once;
+strings produced by evaluation are literal, never recursively executed as CEL.
+Artifact Fields require `{artifactId: canonicalId}` (optional name), never output
+keys, copied storage locators or signed URLs. Upload's saved `.artifact` can feed
+Node outputs and download's `artifact` parameter directly.
+
+Breaking migration: use save_to instead of save_state; named Routine outputs
+instead of returns; execute_routine.with instead of args; event-only report actions
+instead of status-report hooks. No parser alias silently accepts removed syntax.

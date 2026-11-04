@@ -14,20 +14,20 @@ The local scheduler executes eligible nodes across claimed Requests and Specs.
 `once --resume` processes recorded recovery work without claiming a new batch;
 `start --resume` drains recovery before normal claiming.
 
-Real execution preserves Spec-owned reporting through HTTP actions/routines/events;
-there is no automatic status reporter. A Spec without reporting can finish locally
-while its server Request remains possessed. `--fake` is a separate serial simulation
-that claims real work and sends request-level reports.
+Real execution automatically reports Request and Node lifecycle states and resolved
+Outputs. General Spec hooks remain optional; their failures warn independently of
+mandatory reporting failures. Standard start/finish/failure events use the same
+embedded event shape; error details contain the execution failure. Transfers still require explicit Spec actions.
 
 ## Identity and durable state
 
 Claims include Request ID, pipeline, payload, assignment version, derived output
 metadata and optional frozen Registry values. They do not provide a server lease,
-arbitrary assignment inspection, authoritative node-state download or immutable
-server Spec snapshot. Local checkpoints retain exact Spec text and execution state.
+arbitrary assignment inspection or authoritative node-state download. New claims
+include the exact Spec YAML captured with the Request. Local checkpoints retain exact Spec text and execution state.
 
 An execution session is Request-local; it is distinct from a Creation Space Session.
-Runtime `success` is mapped by Spec reporting to API `succeeded`; failure reporting
+Runtime `success` is mapped by the worker to API `succeeded`; failure reporting
 uses server statuses such as `process_failed`. See [protocol](../reference/protocol.md).
 
 ## Shutdown and recovery
@@ -46,3 +46,22 @@ blindly replayed. See [recovery details](../tasks/completed/phase-3.md#durable-s
 A workspace lock prevents two processes sharing local state. After forced loss,
 verify the old worker and children have stopped before removing a stale lock.
 Separate workspaces do not constitute a multi-host lease.
+
+## Output publication and recovery
+
+Checkpoint version 2 persists published dependency Outputs and terminal Pipeline
+Outputs. Successful Node results are checkpointed before dependents proceed.
+The finishing checkpoint is an outbox: after a crash, the worker resends the
+idempotent terminal status/Outputs without repeating actions or hooks. Node reports
+use the same assignment-scoped route. Lifecycle status/Outputs are idempotent;
+event delivery is at-least-once under uncertain transport/recovery, so a replay
+can append the same message again. No event IDs or separate deduplication system
+are introduced.
+Cancellation reports process_failed while retaining the node-boundary checkpoint;
+explicit --resume/--retry-incomplete can repeat uncertain Node effects. Old execution
+checkpoints are rejected with reset guidance. Entry finalization is worker-wide;
+a failure exits the worker unsuccessfully without rewriting completed Request results.
+
+Fake execution can acknowledge an empty captured output contract, but cannot
+synthesize declared typed Outputs. Such a simulation fails explicitly rather
+than publishing a false successful result. It still claims real Requests.

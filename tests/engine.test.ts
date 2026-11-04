@@ -28,7 +28,7 @@ const write = (path: string, content: unknown) => ({ type: "write_json", path: "
 const command = (code: string, extra: Context = {}) => ({ type: "execute_command", target: "bun", args: ["-e", code], ...extra });
 
 test("CPU workload resolves argv/env exactly once without a shell, then saves command state", async () => {
-  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, inputs: { message: { type: "string", value: "${{ with.message }}" } }, env: { MU_TEST: "${{ inputs.message }}" }, argv: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ inputs.message }}"] } }, pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", with: { message: "${{ inputs.message }}" } }, command("process.stdout.write(' hi\\n');", { save_state: "cmd" }), write("state.json", "${{ actions.cmd }}")] }] } } });
+  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, inputs: { message: { type: "string", value: "${{ with.message }}" } }, env: { MU_TEST: "${{ inputs.message }}" }, argv: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ inputs.message }}"] } }, pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", with: { message: "${{ inputs.message }}" } }, command("process.stdout.write(' hi\\n');", { save_to: "cmd" }), write("state.json", "${{ node.actions.cmd }}")] }] } } });
   await setup.execute({ message: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("workload.json")).toEqual({ argv: "${{ 1 + 1 }}; $(touch forbidden)", env: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("state.json")).toEqual({ success: true, error: null, returncode: 0, stdout: " hi\n", stderr: "" });
@@ -37,8 +37,8 @@ test("CPU workload resolves argv/env exactly once without a shell, then saves co
 
 test("whole-value templates retain typed command argv/env/context", async () => {
   const setup = await fixture({ pipeline: { p: { inputs: { argv: { type: "array" }, env: { type: "object" }, local: { type: "object" } }, nodes: [{ name: "n", run: [
-    { type: "execute_command", target: "bun", args: "${{ inputs.argv }}", env: "${{ inputs.env }}", context: "${{ inputs.local }}", save_state: "cmd" },
-    write("typed.json", { stdout: "${{ actions.cmd.stdout }}", value: "${{ custom.value }}" }),
+    { type: "execute_command", target: "bun", args: "${{ inputs.argv }}", env: "${{ inputs.env }}", context: "${{ inputs.local }}", save_to: "cmd" },
+    write("typed.json", { stdout: "${{ node.actions.cmd.stdout }}", value: "${{ custom.value }}" }),
   ] }] } } });
   await setup.execute({ argv: ["-e", "process.stdout.write(process.env.MU_TEST)"], env: { MU_TEST: "${{ literal }}" }, local: { custom: { value: 42 } } });
   expect(await setup.json("typed.json")).toEqual({ stdout: "${{ literal }}", value: 42 });
@@ -70,9 +70,9 @@ test("successful skip checks postcondition, action precondition skips, node prec
   expect(await setup.effects.exists(join(setup.cwd, "action-not-run.json"), "file")).toBe(false);
 });
 
-test("ignored action failures retain failed save_state and ignored node failure allows dependents", async () => {
+test("ignored action failures retain failed save_to and ignored node failure allows dependents", async () => {
   const setup = await fixture({ pipeline: { p: { nodes: [
-    { name: "ignored-action", run: [command("process.exit(3)", { save_state: "failure", ignore_error: true }), write("saved.json", "${{ actions.failure }}")] },
+    { name: "ignored-action", run: [command("process.exit(3)", { save_to: "failure", ignore_error: true }), write("saved.json", "${{ node.actions.failure }}")] },
     { name: "ignored-node", ignore_error: true, run: [command("process.exit(2)")], finally: [write("actual.json", "${{ node.status }}")] },
     { name: "dependent", depends_on: ["ignored-node"], run: [write("dependent.json", true)] },
   ] } } });
@@ -84,8 +84,8 @@ test("ignored action failures retain failed save_state and ignored node failure 
 test("prepare runs once only after valid intake; Registry, request and node actions remain isolated", async () => {
   const setup = await fixture({ pipeline: { p: {
     inputs: { name: { type: "string" }, count: { type: "number", default: "${{ Request.Registry.Count }}" } },
-    context: { captured: "${{ Request.Registry.Count }}" }, prepare: [command("const f=Bun.file('prepare-count'); await Bun.write(f,String(Number(await f.exists()?await f.text():0)+1));", { save_state: "prepared" })],
-    nodes: [{ name: "first", run: [{ ...command("process.stdout.write('private')"), save_state: "private" }] }, { name: "second", run: [write("${{ inputs.name }}.json", { count: "${{ inputs.count }}", captured: "${{ captured }}", prepared: "${{ actions.prepared.success }}", private: "${{ has(actions.private) }}" })] }],
+    context: { captured: "${{ Request.Registry.Count }}" }, prepare: [command("const f=Bun.file('prepare-count'); await Bun.write(f,String(Number(await f.exists()?await f.text():0)+1));", { save_to: "prepared" })],
+    nodes: [{ name: "first", run: [{ ...command("process.stdout.write('private')"), save_to: "private" }] }, { name: "second", run: [write("${{ inputs.name }}.json", { count: "${{ inputs.count }}", captured: "${{ captured }}", prepared: "${{ actions.prepared.success }}", private: "${{ has(actions.private) }}" })] }],
   } } });
   await expect(setup.execute({ name: 1 }, { Request: { Count: 1 } })).rejects.toThrow("string");
   expect(await setup.effects.exists(join(setup.cwd, "prepare-count"), "file")).toBe(false);
@@ -97,11 +97,11 @@ test("prepare runs once only after valid intake; Registry, request and node acti
 });
 
 test("routine context is private; inspect_file hashes bytes and returns typed output", async () => {
-  const setup = await fixture({ routines: { inspect: { inputs: { path: { type: "string" } }, actions: [{ type: "inspect_file", target: "${{ inputs.path }}", save_state: "info", context: { custom: { secret: true } } }], returns: "${{ actions.info }}" } }, pipeline: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", args: { path: "source.json" }, save_state: "routine" }, write("result.json", { result: "${{ actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
+  const setup = await fixture({ routines: { inspect: { inputs: { path: { type: "string", value: "${{ with.path }}" } }, actions: [{ type: "inspect_file", target: "${{ inputs.path }}", save_to: "info", context: { custom: { secret: true } } }], outputs: {file: {type: "object", value: "${{ actions.info }}"}} } }, pipeline: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", with: { path: "source.json" }, save_to: "routine" }, write("result.json", { result: "${{ node.actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
   await setup.execute();
   const output = await setup.json("result.json");
   expect(output.leaked).toBe(false); expect(output.result.success).toBe(true);
-  expect(output.result.output.sha256).toMatch(/^[a-f0-9]{64}$/); expect(output.result.output.name).toBe("source.json");
+  expect(output.result.outputs.file.sha256).toMatch(/^[a-f0-9]{64}$/); expect(output.result.outputs.file.name).toBe("source.json");
 });
 
 test("event hooks accumulate root/pipeline/node in order, have isolated state, and failures do not change outcomes", async () => {
@@ -131,7 +131,7 @@ test("entry finalization attempts all actions after initialization failure", asy
 
 test("conditions distinguish missing from null, filesystem types and CPU node placement", async () => {
   const setup = await fixture({});
-  const context = { ...setup.base, actions: { step: { value: null } }, node: { device: { family: "cpu", index: null } } };
+  const context = { ...setup.base, actions: { step: { value: null } }, node: { actions: {step: {value: null}}, device: { family: "cpu", index: null } } };
   expect(await condition({ operator: "action_state", target: ["step", "value"], expected: null }, context, {}, setup.effects, setup.signal)).toBe(true);
   expect(await condition({ operator: "action_state", target: ["missing"], expected: null }, context, {}, setup.effects, setup.signal)).toBe(false);
   expect(await condition({ operator: "node_state", target: ["device", "index"], expected: null }, context, {}, setup.effects, setup.signal)).toBe(true);
@@ -144,7 +144,7 @@ test("command failure state is available to postcondition/finally and postcondit
   const setup = await fixture({});
   const actions = new Actions({ pipeline: {} } as Spec, setup.effects);
   const context = { ...setup.base };
-  await expect(actions.run({ type: "execute_command", target: "bun", args: ["-e", "process.stdout.write('ok')"], save_state: "cmd", postcondition: { operator: "or", props: [] } }, context, {}, setup.signal)).rejects.toThrow("postcondition");
+  await expect(actions.run({ type: "execute_command", target: "bun", args: ["-e", "process.stdout.write('ok')"], save_to: "cmd", postcondition: { operator: "or", props: [] } }, context, {}, setup.signal)).rejects.toThrow("postcondition");
   const state = mapping(mapping(context.actions).cmd);
   expect(state.stdout).toBe("ok"); expect(state.success).toBe(false); expect(state.returncode).toBe(0);
 });
@@ -227,18 +227,18 @@ test("Workload with cannot implicitly supply a required Field, and with is unava
   }
 });
 
-test("Pipeline, Node and Routine Fields resolve in their owner scope with caller overrides", async () => {
+test("Pipeline, Node and Routine Fields resolve explicit values in their owner scope", async () => {
   const setup = await fixture({
-    routines: { r: { inputs: { n: { type: "number", value: "${{ node.inputs.n + 1 }}" }, text: { type: "string", value: "unused" } }, actions: [], returns: "${{ inputs }}" } },
+    routines: { r: { inputs: { n: { type: "number", value: "${{ node.inputs.n + 1 }}" }, text: { type: "string", value: "unused" } }, actions: [], outputs: {values: {type: "object", value: "${{ inputs }}"}} } },
     pipeline: { p: { inputs: { n: { type: "number", value: 2 }, label: { type: "string", value: "unused" } }, nodes: [
       { name: "n", inputs: { n: { type: "number", value: "${{ pipeline.inputs.n * 3 }}" } }, run: [
-        { type: "execute_routine", routine: "r", args: { text: "${{ inputs.label }}" }, save_state: "r" },
-        write("scopes.json", { pipeline: "${{ inputs }}", node: "${{ node.inputs }}", routine: "${{ actions.r.output }}" }),
+        { type: "execute_routine", routine: "r", with: { text: "${{ inputs.label }}" }, save_to: "r" },
+        write("scopes.json", { pipeline: "${{ inputs }}", node: "${{ node.inputs }}", routine: "${{ node.actions.r.outputs.values }}" }),
       ] },
     ] } },
   });
   await setup.execute({ label: "${{ literal }}" });
-  expect(await setup.json("scopes.json")).toEqual({ pipeline: { n: 2, label: "${{ literal }}" }, node: { n: 6 }, routine: { n: 7, text: "${{ literal }}" } });
+  expect(await setup.json("scopes.json")).toEqual({ pipeline: { n: 2, label: "${{ literal }}" }, node: { n: 6 }, routine: { n: 7, text: "unused" } });
 });
 
 test("Node context resolves parent namespaces under node only, before Node inputs and conditions", async () => {
@@ -304,7 +304,7 @@ test("literal and dynamic Node context collisions reject reserved fields without
   for (const key of reserved) {
     await expect(setup.execute({context: {safe: "not-injected", [key]: "forged"}})).rejects.toThrow("nodes failed");
     expect(await setup.json("collision-error.json")).toBe(`node.n.context.${key}: reserved Node field`);
-    expect(await setup.json("collision-metadata.json")).toEqual({name: "n", status: "failed", total_units: 0, device: {family: "cpu", index: null}});
+    expect(await setup.json("collision-metadata.json")).toEqual({actions: {}, name: "n", status: "failed", total_units: 0, device: {family: "cpu", index: null}});
   }
   expect(await setup.effects.exists(join(setup.cwd, "collision-ran.json"), "file")).toBe(false);
 });
