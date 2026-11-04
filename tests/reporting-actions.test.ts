@@ -35,15 +35,16 @@ const upload: Action = {type: "upload_artifact", artifact_id: "result", target: 
 test("built-ins register with parser and report rendered node/request events using active assignment", async () => {
   const f = await fixture(() => Response.json({artifact: {id: "result"}}));
   try {
-    const spec = parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type: "report_node", status: "running", events: [{level: "info", message: "${{ node.name }}"}], request_events: [{level: "warning", message: "request", createdAt: 12}], save_state: "report"}]}]}}}));
+    const spec = parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type: "report_node", status: "running", events: [{level: "info", message: "${{ node.name }}"}], save_state: "report"}]}]}}}));
     await f.actions.run(spec.pipeline.p!.nodes![0]!.run![0]!, f.context, {}, signal());
     const call = f.calls[0]!; const body = call.body as any;
     expect(call.headers.get("x-mu-assignment-version")).toBe("7");
     expect(body.status).toBeUndefined(); expect(body.node_states.publish.status).toBe("running");
     expect(body.node_states.publish.events[0].message).toBe("publish"); expect(body.node_states.publish.events[0].createdAt).toBeNumber();
-    expect(body.events[0].createdAt).toBe(12);
-    await f.actions.run({type: "report_node", request_events: [{level: "info", message: "only request"}]}, {...f.context, node: undefined}, {}, signal());
+    expect(body.events).toBeUndefined();
+    await f.actions.run({type: "report_request", events: [{level: "info", message: "only request", createdAt: 12}]}, {...f.context, node: undefined}, {}, signal());
     expect((f.calls[1]!.body as any).node_states).toBeUndefined();
+    expect((f.calls[1]!.body as any).events[0].createdAt).toBe(12);
   } finally { await f.cleanup(); }
 });
 
@@ -94,4 +95,43 @@ for (const mode of ["digest", "size", "missing", "http", "timeout"]) test(`downl
     await expect(new Actions({pipeline: {}}, new BunEffects(transport)).run({type: "download_artifact", artifact_id: "result", target}, context, {}, signal())).rejects.toThrow();
     expect(await Bun.file(target).text()).toBe("keep");
   } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
+for (const input of [
+  {status: "processing"},
+  {events: [{level: "warning", message: "request event", details: {attempt: 2}, createdAt: 123}]},
+  {status: "succeeded", events: [{level: "info", message: "finished"}]},
+]) test(`report_request sends only specified fields: ${Object.keys(input).join("/")}`, async () => {
+  const f = await fixture(() => Response.json({ok: true}));
+  try {
+    const action = parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type: "report_request", ...input, save_state: "reported"}]}]}}})).pipeline.p!.nodes![0]!.run![0]!;
+    await f.actions.run(action, {...f.context, node: undefined}, {}, signal());
+    const call = f.calls[0]!, body = call.body as Context;
+    expect(call.url).toBe("http://server/api/requests/report");
+    expect(call.headers.get("authorization")).toBe("Bearer secret");
+    expect(call.headers.get("x-mu-assignment-version")).toBe("7");
+    expect(body.id).toBe("r"); expect(body.node_states).toBeUndefined();
+    expect(Object.keys(body).sort()).toEqual(["id", ...Object.keys(input)].sort());
+    if (input.status) expect(body.status).toBe(input.status);
+  } finally { await f.cleanup(); }
+});
+
+test("report_request validates events/status, saves HTTP failures and preserves cancellation", async () => {
+  const f = await fixture(() => Response.json({ok: true}));
+  try {
+    for (const status of ["waiting", "possessed", "running", "artifact_available", "retrieve_artifact_failed"]) {
+      await expect(f.actions.run({type: "report_request", status}, f.context, {}, signal())).rejects.toThrow("Invalid request status");
+    }
+    for (const event of [{level: "debug", message: "bad"}, {level: "info", message: "bad", createdAt: -1}, {level: "info", message: "bad", details: []}]) {
+      await expect(f.actions.run({type: "report_request", events: [event]}, f.context, {}, signal())).rejects.toThrow();
+    }
+    expect(f.calls).toHaveLength(0);
+    const failing = new Actions({pipeline: {}}, new BunEffects((async () => new Response(null, {status: 403})) as unknown as typeof fetch));
+    await expect(failing.run({type: "report_request", status: "processing", save_state: "failed"}, f.context, {}, signal())).rejects.toThrow("HTTP 403");
+    expect((f.context.actions as any).failed.success).toBe(false);
+    const abort = new AbortController(); abort.abort();
+    await expect(f.actions.run({type: "report_request", events: []}, f.context, {}, abort.signal)).rejects.toThrow();
+    expect(f.calls).toHaveLength(0);
+    for (const type of ["report_request", "report_node"]) expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type, request_status: "processing"}]}]}}}))).toThrow("report_request");
+  } finally { await f.cleanup(); }
 });

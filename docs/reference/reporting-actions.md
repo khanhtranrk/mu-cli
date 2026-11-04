@@ -8,19 +8,24 @@ existing warning behavior; put required reports/transfers in node actions when
 failure must fail execution.
 
 These actions require active `session.server`, `session.token`,
-`request.requestId` and `request.assignmentVersion`; node reports additionally
+`request.requestId` and `request.assignmentVersion`; `report_node` additionally
 require `node.name` when sending node fields. The worker supplies these contexts.
 Storage requests never receive worker credentials. All paths below resolve
 relative to `session.working_dir`.
 
 | Action | Parameters | Saved result beyond success/error |
 | --- | --- | --- |
-| `report_node` | Optional node `status`, `events`; optional `request_status`, `request_events`; `timeout` (seconds, default 120) | No additional fields |
+| `report_request` | Optional request `status`, `events`; `timeout` (seconds, default 120) | No additional fields |
+| `report_node` | Optional node `status`, `events`; `timeout` (seconds, default 120) | No additional fields |
 | `inspect_file` | Required `target` local path | `path` (absolute), `name`, `size` (bytes), `sha256`, `contentType` |
 | `upload_artifact` | Required `target`, `artifact_id`; optional `connection_id`, `content_type`, `node_name`, `label`, `timeout` (default 120 seconds per call) | `artifact` registered Request output metadata |
 | `download_artifact` | Required destination `target`, `artifact_id`; optional expected `sha256`, `timeout` (default 120 seconds per call) | `path`, `name`, `size`, `sha256`, `contentType` for downloaded local file |
 
-`report_node` sends only explicitly supplied fields: no implicit status change.
+`report_request` and `report_node` send only explicitly supplied fields: no implicit status change.
+They update separate scopes: `report_request` never sends node updates and needs no
+node context; `report_node` only updates the current node. The former mixed-scope
+`request_status`/`request_events` parameters are rejected; use a separate
+`report_request` action with `status`/`events` instead.
 Node statuses are `queue`, `running`, `failed`, `succeeded`; request statuses a
 worker can report are `processing`, `process_failed`, `succeeded`. Engine node
 `success` maps to report `succeeded` explicitly in the example below.
@@ -51,6 +56,11 @@ not independently verified security attestations.
 
 ```yaml
 events:
+  - on: pipeline_started
+    do:
+      - type: report_request
+        status: processing
+        events: [{level: info, message: Request started}]
   - on: node_finished
     do:
       - type: report_node

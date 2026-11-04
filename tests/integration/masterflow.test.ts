@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
+import { Actions } from "../../src/engine/actions";
 import { Worker } from "../../src/worker";
 import { DataCenterClient } from "../../src/api";
 import { SpecExecutor } from "../../src/runtime/spec-executor";
@@ -172,5 +173,31 @@ integration("real worker authorization rejects foreign/stale/revoked assignments
     expect((await setup.call("/api/requests/report", { id: foreign, status: "succeeded" })).status).toBe(400);
     await setup.backend.run(ctx => ctx.db.patch(setup.ids.tokenId, { deletedAt: Date.now() }));
     expect((await setup.call("/api/requests/report", report)).status).toBe(401);
+  } finally { await setup.close(); }
+});
+
+integration("report_request appends through MasterFlow without coupling events/status or changing nodes", async () => {
+  const setup = await fixture();
+  try {
+    await setup.api.heartbeat("online");
+    const [request] = await setup.api.claim("demo", 1);
+    const context = {session: {working_dir: setup.config.workspace, server: setup.config.server, token: setup.config.token}, request};
+    const actions = new Actions({pipeline: {}}, new BunEffects());
+    const signal = new AbortController().signal;
+    const first = {level: "info" as const, message: "accepted", createdAt: 100};
+    const second = {level: "warning" as const, message: "retry", details: {attempt: 2}, createdAt: 200};
+    await actions.run({type: "report_request", events: [first]}, context, {}, signal);
+    let row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+    expect(row?.status).toBe("possessed"); expect(row?.events).toEqual([first]);
+    await actions.run({type: "report_request", status: "processing"}, context, {}, signal);
+    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+    expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first]);
+    await actions.run({type: "report_request", events: [second]}, context, {}, signal);
+    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+    expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first, second]);
+    await actions.run({type: "report_request", status: "succeeded", events: []}, context, {}, signal);
+    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+    expect(row?.status).toBe("succeeded"); expect(row?.events).toEqual([first, second]);
+    expect(row?.nodeStates).toBeUndefined();
   } finally { await setup.close(); }
 });

@@ -39,13 +39,21 @@ export async function reportingAction(type: string, values: Context, context: Co
       throw new Error(`Data Center HTTP ${status}`);
     }
   };
+  if (type === "report_request" || type === "report_node") {
+    if (values.request_status !== undefined || values.request_events !== undefined) throw new Error("Use report_request with status/events for request reporting");
+  }
+  if (type === "report_request") {
+    const body: Context = { id: requestId };
+    if (values.status !== undefined) {
+      if (!statuses.slice(2).includes(String(values.status))) throw new Error("Invalid request status");
+      body.status = values.status;
+    }
+    if (values.events !== undefined) body.events = events(values.events);
+    await call("/api/requests/report", body);
+    return {};
+  }
   if (type === "report_node") {
     const body: Context = { id: requestId };
-    if (values.request_status !== undefined) {
-      if (!statuses.slice(2).includes(String(values.request_status))) throw new Error("Invalid request status");
-      body.status = values.request_status;
-    }
-    if (values.request_events !== undefined) body.events = events(values.request_events);
     const update: Context = {};
     if (values.status !== undefined) {
       if (!["queue", "running", "failed", "succeeded"].includes(String(values.status))) throw new Error("Invalid node status");

@@ -2,9 +2,9 @@ expression_engine: cel-v1
 events:
   - on: pipeline_started
     do:
-      - type: report_node
-        request_status: processing
-        request_events: [{level: info, message: Request started}]
+      - type: report_request
+        status: processing
+        events: [{level: info, message: Request started}]
   - on: node_started
     do:
       - type: report_node
@@ -16,8 +16,8 @@ events:
         events: [{level: info, message: Node finished}]
   - on: pipeline_finished
     do:
-      - type: report_node
-        request_status: '${{ event.pipeline.status == "success" ? "succeeded" : "process_failed" }}'
+      - type: report_request
+        status: '${{ event.pipeline.status == "success" ? "succeeded" : "process_failed" }}'
 workloads:
   generate:
     units: 0

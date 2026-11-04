@@ -49,6 +49,7 @@ export class Actions {
     try {
       signal.throwIfAborted();
       switch (action.type) {
+        case "report_request":
         case "report_node":
         case "upload_artifact":
         case "download_artifact":
