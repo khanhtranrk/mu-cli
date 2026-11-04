@@ -1,0 +1,526 @@
+# Migrated from mu-cli-legacy/examples/song-with-cover/spec-finally.yaml.
+# Lifecycle status/events are automatic; required uploads remain in Node finally.
+# Cached files skip generation only; uploads still run and publish canonical Artifacts.
+# Requires a configured MasterFlow worker and real GPU/media tools; do not run as a smoke test.
+expression_engine: cel-v1
+entries:
+  direct_flow:
+    initialization: []
+  master_flow:
+    initialization:
+      - type: execute_routine
+        routine: send_notification
+        ignore_error: true
+        with:
+          title: Worker ready
+          message: Initialization completed
+    finalization:
+      - type: execute_routine
+        routine: send_notification
+        ignore_error: true
+        with:
+          title: Worker ended
+          message: Worker finished with status ${{ entry.status }}.
+workloads:
+  yue2:
+    target: ${{ sys.cache_dir }}/bin/yue-synth
+    device_args:
+      - --device
+      - ${{ schedule.device_family }}${{ schedule.device_index }}
+    units: 3
+    inputs:
+      request:
+        type: string
+        value: ${{ with.request }}
+      output:
+        type: string
+        value: ${{ with.output }}
+      score:
+        type: string
+        value: ${{ with.score }}
+    argv:
+      - --model
+      - ${{ sys.models["YuE2-3B-BF16"] }}
+      - --vae
+      - ${{ sys.models["YuE2-Vae-F32"] }}
+      - --request
+      - ${{ inputs.request }}
+      - --out
+      - ${{ inputs.output }}
+      - --score
+      - ${{ inputs.score }}
+  qwen-image:
+    target: ${{ sys.cache_dir }}/bin/sd-cli
+    device_args:
+      - --backend
+      - diffusion=${{ schedule.device_family }}${{ schedule.device_index }},te=${{ schedule.device_family }}${{ schedule.device_index }},vae=${{ schedule.device_family }}${{ schedule.device_index }}
+    units: 3
+    inputs:
+      prompt:
+        type: string
+        value: ${{ with.prompt }}
+      cover_with:
+        type: number
+        value: ${{ with.cover_with }}
+      cover_height:
+        type: number
+        value: ${{ with.cover_height }}
+      output:
+        type: string
+        value: ${{ with.output }}
+    argv:
+      - --diffusion-model
+      - ${{ sys.models["qwen-image-2.1-Q4_K_M"] }}
+      - --vae
+      - ${{ sys.models["vae/qwen_image_2.1_vae_bf16"] }}
+      - --llm
+      - ${{ sys.models["Qwen3-VL-8B-Instruct-UD-Q4_K_XL"] }}
+      - --flash-attn
+      - off,diffusion=on
+      - --prompt
+      - ${{ inputs.prompt }}
+      - --steps
+      - "24"
+      - --cfg-scale
+      - "5.0"
+      - --sampling-method
+      - euler
+      - -W
+      - ${{ inputs.cover_with }}
+      - -H
+      - ${{ inputs.cover_height }}
+      - -o
+      - ${{ inputs.output }}
+  demucs:
+    target: demucs
+    units: 1
+    device_args:
+      - -d
+      - cuda:${{ schedule.device_index }}
+    inputs:
+      input:
+        type: string
+        value: ${{ with.input }}
+      output:
+        type: string
+        value: ${{ with.output }}
+    argv:
+      - -n
+      - htdemucs
+      - --two-stems=vocals
+      - --shifts
+      - "1"
+      - -j
+      - "2"
+      - -o
+      - ${{ inputs.output }}
+      - ${{ inputs.input }}
+  whisperx:
+    target: whisperx
+    units: 3
+    device_args:
+      - --device_index
+      - ${{ schedule.device_index }}
+    inputs:
+      input:
+        type: string
+        value: ${{ with.input }}
+      output:
+        type: string
+        value: ${{ with.output }}
+    argv:
+      - ${{ inputs.input }}
+      - --model
+      - large-v3
+      - --device
+      - cuda
+      - --batch_size
+      - "4"
+      - --output_dir
+      - ${{ inputs.output }}
+      - --output_format
+      - all
+pipeline:
+  song-with-cover:
+    prepare:
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/YuE2-Vae-F32.gguf
+        target: hf
+        args:
+          - download
+          - Serveurperso/YuE2-GGUF
+          - YuE2-Vae-F32.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: and
+          props:
+            - operator: file_exists
+              path: ${{ sys.cache_dir }}/models/YuE2-Vae-F32.gguf
+            - operator: action_state
+              target:
+                - prepare_command
+                - returncode
+              expected: 0
+        save_to: prepare_command
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/YuE2-3B-BF16.gguf
+        target: hf
+        args:
+          - download
+          - Serveurperso/YuE2-GGUF
+          - YuE2-3B-BF16.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/YuE2-3B-BF16.gguf
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/MERT-v2-FullSong-Q8_0.gguf
+        target: hf
+        args:
+          - download
+          - Serveurperso/YuE2-GGUF
+          - MERT-v2-FullSong-Q8_0.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/MERT-v2-FullSong-Q8_0.gguf
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/SheetSage2-Q8_0.gguf
+        target: hf
+        args:
+          - download
+          - Serveurperso/YuE2-GGUF
+          - SheetSage2-Q8_0.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/SheetSage2-Q8_0.gguf
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
+        target: hf
+        args:
+          - download
+          - Serveurperso/YuE2-GGUF
+          - yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/qwen-image-2.1-Q4_K_M.gguf
+        target: hf
+        args:
+          - download
+          - unsloth/Qwen-Image-2.1-GGUF
+          - qwen-image-2.1-Q4_K_M.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/qwen-image-2.1-Q4_K_M.gguf
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/vae/qwen_image_2.1_vae_bf16.safetensors
+        target: hf
+        args:
+          - download
+          - unsloth/Qwen-Image-2.1-FP8
+          - vae/qwen_image_2.1_vae_bf16.safetensors
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/vae/qwen_image_2.1_vae_bf16.safetensors
+      - type: execute_command
+        skip_if:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
+        target: hf
+        args:
+          - download
+          - unsloth/Qwen3-VL-8B-Instruct-GGUF
+          - Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
+          - --local-dir
+          - ${{ sys.cache_dir }}/models
+        postcondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/models/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf
+      - type: execute_command
+        skip_if:
+          operator: exit_code
+          target:
+            - demucs
+            - --help
+        target: uv
+        args:
+          - tool
+          - install
+          - demucs
+          - --with
+          - wrapt
+          - --with
+          - numpy
+        postcondition:
+          operator: exit_code
+          target:
+            - demucs
+            - --help
+      - type: execute_command
+        skip_if:
+          operator: exit_code
+          target:
+            - whisperx
+            - --help
+        target: uv
+        args:
+          - tool
+          - install
+          - whisperx
+          - --with
+          - wrapt
+        postcondition:
+          operator: exit_code
+          target:
+            - whisperx
+            - --help
+    nodes:
+      - name: generate-song
+        postcondition:
+          operator: and
+          props:
+            - operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+            - operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
+        precondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/bin/yue-synth
+        before_run:
+          - type: create_dir
+            path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}
+          - type: create_dir
+            path: ${{ session.cache_dir }}/requests/${{ pipeline.inputs.name }}
+          - type: write_json
+            path: ${{ session.cache_dir }}/requests/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.json
+            content:
+              name: ${{ pipeline.inputs.name }}
+              style: ${{ pipeline.inputs.style }}
+              lyrics: ${{ pipeline.inputs.lyrics }}
+        run:
+          - type: execute_workload
+            workload: yue2
+            skip_if:
+              operator: and
+              props:
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
+            postcondition:
+              operator: and
+              props:
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
+            with:
+              request: ${{ session.cache_dir }}/requests/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.json
+              output: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+              score: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
+        finally:
+          - type: upload_artifact
+            target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+            artifact_id: song-mp3
+            node_name: ${{ node.name }}
+            label: Song audio
+            content_type: audio/mpeg
+            save_to: song_mp3
+          - type: upload_artifact
+            target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
+            artifact_id: song-abc
+            node_name: ${{ node.name }}
+            label: ABC notation
+            content_type: text/vnd.abc
+            save_to: song_abc
+        outputs:
+          song_mp3:
+            type: artifact
+            value: ${{ node.actions.song_mp3.artifact }}
+          song_abc:
+            type: artifact
+            value: ${{ node.actions.song_abc.artifact }}
+      - name: generate-cover
+        precondition:
+          operator: file_exists
+          path: ${{ sys.cache_dir }}/bin/sd-cli
+        postcondition:
+          operator: file_exists
+          path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
+        before_run:
+          - type: create_dir
+            path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}
+        run:
+          - type: execute_workload
+            workload: qwen-image
+            skip_if:
+              operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
+            postcondition:
+              operator: and
+              props:
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
+            with:
+              output: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
+              prompt: ${{ pipeline.inputs.cover_prompt }}
+              cover_with: ${{ pipeline.inputs.cover_with }}
+              cover_height: ${{ pipeline.inputs.cover_height }}
+        finally:
+          - type: upload_artifact
+            target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
+            artifact_id: cover-png
+            node_name: ${{ node.name }}
+            label: Cover image
+            content_type: image/png
+            save_to: cover_png
+        outputs:
+          cover_png:
+            type: artifact
+            value: ${{ node.actions.cover_png.artifact }}
+      - name: separate-vocals
+        postcondition:
+          operator: file_exists
+          path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated/htdemucs/${{ pipeline.inputs.name }}/vocals.wav
+        depends_on:
+          - generate-song
+        before_run:
+          - type: create_dir
+            path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated
+        run:
+          - type: execute_workload
+            workload: demucs
+            skip_if:
+              operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated/htdemucs/${{ pipeline.inputs.name }}/vocals.wav
+            postcondition:
+              operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated/htdemucs/${{ pipeline.inputs.name }}/vocals.wav
+            with:
+              output: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated
+              input: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
+      - name: transcribe-vocals
+        postcondition:
+          operator: file_exists
+          path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript/vocals.json
+        depends_on:
+          - separate-vocals
+        before_run:
+          - type: create_dir
+            path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript
+        run:
+          - type: execute_workload
+            workload: whisperx
+            skip_if:
+              operator: file_exists
+              path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript/vocals.json
+            postcondition:
+              operator: and
+              props:
+                - operator: file_exists
+                  path: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript/vocals.json
+            with:
+              output: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript
+              input: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/separated/htdemucs/${{ pipeline.inputs.name }}/vocals.wav
+        finally:
+          - type: upload_artifact
+            target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript/vocals.json
+            artifact_id: transcript-json
+            node_name: ${{ node.name }}
+            label: Vocal transcript
+            content_type: application/json
+            save_to: transcript_json
+        outputs:
+          transcript_json:
+            type: artifact
+            value: ${{ node.actions.transcript_json.artifact }}
+    inputs:
+      name:
+        type: string
+      style:
+        type: string
+      lyrics:
+        type: string
+      cover_prompt:
+        type: string
+      cover_with:
+        type: number
+        default: 1280
+      cover_height:
+        type: number
+        default: 768
+    outputs:
+      song_mp3:
+        type: artifact
+        value: ${{ pipeline.nodes["generate-song"].outputs.song_mp3 }}
+      song_abc:
+        type: artifact
+        value: ${{ pipeline.nodes["generate-song"].outputs.song_abc }}
+      cover_png:
+        type: artifact
+        value: ${{ pipeline.nodes["generate-cover"].outputs.cover_png }}
+      transcript_json:
+        type: artifact
+        value: ${{ pipeline.nodes["transcribe-vocals"].outputs.transcript_json }}
+routines:
+  send_notification:
+    actions:
+      - type: send_http_request
+        url: ${{ session.server }}/api/notifications/send
+        method: post
+        header:
+          Authorization: Bearer ${{ session.token }}
+          Content-Type: application/json
+        body:
+          title: ${{ inputs.title }}
+          message: ${{ inputs.message }}
+          tags: ${{ inputs.tags }}
+    inputs:
+      title:
+        type: string
+        value: ${{ with.title }}
+      message:
+        type: string
+        value: ${{ with.message }}
+      tags:
+        type: array
+        default: []
+        value: "${{ has(with.tags) ? with.tags : [] }}"
+events:
+  - on: pipeline_finished
+    do:
+      - type: execute_routine
+        routine: send_notification
+        precondition:
+          operator: cel
+          expression: '${{ event.pipeline.status == "success" }}'
+        with:
+          title: Song pipeline completed
+          message: Request ${{ request.requestId }} for ${{ pipeline.inputs.name }} completed successfully
