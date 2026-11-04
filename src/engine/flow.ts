@@ -2,7 +2,8 @@ import { render } from "../spec/expressions";
 import { applyContext, mapping, type Context, type Node, type NodeStatus, type Spec, type States } from "../spec/types";
 import { Actions, errorValue } from "./actions";
 import { condition } from "./conditions";
-import { paramsFor, requestScopes } from "./context";
+import { requestScopes } from "./context";
+import { resolveFields } from "../spec/fields";
 import type { Effects } from "./ports";
 import { Scheduler, type Device } from "../scheduler/scheduler";
 import { RecoveryError, type ExecutionPersistence, type ExecutionSnapshot } from "./checkpoint";
@@ -85,6 +86,7 @@ export class Flow {
     try {
       signal.throwIfAborted();
       applyContext(local, render(node.context ?? {}, local));
+      mapping(local.node).inputs = resolveFields(node.inputs, {}, local, "node " + node.name);
       if (node.skip_if && await condition(node.skip_if, local, states, this.effects, signal)) skipped = true;
       else {
         if (!await condition(node.precondition, local, states, this.effects, signal)) throw new Error("Node precondition failed");
@@ -147,7 +149,8 @@ export class Flow {
         const local = structuredClone(base);
         requestScopes(local, request.registryContext); local.request = structuredClone(request.metadata); local.pipeline_name = name;
         applyContext(local, render(definition.context ?? {}, local));
-        paramsFor(definition.params, request.payload, local, "pipeline " + name);
+        local.inputs = resolveFields(definition.inputs, request.payload, local, "pipeline " + name);
+        local.pipeline = { name, inputs: structuredClone(local.inputs) };
         return local;
       };
       if (!restored) {
@@ -171,7 +174,6 @@ export class Flow {
           await this.preparing.get(name);
         }
         context = validate(this.prepared.get(name)!);
-        context.params = paramsFor(definition.params, request.payload, context, "pipeline " + name);
       } else {
         context = structuredClone(restored.context);
         const metadata = mapping(context.request);

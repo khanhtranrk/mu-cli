@@ -1,8 +1,8 @@
 export type Context = Record<string, unknown>;
 export type NodeStatus = "running" | "success" | "failed";
 export type States = Record<string, NodeStatus>;
-export interface Parameter { type?: "string" | "number" | "boolean" | "array" | "object"; default?: unknown }
-export type Parameters = Record<string, Parameter>;
+export interface Field { type: "string" | "number" | "boolean" | "array" | "object" | "artifact"; value?: unknown; default?: unknown }
+export type Fields = Record<string, Field>;
 export interface Condition {
   operator: "and" | "or" | "cel" | "file_exists" | "folder_exists" | "path_exists" | "exit_code" | "action_state" | "node_state" | "node_status";
   expected?: unknown;
@@ -24,6 +24,7 @@ export interface Action extends Common {
   target?: string;
   args?: unknown[] | Context | string;
   env?: Record<string, unknown> | string;
+  with?: Context | string;
   workload?: string;
   routine?: string;
   path?: string;
@@ -47,6 +48,7 @@ export interface Action extends Common {
 }
 export interface EventHook { on: "pipeline_started" | "pipeline_finished" | "node_started" | "node_finished"; do: Action[] }
 export interface Node extends Common {
+  inputs?: Fields;
   name: string;
   depends_on?: string[];
   before_run?: Action[];
@@ -55,9 +57,9 @@ export interface Node extends Common {
   finally?: Action[];
   events?: EventHook[];
 }
-export interface Pipeline { params?: Parameters; context?: Context | string; prepare?: Action[]; nodes?: Node[]; events?: EventHook[] }
-export interface Workload { params?: Parameters; target: string; args?: unknown[] | string; env?: Record<string, unknown> | string; device_args?: unknown[] | string; units?: number }
-export interface Routine { params?: Parameters; actions: Action[]; returns?: unknown }
+export interface Pipeline { inputs?: Fields; context?: Context | string; prepare?: Action[]; nodes?: Node[]; events?: EventHook[] }
+export interface Workload { inputs?: Fields; target: string; argv?: unknown[] | string; env?: Record<string, unknown> | string; device_args?: unknown[] | string; units?: number }
+export interface Routine { inputs?: Fields; actions: Action[]; returns?: unknown }
 export interface Lifecycle { initialization?: Action[]; finalization?: Action[] }
 export interface Spec {
   expression_engine?: "cel-v1";

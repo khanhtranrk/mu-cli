@@ -1,6 +1,6 @@
 import { render } from "../spec/expressions";
 import { applyContext, mapping, type Action, type Context, type Spec, type States } from "../spec/types";
-import { paramsFor } from "./context";
+import { resolveFields } from "../spec/fields";
 import { condition } from "./conditions";
 import type { Effects, HttpOptions } from "./ports";
 import { reportingAction } from "./reporting-actions";
@@ -62,11 +62,15 @@ export class Actions {
         }
         case "execute_workload": {
           const workload = this.spec.workloads![action.workload!]!;
-          const local = { ...context, params: paramsFor(workload.params, values.args ?? {}, context, "workload " + action.workload) };
+          const local = structuredClone(context);
+          delete local.with;
+          local.inputs = {};
+          const invocation = { ...local, with: mapping(values.with === undefined ? {} : values.with, "execute_workload.with") };
+          local.inputs = resolveFields(workload.inputs, {}, invocation, "workload " + action.workload);
           delete (local as Context).schedule;
           const placement = mapping(mapping(context.node ?? {}).device ?? {});
           const gpu = (workload.units ?? 0) > 0 && placement.family !== "cpu" && placement.index != null;
-          const target = render(workload.target, local), args = render(workload.args ?? [], local);
+          const target = render(workload.target, local), args = render(workload.argv ?? [], local);
           if (typeof target !== "string" || !target || !Array.isArray(args)) throw new Error("Workload requires target and argv list");
           if (gpu) {
             (local as Context).schedule = { device_family: placement.family, device_index: placement.index };
@@ -81,7 +85,7 @@ export class Actions {
         case "execute_routine": {
           const declaration = this.spec.routines![action.routine!]!;
           const local = structuredClone(context);
-          local.params = paramsFor(declaration.params, values.args ?? {}, context, "routine " + action.routine);
+          local.inputs = resolveFields(declaration.inputs, values.args ?? {}, context, "routine " + action.routine);
           local.actions = {};
           await this.runAll(declaration.actions, local, states, signal);
           result.output = render(declaration.returns ?? null, local);

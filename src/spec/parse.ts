@@ -1,4 +1,5 @@
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
+import { validateFields } from "./fields";
 import { validateTemplates } from "./expressions";
 import { mapping, type Spec } from "./types";
 
@@ -21,11 +22,9 @@ const literalName = (value: unknown, label: string) => {
   return name;
 };
 
-function parameters(value: unknown, label: string): void {
-  for (const [name, raw] of Object.entries(mapping(defaultValue(value, {}), label))) {
-    const declaration = mapping(raw, `${label}.${name}`);
-    if (declaration.type !== undefined && !["string", "number", "boolean", "array", "object"].includes(String(declaration.type))) throw new Error(`${label}.${name}: invalid parameter type`);
-  }
+function inputs(item: Record<string, unknown>, label: string): void {
+  if (has(item, "params")) throw new Error(`${label}.params was removed; use inputs Field declarations`);
+  validateFields(defaultValue(item.inputs, {}), label + ".inputs");
 }
 
 function condition(value: unknown, label: string): void {
@@ -94,7 +93,10 @@ export function parseSpec(source: string): Spec {
         const name = literalName(item[key], path + "." + key);
         if (type === "execute_workload" && !allowWorkload) throw new Error(`${path}: execute_workload only allowed in node before_run/run/after_run`);
         if (!has(type === "execute_workload" ? workloads : routines, name)) throw new Error(`${path}: undefined ${key} ${name}`);
-        if (type === "execute_workload") mapping(defaultValue(item.args, {}), path + ".args");
+        if (type === "execute_workload") {
+          if (has(item, "args")) throw new Error(`${path}.args was removed; use with for the Workload CEL context`);
+          renderedMapping(defaultValue(item.with, {}), path + ".with");
+        }
         else renderedMapping(defaultValue(item.args, {}), path + ".args");
       } else if (type === "execute_command") {
         text(item.target, path + ".target"); renderedList(defaultValue(item.args, []), path + ".args"); renderedMapping(defaultValue(item.env, {}), path + ".env");
@@ -126,9 +128,10 @@ export function parseSpec(source: string): Spec {
   for (const [name, raw] of Object.entries(workloads)) {
     literalName(name, "workload name");
     const item = mapping(raw, "workload " + name);
-    parameters(item.params, `workloads.${name}.params`);
+    inputs(item, `workloads.${name}`);
+    if (has(item, "args")) throw new Error(`workloads.${name}.args was removed; use argv`);
     text(item.target, `workloads.${name}.target`);
-    renderedList(defaultValue(item.args, []), `workloads.${name}.args`); renderedList(defaultValue(item.device_args, []), `workloads.${name}.device_args`);
+    renderedList(defaultValue(item.argv, []), `workloads.${name}.argv`); renderedList(defaultValue(item.device_args, []), `workloads.${name}.device_args`);
     renderedMapping(defaultValue(item.env, {}), `workloads.${name}.env`);
     if (item.units !== undefined && (typeof item.units !== "number" || !Number.isFinite(item.units) || item.units < 0)) throw new Error(`workloads.${name}.units must be finite and non-negative`);
   }
@@ -136,7 +139,7 @@ export function parseSpec(source: string): Spec {
   for (const [name, raw] of Object.entries(routines)) {
     literalName(name, "routine name");
     const item = mapping(raw, "routine " + name);
-    parameters(item.params, `routines.${name}.params`);
+    inputs(item, `routines.${name}`);
     const children = list(item.actions, `routines.${name}.actions`);
     actions(children, `routines.${name}.actions`);
     routineEdges.set(name, children.map(child => mapping(child)).filter(child => child.type === "execute_routine").map(child => String(child.routine)));
@@ -150,7 +153,7 @@ export function parseSpec(source: string): Spec {
   events(root.events, "events");
   for (const [name, raw] of Object.entries(pipelines)) {
     const item = mapping(raw, `pipeline.${name}`);
-    parameters(item.params, `pipeline.${name}.params`);
+    inputs(item, `pipeline.${name}`);
     if (item.context !== undefined) common({ context: item.context }, `pipeline.${name}`);
     actions(item.prepare, `pipeline.${name}.prepare`); events(item.events, `pipeline.${name}.events`);
     const edges = new Map<string, string[]>();
@@ -161,6 +164,7 @@ export function parseSpec(source: string): Spec {
       const dependencies = list(defaultValue(node.depends_on, []), "depends_on").map(dependency => literalName(dependency, "depends_on"));
       edges.set(nodeName, dependencies);
       common(node, `node.${nodeName}`);
+      inputs(node, `pipeline.${name}.nodes.${nodeName}`);
       for (const phase of ["before_run", "run", "after_run", "finally"]) actions(node[phase], `node.${nodeName}.${phase}`, phase !== "finally");
       events(node.events, `node.${nodeName}.events`, true);
     }

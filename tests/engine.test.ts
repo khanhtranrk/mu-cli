@@ -28,7 +28,7 @@ const write = (path: string, content: unknown) => ({ type: "write_json", path: "
 const command = (code: string, extra: Context = {}) => ({ type: "execute_command", target: "bun", args: ["-e", code], ...extra });
 
 test("CPU workload resolves argv/env exactly once without a shell, then saves command state", async () => {
-  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, params: { message: { type: "string" } }, env: { MU_TEST: "${{ params.message }}" }, args: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ params.message }}"] } }, pipeline: { p: { params: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", args: { message: "${{ params.message }}" } }, command("process.stdout.write(' hi\\n');", { save_state: "cmd" }), write("state.json", "${{ actions.cmd }}")] }] } } });
+  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, inputs: { message: { type: "string", value: "${{ with.message }}" } }, env: { MU_TEST: "${{ inputs.message }}" }, argv: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ inputs.message }}"] } }, pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", with: { message: "${{ inputs.message }}" } }, command("process.stdout.write(' hi\\n');", { save_state: "cmd" }), write("state.json", "${{ actions.cmd }}")] }] } } });
   await setup.execute({ message: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("workload.json")).toEqual({ argv: "${{ 1 + 1 }}; $(touch forbidden)", env: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("state.json")).toEqual({ success: true, error: null, returncode: 0, stdout: " hi\n", stderr: "" });
@@ -36,8 +36,8 @@ test("CPU workload resolves argv/env exactly once without a shell, then saves co
 });
 
 test("whole-value templates retain typed command argv/env/context", async () => {
-  const setup = await fixture({ pipeline: { p: { params: { argv: { type: "array" }, env: { type: "object" }, local: { type: "object" } }, nodes: [{ name: "n", run: [
-    { type: "execute_command", target: "bun", args: "${{ params.argv }}", env: "${{ params.env }}", context: "${{ params.local }}", save_state: "cmd" },
+  const setup = await fixture({ pipeline: { p: { inputs: { argv: { type: "array" }, env: { type: "object" }, local: { type: "object" } }, nodes: [{ name: "n", run: [
+    { type: "execute_command", target: "bun", args: "${{ inputs.argv }}", env: "${{ inputs.env }}", context: "${{ inputs.local }}", save_state: "cmd" },
     write("typed.json", { stdout: "${{ actions.cmd.stdout }}", value: "${{ custom.value }}" }),
   ] }] } } });
   await setup.execute({ argv: ["-e", "process.stdout.write(process.env.MU_TEST)"], env: { MU_TEST: "${{ literal }}" }, local: { custom: { value: 42 } } });
@@ -83,9 +83,9 @@ test("ignored action failures retain failed save_state and ignored node failure 
 
 test("prepare runs once only after valid intake; Registry, request and node actions remain isolated", async () => {
   const setup = await fixture({ pipeline: { p: {
-    params: { name: { type: "string" }, count: { type: "number", default: "${{ Request.Registry.Count }}" } },
+    inputs: { name: { type: "string" }, count: { type: "number", default: "${{ Request.Registry.Count }}" } },
     context: { captured: "${{ Request.Registry.Count }}" }, prepare: [command("const f=Bun.file('prepare-count'); await Bun.write(f,String(Number(await f.exists()?await f.text():0)+1));", { save_state: "prepared" })],
-    nodes: [{ name: "first", run: [{ ...command("process.stdout.write('private')"), save_state: "private" }] }, { name: "second", run: [write("${{ params.name }}.json", { count: "${{ params.count }}", captured: "${{ captured }}", prepared: "${{ actions.prepared.success }}", private: "${{ has(actions.private) }}" })] }],
+    nodes: [{ name: "first", run: [{ ...command("process.stdout.write('private')"), save_state: "private" }] }, { name: "second", run: [write("${{ inputs.name }}.json", { count: "${{ inputs.count }}", captured: "${{ captured }}", prepared: "${{ actions.prepared.success }}", private: "${{ has(actions.private) }}" })] }],
   } } });
   await expect(setup.execute({ name: 1 }, { Request: { Count: 1 } })).rejects.toThrow("string");
   expect(await setup.effects.exists(join(setup.cwd, "prepare-count"), "file")).toBe(false);
@@ -97,7 +97,7 @@ test("prepare runs once only after valid intake; Registry, request and node acti
 });
 
 test("routine context is private; inspect_file hashes bytes and returns typed output", async () => {
-  const setup = await fixture({ routines: { inspect: { params: { path: { type: "string" } }, actions: [{ type: "inspect_file", target: "${{ params.path }}", save_state: "info", context: { custom: { secret: true } } }], returns: "${{ actions.info }}" } }, pipeline: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", args: { path: "source.json" }, save_state: "routine" }, write("result.json", { result: "${{ actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
+  const setup = await fixture({ routines: { inspect: { inputs: { path: { type: "string" } }, actions: [{ type: "inspect_file", target: "${{ inputs.path }}", save_state: "info", context: { custom: { secret: true } } }], returns: "${{ actions.info }}" } }, pipeline: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", args: { path: "source.json" }, save_state: "routine" }, write("result.json", { result: "${{ actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
   await setup.execute();
   const output = await setup.json("result.json");
   expect(output.leaked).toBe(false); expect(output.result.success).toBe(true);
@@ -183,4 +183,60 @@ test("legacy offline routines fixture preserves nested calls, dynamic keys and f
   expect(manifest["artifact-demo"].logs).toEqual(["File inspected"]);
   const inspected = await setup.effects.inspect(join(setup.cwd, "output/result.json"));
   expect(manifest["artifact-demo"].file).toEqual({ success: true, error: null, ...inspected });
+});
+
+test("Workload with selects explicit Fields, isolates siblings and renders argv from only its inputs", async () => {
+  const setup = await fixture({
+    workloads: { echo: {
+      inputs: {
+        selected: { type: "object", value: "${{ with.use ? {'message': with.nested.message, 'id': request.requestId} : {'message': 'fallback', 'id': request.requestId} }}" },
+        fixed: { type: "number", value: 7 },
+        fallback: { type: "boolean", default: false },
+      },
+      target: "bun", argv: ["-e", "await Bun.write(process.argv[1], process.argv[2]);", "${{ node.inputs.path }}", "${{ string(inputs.selected.message) + ':' + inputs.selected.id + ':' + string(inputs.fixed) + ':' + string(has(inputs.extra)) + ':' + string(has(inputs.message)) + ':' + string(inputs.fallback) }}"],
+    } },
+    pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [
+      { name: "one", inputs: { path: { type: "string", value: "one.txt" } }, run: [
+        { type: "execute_workload", workload: "echo", with: { use: true, nested: { message: "${{ inputs.message }}" }, extra: 100, message: "implicit" } },
+        write("caller.json", { inputs: "${{ inputs }}", node: "${{ node.inputs }}" }),
+      ] },
+      { name: "two", inputs: { path: { type: "string", value: "two.txt" } }, run: [
+        { type: "execute_workload", workload: "echo", with: "${{ {'use': false, 'nested': {}} }}" },
+      ] },
+    ] } },
+  });
+  await setup.execute({ message: "${{ literal }}" });
+  expect(await readFile(join(setup.cwd, "one.txt"), "utf8")).toBe("${{ literal }}:r:7:false:false:false");
+  expect(await readFile(join(setup.cwd, "two.txt"), "utf8")).toBe("fallback:r:7:false:false:false");
+  expect(await setup.json("caller.json")).toEqual({ inputs: { message: "${{ literal }}" }, node: { path: "one.txt" } });
+});
+
+test("Workload with cannot implicitly supply a required Field, and with is unavailable to argv", async () => {
+  const setup = await fixture({});
+  for (const workload of [
+    { inputs: { x: { type: "string" } }, target: "bun", argv: [] },
+    { inputs: {}, target: "bun", argv: ["${{ with.x }}"] },
+    { inputs: {}, target: "bun", argv: ["${{ inputs.x }}"] },
+    { inputs: { x: { type: "number", value: "${{ with.x }}" } }, target: "bun", argv: [] },
+  ]) {
+    const spec = parseSpec(JSON.stringify({ workloads: { w: workload } }));
+    const context = structuredClone(setup.base);
+    await expect(new Actions(spec, setup.effects).run({ type: "execute_workload", workload: "w", with: { x: "provided" } }, context, {}, setup.signal)).rejects.toThrow();
+    expect(Object.hasOwn(context, "with")).toBe(false);
+    expect(Object.hasOwn(context, "inputs")).toBe(false);
+  }
+});
+
+test("Pipeline, Node and Routine Fields resolve in their owner scope with caller overrides", async () => {
+  const setup = await fixture({
+    routines: { r: { inputs: { n: { type: "number", value: "${{ node.inputs.n + 1 }}" }, text: { type: "string", value: "unused" } }, actions: [], returns: "${{ inputs }}" } },
+    pipeline: { p: { inputs: { n: { type: "number", value: 2 }, label: { type: "string", value: "unused" } }, nodes: [
+      { name: "n", inputs: { n: { type: "number", value: "${{ pipeline.inputs.n * 3 }}" } }, run: [
+        { type: "execute_routine", routine: "r", args: { text: "${{ inputs.label }}" }, save_state: "r" },
+        write("scopes.json", { pipeline: "${{ inputs }}", node: "${{ node.inputs }}", routine: "${{ actions.r.output }}" }),
+      ] },
+    ] } },
+  });
+  await setup.execute({ label: "${{ literal }}" });
+  expect(await setup.json("scopes.json")).toEqual({ pipeline: { n: 2, label: "${{ literal }}" }, node: { n: 6 }, routine: { n: 7, text: "${{ literal }}" } });
 });
