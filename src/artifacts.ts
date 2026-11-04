@@ -1,5 +1,6 @@
 export interface ArtifactMetadata {
   id: string;
+  artifactId?: string;
   name: string;
   handler: "s3";
   connectionId: string;
@@ -14,7 +15,7 @@ export interface ArtifactMetadata {
 export function parseArtifacts(value: unknown): ArtifactMetadata[] {
   if (!Array.isArray(value) || value.length > 100) throw new Error("Invalid artifact metadata array");
   const ids = new Set<string>();
-  const allowed = new Set(["id", "name", "handler", "connectionId", "objectKey", "contentType", "size", "createdAt", "nodeName", "label"]);
+  const allowed = new Set(["artifactId", "id", "name", "handler", "connectionId", "objectKey", "contentType", "size", "createdAt", "nodeName", "label"]);
   return value.map(raw => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid artifact metadata");
     const item = raw as Record<string, unknown>;

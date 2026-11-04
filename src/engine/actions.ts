@@ -32,17 +32,19 @@ export class Actions {
     if (action.skip_if && await condition(action.skip_if, context, states, this.effects, signal)) return;
     if (!await condition(action.precondition, context, states, this.effects, signal)) return;
     const values = mapping(render(Object.fromEntries(Object.entries(action).filter(([key]) => !["context", "skip_if", "precondition", "postcondition", "body", "content"].includes(key))), context));
-    const key = values.save_state;
-    if (key !== undefined && (typeof key !== "string" || !key.trim())) throw new Error("save_state must resolve to a nonempty name");
+    const key = values.save_to;
+    if (key !== undefined && (typeof key !== "string" || !key.trim())) throw new Error("save_to must resolve to a nonempty name");
     if (key !== undefined) mapping(context.actions ?? {}, "context.actions");
     const result: Context = { success: false, error: null };
     if (action.type === "execute_command") Object.assign(result, { returncode: null, stdout: "", stderr: "" });
     if (action.type === "send_http_request") Object.assign(result, { status_code: null, headers: {}, body: null });
     const save = () => {
       if (typeof key === "string") {
-        const actions = mapping(context.actions ?? {});
-        if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("Invalid save_state name");
-        actions[key] = structuredClone(result); context.actions = actions;
+        const actions = mapping(context.node && !context.routine ? mapping(context.node).actions ?? {} : context.actions ?? {});
+        if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("Invalid save_to name");
+        actions[key] = structuredClone(result);
+        if (context.node && !context.routine) mapping(context.node).actions = actions;
+        else context.actions = actions;
       }
     };
     const cwd = String(mapping(context.session).working_dir);
@@ -80,15 +82,18 @@ export class Actions {
           }
           const process = await this.effects.process([target, ...args.map(value => argumentText(value))], environment(render(workload.env ?? {}, local)), cwd, signal);
           if (process.returncode !== 0) throw new Error(`Workload exited with status ${process.returncode}`);
+          local.result = process;
+          result.outputs = resolveFields(workload.outputs, {}, local, "workload outputs");
           break;
         }
         case "execute_routine": {
           const declaration = this.spec.routines![action.routine!]!;
           const local = structuredClone(context);
-          local.inputs = resolveFields(declaration.inputs, values.args ?? {}, context, "routine " + action.routine);
+          local.inputs = resolveFields(declaration.inputs, {}, {...context, with: mapping(values.with ?? {})}, "routine " + action.routine);
+          local.routine = {name: action.routine};
           local.actions = {};
           await this.runAll(declaration.actions, local, states, signal);
-          result.output = render(declaration.returns ?? null, local);
+          result.outputs = resolveFields(declaration.outputs, {}, local, "routine outputs");
           break;
         }
         case "create_dir":
@@ -108,10 +113,15 @@ export class Actions {
             for (const key of Object.keys(headers)) if (key.toLowerCase() === "x-mu-assignment-version") delete headers[key];
             headers["X-Mu-Assignment-Version"] = String(request.assignmentVersion);
           }
+          const body = Object.hasOwn(action, "body") ? render(action.body, context, true) : undefined;
+          if (typeof session.server === "string" && new URL(session.server).origin === url.origin && url.pathname === "/api/requests/report" && body && typeof body === "object") {
+            const report = mapping(body);
+            if (report.status !== undefined || report.pipelineState !== undefined || Object.values(mapping(report.node_states ?? {})).some(value => mapping(value).status !== undefined || mapping(value).outputs !== undefined)) throw new Error("Lifecycle status and Outputs are owned by the worker");
+          }
           const options: HttpOptions = {
             url: url.href, method: String(values.method ?? "get").toUpperCase(), headers,
             timeout,
-            ...(Object.hasOwn(action, "body") ? { body: render(action.body, context, true) } : {}),
+            ...(Object.hasOwn(action, "body") ? { body } : {}),
             ...(values.body_file === undefined ? {} : { bodyFile: this.effects.path(String(values.body_file), cwd) }),
             ...(values.response_file === undefined ? {} : { responseFile: this.effects.path(String(values.response_file), cwd) }),
           };
@@ -123,7 +133,7 @@ export class Actions {
       result.success = true; save();
       if (!await condition(action.postcondition, context, states, this.effects, signal)) throw new Error("Action postcondition failed");
     } catch (error) {
-      delete result.output;
+      delete result.outputs;
       result.success = false; result.error = errorValue(error); save();
       if (action.ignore_error === true && !signal.aborted) { this.effects.warning("Ignored action failure"); return; }
       throw error;

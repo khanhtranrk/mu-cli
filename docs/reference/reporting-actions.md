@@ -1,9 +1,8 @@
 # Built-in reporting and artifact actions
 
 All actions use the existing CEL context, conditions, `ignore_error`,
-`postcondition` and `save_state` handling. Saved results include `success` and
-`error`; failures propagate to the node unless explicitly ignored. Reporting and
-transfer remain Spec-controlled. Lifecycle hook failures retain the engine's
+`postcondition` and `save_to` handling. Saved results include `success` and
+`error`; failures propagate to the node unless explicitly ignored. Artifact transfers remain Spec-controlled; lifecycle status and typed Outputs are worker-owned. Lifecycle hook failures retain the engine's
 existing warning behavior; put required reports/transfers in node actions when
 failure must fail execution.
 
@@ -15,20 +14,18 @@ relative to `session.working_dir`.
 
 | Action | Parameters | Saved result beyond success/error |
 | --- | --- | --- |
-| `report_request` | Optional request `status`, `events`; `timeout` (seconds, default 120) | No additional fields |
-| `report_node` | Optional node `status`, `events`; `timeout` (seconds, default 120) | No additional fields |
+| `report_request` | Optional request `events`; `timeout` (seconds, default 120) | No additional fields |
+| `report_node` | Optional node `events`; `timeout` (seconds, default 120) | No additional fields |
 | `inspect_file` | Required `target` local path | `path` (absolute), `name`, `size` (bytes), `sha256`, `contentType` |
 | `upload_artifact` | Required `target`, `artifact_id`; optional `connection_id`, `content_type`, `node_name`, `label`, `timeout` (default 120 seconds per call) | `artifact` registered Request output metadata |
-| `download_artifact` | Required destination `target`, `artifact_id`; optional expected `sha256`, `timeout` (default 120 seconds per call) | `path`, `name`, `size`, `sha256`, `contentType` for downloaded local file |
+| `download_artifact` | Required destination `target`, canonical `artifact` object; optional expected `sha256`, `timeout` (default 120 seconds per call) | `path`, `name`, `size`, `sha256`, `contentType` for downloaded local file |
 
-`report_request` and `report_node` send only explicitly supplied fields: no implicit status change.
-They update separate scopes: `report_request` never sends node updates and needs no
-node context; `report_node` only updates the current node. The former mixed-scope
-`request_status`/`request_events` parameters are rejected; use a separate
-`report_request` action with `status`/`events` instead.
-Node statuses are `queue`, `running`, `failed`, `succeeded`; request statuses a
-worker can report are `processing`, `process_failed`, `succeeded`. Engine node
-`success` maps to report `succeeded` explicitly in the example below.
+`report_request` and `report_node` append events for their own scope. Spec-authored
+`status` is rejected: the engine automatically reports Request processing/succeeded/
+process_failed and Node queue/running/succeeded/failed. Event-only actions leave
+status unchanged. Mandatory status reports use the same endpoint and assignment
+context as these actions, and include standard lifecycle events. Status/Outputs are idempotent; event append
+remains at-least-once when an uncertain report is retried or recovered.
 
 Both event lists use `{level: "info" | "warning" | "error", message: string,
 details?: object, createdAt: number}`. The action fills missing `createdAt` with
@@ -59,12 +56,10 @@ events:
   - on: pipeline_started
     do:
       - type: report_request
-        status: processing
         events: [{level: info, message: Request started}]
   - on: node_finished
     do:
       - type: report_node
-        status: '${{ node.status == "success" ? "succeeded" : "failed" }}'
         events:
           - level: info
             message: 'Finished ${{ node.name }}'
@@ -73,12 +68,12 @@ events:
 #   target: '${{ session.output_dir }}/result.json'
 #   artifact_id: result
 #   content_type: application/json
-#   save_state: published
+#   save_to: published
 # In a dependent node's run:
 # - type: download_artifact
-#   artifact_id: result
+#   artifact: '${{ pipeline.nodes.publish.outputs.published }}'
 #   target: '${{ session.output_dir }}/downloaded.json'
-#   save_state: downloaded
+#   save_to: downloaded
 ```
 
 See the runnable [CPU round trip](../../examples/cpu-artifacts/spec.yaml) and

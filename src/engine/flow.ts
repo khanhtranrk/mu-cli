@@ -1,3 +1,4 @@
+import {reportingAction} from "./reporting-actions";
 import { render } from "../spec/expressions";
 import { applyContext, mapping, nodeContextValues, type Context, type Node, type NodeStatus, type Spec, type States } from "../spec/types";
 import { Actions, errorValue } from "./actions";
@@ -27,7 +28,7 @@ export class Flow {
   }
 
   restore(snapshot: ExecutionSnapshot): void {
-    if (snapshot.version !== 1 || snapshot.stage !== "nodes") throw new RecoveryError("Recovery requires a node-boundary checkpoint; lifecycle/prepare outcomes are unknown");
+    if (snapshot.version !== 2 || snapshot.stage !== "nodes") throw new RecoveryError("Recovery requires a node-boundary checkpoint; lifecycle/prepare outcomes are unknown");
     const definition = this.spec.pipeline[snapshot.pipelineName];
     if (!Object.hasOwn(this.spec.pipeline, snapshot.pipelineName) || !definition || !snapshot.prepared) throw new RecoveryError("Invalid checkpoint pipeline/preparation");
     for (const [name, status] of Object.entries(mapping(snapshot.states))) {
@@ -66,6 +67,17 @@ export class Flow {
     const status = options.status ?? "running";
     const event: Context = { name, pipeline: { name: pipelineName, ...(options.node ? {} : { status }) }, error: options.error ?? null };
     if (options.node) event.node = { ...mapping(context.node ?? {}), name: options.node.name, status, skipped: options.skipped ?? false, blocked: options.blocked ?? false, ignored_error: options.ignoredError ?? null };
+    const request = mapping(context.request ?? {}), session = mapping(context.session ?? {});
+    const diagnostic = {level: options.error ? "error" : "info", message: options.node ? `Node ${options.node.name} ${name === "node_started" ? "started" : status === "success" ? "finished" : "failed"}` : name === "pipeline_started" ? "Request started" : status === "success" ? "Request finished" : "Request failed", ...(options.error ? {details: options.error} : {}), createdAt: Date.now()};
+    if (typeof request.requestId === "string" && typeof session.server === "string" && typeof session.token === "string") {
+      const reportingSignal = signal.aborted ? AbortSignal.timeout(this.shutdownTimeout) : signal;
+      if (options.node) {
+        const node = mapping(context.node);
+        await reportingAction("report_node", {events: [diagnostic], status: name === "node_started" ? "running" : status === "success" ? "succeeded" : "failed", ...(name === "node_finished" ? {skipped: options.skipped ?? false, blocked: options.blocked ?? false, ...(status === "success" && !options.skipped && !options.blocked && !options.ignoredError ? {outputs: node.outputs ?? {}} : {})} : {})}, context, this.effects, reportingSignal, true);
+      } else {
+        await reportingAction("report_request", {events: name === "pipeline_finished" ? mapping(context.pipeline ?? {}).events ?? [diagnostic] : [diagnostic], status: name === "pipeline_started" ? "processing" : status === "success" ? "succeeded" : "process_failed", ...(name === "pipeline_finished" && status === "success" ? {pipelineState: {status: "success", outputs: mapping(context.pipeline ?? {}).outputs ?? {}}} : {})}, context, this.effects, reportingSignal, true);
+      }
+    }
     for (const hooks of [this.spec.events, pipeline?.events, options.node?.events]) {
       for (const hook of hooks ?? []) {
         if (hook.on !== name) continue;
@@ -80,7 +92,7 @@ export class Flow {
 
   private async executeNode(node: Node, pipelineName: string, context: Context, states: States, signal: AbortSignal, device?: Device): Promise<{ status: NodeStatus; context: Context }> {
     const local = structuredClone(context);
-    local.node = { name: node.name, status: "running", total_units: nodeUnits(this.spec, node), device: { family: device?.family ?? "cpu", index: device ? String(device.index) : null } };
+    local.node = { actions: {}, name: node.name, status: "running", total_units: nodeUnits(this.spec, node), device: { family: device?.family ?? "cpu", index: device ? String(device.index) : null } };
     await this.emit("node_started", pipelineName, local, states, signal, { node });
     let status: NodeStatus = "success", error: unknown, skipped = false;
     try {
@@ -106,6 +118,11 @@ export class Flow {
       ignoredError = String(errorValue(error).message); status = "success"; error = undefined;
     }
     mapping(local.node).status = status;
+    if (status === "success" && !skipped && !ignoredError) {
+      try { mapping(local.node).outputs = resolveFields(node.outputs, {}, local, "node outputs " + node.name); }
+      catch (caught) { status = "failed"; error = caught; }
+    }
+    mapping(local.node).status = status;
     await this.emit("node_finished", pipelineName, local, { ...states, [node.name]: status }, signal, {
       node, status, error: error ? errorValue(error) : null, skipped, ignoredError,
     });
@@ -116,10 +133,10 @@ export class Flow {
     if (!this.initialized) throw new Error("Flow must initialize before execution");
     const name = request.pipelineName;
     let context = structuredClone(this.base);
-    context.request = structuredClone(request.metadata); context.pipeline_name = name;
+    context.request = {...structuredClone(request.metadata), pipelineName: name, inputs: structuredClone(request.payload)}; context.pipeline_name = name;
     requestScopes(context, request.registryContext);
     const restored = persistence?.snapshot;
-    if (restored && (restored.version !== 1 || restored.stage !== "nodes" || restored.pipelineName !== name)) throw new RecoveryError("Checkpoint is not a resumable node boundary");
+    if (restored && (restored.version !== 2 || restored.stage !== "nodes" || restored.pipelineName !== name)) throw new RecoveryError("Checkpoint is not a resumable node boundary");
     const states: States = structuredClone(restored?.states ?? {});
     const nodeContexts = structuredClone(restored?.nodeContexts ?? {});
     if (Object.values(states).includes("running") && !persistence?.retryIncomplete) throw new RecoveryError("Checkpoint contains incomplete nodes; use --resume --retry-incomplete only if repeating their effects is acceptable");
@@ -132,7 +149,7 @@ export class Flow {
     const checkpoint = async () => {
       if (!persistence) return;
       const snapshot: ExecutionSnapshot = {
-        version: 1, stage, pipelineName: name, base: structuredClone(this.base),
+        version: 2, stage, pipelineName: name, base: structuredClone(this.base),
         ...(this.prepared.has(name) ? { prepared: structuredClone(this.prepared.get(name)!) } : {}),
         context: structuredClone(context), states: structuredClone(states), nodeContexts: structuredClone(nodeContexts),
       };
@@ -147,10 +164,10 @@ export class Flow {
       if (!Object.hasOwn(this.spec.pipeline, name) || !definition) throw new Error("Unknown pipeline " + name);
       const validate = (base: Context) => {
         const local = structuredClone(base);
-        requestScopes(local, request.registryContext); local.request = structuredClone(request.metadata); local.pipeline_name = name;
+        requestScopes(local, request.registryContext); local.request = {...structuredClone(request.metadata), pipelineName: name, inputs: structuredClone(request.payload)}; local.pipeline_name = name;
         applyContext(local, render(definition.context ?? {}, local));
         local.inputs = resolveFields(definition.inputs, request.payload, local, "pipeline " + name);
-        local.pipeline = { name, inputs: structuredClone(local.inputs) };
+        local.pipeline = { name, status: "running", inputs: structuredClone(local.inputs), nodes: {} };
         return local;
       };
       if (!restored) {
@@ -176,6 +193,7 @@ export class Flow {
         context = validate(this.prepared.get(name)!);
       } else {
         context = structuredClone(restored.context);
+        if (mapping(context.session).server) await reportingAction("report_request", {status: "processing"}, context, this.effects, executionSignal, true);
         const metadata = mapping(context.request);
         if (metadata.requestId !== request.metadata.requestId || metadata.assignmentVersion !== request.metadata.assignmentVersion || metadata.specSlug !== request.metadata.specSlug) throw new RecoveryError("Checkpoint assignment does not match request");
         for (const [node, status] of Object.entries(states)) if (!(definition.nodes ?? []).some(item => item.name === node) || !["success", "failed", "running"].includes(status)) throw new RecoveryError("Invalid checkpoint node state");
@@ -187,7 +205,15 @@ export class Flow {
         }
       }
       stage = "nodes"; await checkpoint();
+      const publish = (nodeName: string, status: NodeStatus, local?: Context) => {
+        const nodes = mapping(mapping(context.pipeline).nodes);
+        const node = mapping(local?.node ?? {});
+        nodes[nodeName] = {status, ...(status === "success" && node.outputs !== undefined ? {outputs: structuredClone(node.outputs)} : {})};
+      };
       const pending = new Map((definition.nodes ?? []).filter(node => !states[node.name]).map(node => [node.name, node]));
+      if (mapping(context.session ?? {}).server) for (const node of pending.values()) {
+        await reportingAction("report_node", {status: "queue"}, {...context, node: {name: node.name}}, this.effects, executionSignal, true);
+      }
       let runnerError: unknown;
       while (pending.size || running.size) {
         let progressed = false;
@@ -204,13 +230,13 @@ export class Flow {
               node, status, blocked: true, error: status === "failed" ? { type: "DependencyError", message: detail } : null,
               ignoredError: status === "success" ? detail : null,
             });
-            states[nodeName] = status; await checkpoint(); settled.add(nodeName);
+            states[nodeName] = status; publish(nodeName, status); await checkpoint(); settled.add(nodeName);
           } else {
             const task = this.scheduler.run(nodeUnits(this.spec, node), executionSignal, async device => {
               executionSignal.throwIfAborted();
               states[nodeName] = "running"; await checkpoint();
               const result = await this.executeNode(node, name, context, terminalStates(states), executionSignal, device);
-              if (!executionSignal.aborted) { states[nodeName] = result.status; nodeContexts[nodeName] = result.context; await checkpoint(); settled.add(nodeName); }
+              if (!executionSignal.aborted) { states[nodeName] = result.status; nodeContexts[nodeName] = result.context; publish(nodeName, result.status, result.context); await checkpoint(); settled.add(nodeName); }
             }).catch(error => { runnerError ??= error; scope.abort(error); }).finally(() => { running.delete(task); });
             running.add(task);
           }
@@ -223,15 +249,26 @@ export class Flow {
       if (runnerError) throw runnerError;
       executionSignal.throwIfAborted();
       if (Object.values(states).includes("failed")) throw new Error("One or more nodes failed");
+      mapping(context.pipeline).status = "success";
+      mapping(context.pipeline).outputs = resolveFields(definition.outputs, {}, context, "pipeline outputs");
     } catch (caught) {
       if (running.size) { scope.abort(caught); await Promise.allSettled(running); }
       if (caught instanceof RecoveryError) throw caught;
       pipelineError = caught; this.failed = true;
     }
-    if (!executionSignal.aborted) {
+    if (pipelineError && mapping(context.session ?? {}).server) {
+      for (const node of this.spec.pipeline[name]?.nodes ?? []) if (states[node.name] === "running" || !states[node.name]) {
+        await reportingAction("report_node", {status: "failed", blocked: !states[node.name], reason: "Execution interrupted or could not complete"}, {...context, node: {name: node.name}}, this.effects, AbortSignal.timeout(this.shutdownTimeout), true);
+      }
+    }
+    if (!signal.aborted) {
+      context.pipeline = {...mapping(context.pipeline ?? {}), status: pipelineError ? "failed" : "success", events: [{level: pipelineError ? "error" : "info", message: pipelineError ? "Request failed" : "Request finished", ...(pipelineError ? {details: errorValue(pipelineError)} : {}), createdAt: Date.now()}]};
       stage = "finishing"; await checkpoint();
-      await this.emit("pipeline_finished", name, context, states, executionSignal, { status: pipelineError ? "failed" : "success", error: pipelineError ? errorValue(pipelineError) : null });
+      await this.emit("pipeline_finished", name, context, states, executionSignal.aborted ? AbortSignal.timeout(this.shutdownTimeout) : executionSignal, { status: pipelineError ? "failed" : "success", error: pipelineError ? errorValue(pipelineError) : null });
       stage = "finished"; await checkpoint();
+    }
+    if (signal.aborted) {
+      await reportingAction("report_request", {status: "process_failed"}, context, this.effects, AbortSignal.timeout(this.shutdownTimeout), true);
     }
     if (pipelineError) throw pipelineError;
     return states;

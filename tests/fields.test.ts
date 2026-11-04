@@ -8,7 +8,7 @@ const resolve = (field: Field, supplied: Record<string, unknown> = {}, context =
 for (const [type, value, wrong] of [
   ["string", "hello", 1], ["number", 2.5, "2.5"], ["boolean", false, 0],
   ["array", [1, { nested: true }], {}], ["object", { nested: [1, null] }, []],
-  ["artifact", { artifactId: "opaque", metadata: { tags: [] } }, "id"],
+  ["artifact", { artifactId: "opaque" }, "id"],
 ] as const) test(`Field ${type}: strict literal, expression, override and null validation`, () => {
   const field: Field = { type, value };
   expect(resolve(field)).toEqual({ x: value });

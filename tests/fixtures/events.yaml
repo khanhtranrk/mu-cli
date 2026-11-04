@@ -1,43 +1,45 @@
 expression_engine: cel-v1
-# Offline example: write one JSON snapshot at each lifecycle boundary.
 routines:
   record_event:
     inputs:
-      path: {type: string}
+      path:
+        type: string
+        value: ${{ with.path }}
     actions:
-      - type: write_json
-        path: "${{ inputs.path }}"
-        content: "${{ event }}"
+    - type: write_json
+      path: ${{ inputs.path }}
+      content: ${{ event }}
 events:
-  - on: pipeline_started
-    do:
-      - type: execute_routine
-        routine: record_event
-        args:
-          path: "${{ session.working_dir }}/pipeline-started.json"
-  - on: node_started
-    do:
-      - type: execute_routine
-        routine: record_event
-        args:
-          path: "${{ session.working_dir }}/${{ event.node.name }}-started.json"
-  - on: node_finished
-    do:
-      - type: execute_routine
-        routine: record_event
-        args:
-          path: "${{ session.working_dir }}/${{ event.node.name }}-finished.json"
-  - on: pipeline_finished
-    do:
-      - type: execute_routine
-        routine: record_event
-        args:
-          path: "${{ session.working_dir }}/pipeline-finished.json"
+- on: pipeline_started
+  do:
+  - type: execute_routine
+    routine: record_event
+    with:
+      path: ${{ session.working_dir }}/pipeline-started.json
+- on: node_started
+  do:
+  - type: execute_routine
+    routine: record_event
+    with:
+      path: ${{ session.working_dir }}/${{ event.node.name }}-started.json
+- on: node_finished
+  do:
+  - type: execute_routine
+    routine: record_event
+    with:
+      path: ${{ session.working_dir }}/${{ event.node.name }}-finished.json
+- on: pipeline_finished
+  do:
+  - type: execute_routine
+    routine: record_event
+    with:
+      path: ${{ session.working_dir }}/pipeline-finished.json
 pipeline:
   demo:
     nodes:
-      - name: hello
-        run:
-          - type: write_json
-            path: "${{ session.working_dir }}/hello.json"
-            content: {message: hello}
+    - name: hello
+      run:
+      - type: write_json
+        path: ${{ session.working_dir }}/hello.json
+        content:
+          message: hello

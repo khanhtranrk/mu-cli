@@ -36,7 +36,8 @@ export interface Action extends Common {
   body_file?: string;
   response_file?: string;
   timeout?: number | string;
-  save_state?: string;
+  save_to?: string;
+  artifact?: unknown;
   status?: string;
   events?: unknown;
   artifact_id?: string;
@@ -48,6 +49,7 @@ export interface Action extends Common {
 }
 export interface EventHook { on: "pipeline_started" | "pipeline_finished" | "node_started" | "node_finished"; do: Action[] }
 export interface Node extends Common {
+  outputs?: Fields;
   inputs?: Fields;
   name: string;
   depends_on?: string[];
@@ -57,9 +59,9 @@ export interface Node extends Common {
   finally?: Action[];
   events?: EventHook[];
 }
-export interface Pipeline { inputs?: Fields; context?: Context | string; prepare?: Action[]; nodes?: Node[]; events?: EventHook[] }
-export interface Workload { inputs?: Fields; target: string; argv?: unknown[] | string; env?: Record<string, unknown> | string; device_args?: unknown[] | string; units?: number }
-export interface Routine { inputs?: Fields; actions: Action[]; returns?: unknown }
+export interface Pipeline { outputs?: Fields; inputs?: Fields; context?: Context | string; prepare?: Action[]; nodes?: Node[]; events?: EventHook[] }
+export interface Workload { outputs?: Fields; inputs?: Fields; target: string; argv?: unknown[] | string; env?: Record<string, unknown> | string; device_args?: unknown[] | string; units?: number }
+export interface Routine { inputs?: Fields; actions: Action[]; outputs?: Fields }
 export interface Lifecycle { initialization?: Action[]; finalization?: Action[] }
 export interface Spec {
   expression_engine?: "cel-v1";

@@ -1,3 +1,4 @@
+import {parseSpec} from "./spec/parse";
 import type { WorkerConfig } from "./config";
 import type { DataCenterClient, ClaimedRequest, Report } from "./api";
 import type { RequestExecutor } from "./runtime/types";
@@ -17,7 +18,14 @@ export class Worker {
 
   private async deliver(state: Checkpoint): Promise<void> {
     if (!state.report) throw new Error("Checkpoint has no report");
-    await this.api.report(state.report, state.request.assignmentVersion);
+    try { await this.api.report(state.report, state.request.assignmentVersion); }
+    catch (error) {
+      const status = (error as {status?: number}).status;
+      if (state.report.status !== "succeeded" || !state.report.pipelineState || status === undefined || status < 400 || status >= 500) throw error;
+      state = {...state, report: {id: state.request.requestId, status: "process_failed", events: [{level: "error", message: "Request output report was rejected", createdAt: Date.now()}]}};
+      await this.store.save(state);
+      await this.api.report(state.report!, state.request.assignmentVersion);
+    }
     await this.store.save({ ...state, phase: "reported" });
   }
 
@@ -26,14 +34,22 @@ export class Worker {
     for (const state of await this.store.load()) {
       this.seen.add(state.request.requestId + ":" + state.request.assignmentVersion);
       if (state.phase === "reported") continue;
+      if (state.phase === "terminal") { await this.deliver(state); continue; }
+      if (state.reporting === "spec" && state.execution && state.execution.version !== 2) throw new RecoveryError("Execution contract changed; reset old checkpoints in MasterFlow");
+      if (state.reporting === "spec" && state.execution?.stage === "finishing") {
+        const pipeline = state.execution.context.pipeline as {status: string; outputs?: Record<string, unknown>; events?: Report["events"]};
+        const report: Report = {id: state.request.requestId, status: pipeline.status === "success" ? "succeeded" : "process_failed", ...(pipeline.events ? {events: pipeline.events} : {}), ...(pipeline.status === "success" ? {pipelineState: {status: "success", outputs: pipeline.outputs ?? {}}} : {})};
+        const terminal: Checkpoint = {...state, phase: "terminal", report};
+        await this.store.save(terminal); await this.deliver(terminal); continue;
+      }
       if (state.reporting === "spec") {
         if (state.execution?.stage === "finished") { await this.store.save({ ...state, phase: "reported" }); continue; }
         if (state.source !== undefined || state.execution) {
           if (!this.config.resume) throw new RecoveryError("Unfinished Spec assignment found; use --resume to continue persisted nodes");
-          if (this.executor.reporting !== "spec" || !state.source || state.execution?.version !== 1 || state.execution.stage !== "nodes") throw new RecoveryError("Unknown intake/prepare/lifecycle outcome; inspect/reset the request in MasterFlow");
+          if (this.executor.reporting !== "spec" || !state.source || state.execution?.version !== 2 || state.execution.stage !== "nodes") throw new RecoveryError("Unknown intake/prepare/lifecycle outcome; inspect/reset the request in MasterFlow");
           if (Object.values(state.execution.states).includes("running") && !this.config.retryIncomplete) throw new RecoveryError("Incomplete nodes require --resume --retry-incomplete; their external effects may repeat");
           if (!this.config.specs.includes(state.request.specSlug)) throw new RecoveryError("Recovered assignment requires its --spec filter");
-          const source = this.sources.get(state.request.specSlug) ?? await this.api.spec(state.request.specSlug);
+          const source = state.request.specYaml ?? this.sources.get(state.request.specSlug) ?? await this.api.spec(state.request.specSlug);
           if (source !== state.source) throw new RecoveryError("Remote Spec changed since checkpoint; inspect/reset the request");
           this.sources.set(state.request.specSlug, source);
           await this.api.verifyAssignment(state.request);
@@ -44,11 +60,9 @@ export class Worker {
         console.warn("Recovered an unfinished Spec assignment without replaying actions or reports; inspect/reset it in MasterFlow");
         continue;
       }
-      if (state.phase !== "terminal") {
-        state.phase = "terminal";
-        state.report = { id: state.request.requestId, status: "process_failed" };
-        await this.store.save(state);
-      }
+      state.phase = "terminal";
+      state.report = { id: state.request.requestId, status: "process_failed" };
+      await this.store.save(state);
       await this.deliver(state);
     }
     const outcomes = await Promise.allSettled(resumable.map(state => this.execute(state.request, signal, state)));
@@ -63,11 +77,11 @@ export class Worker {
     await this.store.save(state);
     if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request.assignmentVersion);
     let failed = false;
-    let executionError: unknown;
+    let reportFailure: unknown;
     let writes = Promise.resolve();
     try {
       signal.throwIfAborted();
-      const source = this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
       await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
         snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
         save: snapshot => {
@@ -76,11 +90,18 @@ export class Worker {
           return writes;
         },
       } : undefined);
-    } catch (error) { failed = true; executionError = error; }
+    } catch (error) { failed = true; reportFailure = error; }
     await writes;
+    if (this.executor.reporting === "spec" && signal.aborted && state.execution?.stage === "nodes") return false;
     if (this.executor.reporting === "spec" && state.execution?.stage !== "finished") {
-      if (!signal.aborted && executionError) throw executionError;
-      return false;
+      const pipeline = state.execution?.context.pipeline as {status?: string; outputs?: Record<string, unknown>; events?: Report["events"]} | undefined;
+      const status = (reportFailure as {status?: number} | undefined)?.status;
+      const permanent = status !== undefined && status >= 400 && status < 500;
+      const succeeded = state.execution?.stage === "finishing" && pipeline?.status === "success" && !permanent;
+      const report: Report = {id: request.requestId, status: succeeded ? "succeeded" : "process_failed", ...(permanent ? {events: [{level: "error" as const, message: "Request output report was rejected", createdAt: Date.now()}]} : pipeline?.events ? {events: pipeline.events} : {}), ...(succeeded ? {pipelineState: {status: "success", outputs: pipeline?.outputs ?? {}}} : {})};
+      const terminal: Checkpoint = {...state, phase: "terminal", report};
+      await this.store.save(terminal); await this.deliver(terminal);
+      return succeeded;
     }
     const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded" };
     const terminal: Checkpoint = this.executor.reporting === "spec" ? { ...state, phase: "reported", report } : { ...state, phase: "terminal", report };
@@ -113,7 +134,7 @@ export class Worker {
         signal.throwIfAborted();
         const source = await this.api.spec(slug);
         this.sources.set(slug, source);
-        await this.executor.prepare(source, slug, signal);
+        parseSpec(source); // Reject invalid Specs before claiming, but prepare after assignment.
       }
       do {
         const batch: ClaimedRequest[] = [];
@@ -124,7 +145,7 @@ export class Worker {
             const assignment = request.requestId + ":" + request.assignmentVersion;
             if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
             this.seen.add(assignment);
-            await this.store.save({ request, phase: "claimed", source: this.sources.get(request.specSlug), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
+            await this.store.save({ request, phase: "claimed", source: request.specYaml ?? this.sources.get(request.specSlug), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
           }
           batch.push(...claimed);
         }

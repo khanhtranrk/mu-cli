@@ -1,7 +1,7 @@
 import type { Context, States } from "../spec/types";
 
 export interface ExecutionSnapshot {
-  version: 1;
+  version: 2;
   stage: "intake" | "nodes" | "finishing" | "finished";
   pipelineName: string;
   base: Context;

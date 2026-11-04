@@ -55,7 +55,7 @@ test("unresolved redirect is a failed action and cannot overwrite an existing do
     const transport = (async () => new Response("redirect missing Location", { status: 302 })) as unknown as typeof fetch;
     const actions = new Actions({ pipeline: {} }, new BunEffects(transport));
     const context: Context = { session: { working_dir: directory } };
-    await expect(actions.run({ type: "send_http_request", url: "http://storage/", response_file: destination, save_state: "download" }, context, {}, new AbortController().signal)).rejects.toThrow("HTTP 302");
+    await expect(actions.run({ type: "send_http_request", url: "http://storage/", response_file: destination, save_to: "download" }, context, {}, new AbortController().signal)).rejects.toThrow("HTTP 302");
     expect(await Bun.file(destination).text()).toBe("keep");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
