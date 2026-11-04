@@ -56,6 +56,7 @@ Start with the [documentation index](docs/README.md), which distinguishes curren
 - [Spec engine and supported syntax](docs/reference/spec-engine.md)
 - [Scheduler, devices and recovery](docs/architecture/scheduler-runtime.md)
 - [Server protocol and artifact integration](docs/reference/protocol.md)
+- [Built-in reporting and artifact actions](docs/reference/reporting-actions.md)
 - [CPU artifact example](examples/cpu-artifacts/README.md)
 
 **Decisions and delivery history**

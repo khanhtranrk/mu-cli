@@ -3,6 +3,7 @@ import { applyContext, mapping, type Action, type Context, type Spec, type State
 import { paramsFor } from "./context";
 import { condition } from "./conditions";
 import type { Effects, HttpOptions } from "./ports";
+import { reportingAction } from "./reporting-actions";
 import { argumentText } from "./argv";
 
 export function errorValue(error: unknown): Context {
@@ -48,6 +49,11 @@ export class Actions {
     try {
       signal.throwIfAborted();
       switch (action.type) {
+        case "report_request":
+        case "report_node":
+        case "upload_artifact":
+        case "download_artifact":
+          Object.assign(result, await reportingAction(action.type, values, context, this.effects, signal)); break;
         case "execute_command": {
           if (typeof values.target !== "string" || !values.target || !Array.isArray(values.args ?? [])) throw new Error("Command requires target and argv list");
           Object.assign(result, await this.effects.process([values.target, ...(values.args as unknown[] ?? []).map(value => argumentText(value))], environment(values.env ?? {}), cwd, signal));

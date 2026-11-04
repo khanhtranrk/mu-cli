@@ -86,7 +86,7 @@ export function parseSpec(source: string): Spec {
       if (has(item, "action") || has(item, "save_response_to_context")) throw new Error(`${path}: removed action declaration key`);
       const type = item.type;
       if (has(item, "save_state")) {
-        if (!["execute_command", "send_http_request", "inspect_file", "execute_routine"].includes(String(type))) throw new Error(`${path}: save_state not supported`);
+        if (!["execute_command", "send_http_request", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_state not supported`);
         text(item.save_state, path + ".save_state");
       }
       if (type === "execute_workload" || type === "execute_routine") {
@@ -99,7 +99,12 @@ export function parseSpec(source: string): Spec {
       } else if (type === "execute_command") {
         text(item.target, path + ".target"); renderedList(defaultValue(item.args, []), path + ".args"); renderedMapping(defaultValue(item.env, {}), path + ".env");
       } else if (type === "create_dir" || type === "write_json") text(item.path, path + ".path");
-      else if (type === "inspect_file") text(item.target, path + ".target");
+      else if (type === "report_request" || type === "report_node") {
+        if (has(item, "request_status") || has(item, "request_events")) throw new Error(`${path}: use report_request with status/events for request reporting`);
+        if (has(item, "events")) renderedList(item.events, path + ".events");
+      } else if (type === "upload_artifact" || type === "download_artifact") {
+        text(item.artifact_id, path + ".artifact_id"); text(item.target, path + ".target");
+      } else if (type === "inspect_file") text(item.target, path + ".target");
       else if (type === "send_http_request") {
         text(item.url, path + ".url"); renderedMapping(defaultValue(item.header, {}), path + ".header");
         if (has(item, "body") && has(item, "body_file")) throw new Error(`${path}: body and body_file are mutually exclusive`);

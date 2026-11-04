@@ -9,6 +9,8 @@ export interface HttpOptions {
   bodyFile?: string;
   responseFile?: string;
   timeout: number;
+  expectedSize?: number;
+  expectedSha256?: string;
 }
 export interface Effects {
   process(argv: string[], env: Record<string, string>, cwd: string, signal: AbortSignal): Promise<ProcessResult>;

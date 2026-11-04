@@ -20,7 +20,7 @@ export interface Common {
   ignore_error?: boolean;
 }
 export interface Action extends Common {
-  type: "execute_command" | "execute_workload" | "execute_routine" | "create_dir" | "write_json" | "inspect_file" | "send_http_request";
+  type: "execute_command" | "execute_workload" | "execute_routine" | "create_dir" | "write_json" | "inspect_file" | "report_request" | "report_node" | "upload_artifact" | "download_artifact" | "send_http_request";
   target?: string;
   args?: unknown[] | Context | string;
   env?: Record<string, unknown> | string;
@@ -36,6 +36,14 @@ export interface Action extends Common {
   response_file?: string;
   timeout?: number | string;
   save_state?: string;
+  status?: string;
+  events?: unknown;
+  artifact_id?: string;
+  connection_id?: string;
+  content_type?: string;
+  node_name?: string;
+  label?: string;
+  sha256?: string;
 }
 export interface EventHook { on: "pipeline_started" | "pipeline_finished" | "node_started" | "node_finished"; do: Action[] }
 export interface Node extends Common {

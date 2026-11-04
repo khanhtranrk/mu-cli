@@ -26,6 +26,11 @@ The CPU integration suite loads real sibling HTTP handlers/schema when
 [Phase 4 validation](../tasks/completed/phase-4.md#validation). Historical live smoke results do not
 prove current provider configuration, GPU execution or production readiness.
 
+Built-in [reporting/artifact actions](reporting-actions.md) encapsulate these
+protocols and append Request/Node events through the existing report endpoint.
+Downloads require size and SHA-256 and verify before destination replacement.
+Artifact-specific request statuses are no longer accepted by the companion server.
+
 ## Authorization and recovery limits
 
 Worker tokens do not grant owner administration, arbitrary Request inspection,

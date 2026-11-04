@@ -6,7 +6,11 @@ configure `runtime.devices: []` to force CPU-only execution.
 
 The Spec generates JSON, uploads it using the current receipt protocol, downloads
 it through a signed URL and verifies size/SHA-256. All reports and artifact calls
-use existing Spec routines/actions. Completion alone has one bounded idempotent
+use built-in `report_request`, `report_node`, `upload_artifact` and `download_artifact` actions. Completion alone has one bounded idempotent
 retry; the upload is not retried automatically.
+
+See the [action reference](../../docs/reference/reporting-actions.md) for parameters,
+results and legacy checksum handling. Both transfer failures report `process_failed`;
+availability is represented by registered artifacts.
 
 See [Phase 4](../../docs/tasks/completed/phase-4.md) for setup, test commands and recovery limits.
