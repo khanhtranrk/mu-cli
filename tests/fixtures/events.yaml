@@ -2,11 +2,11 @@ expression_engine: cel-v1
 # Offline example: write one JSON snapshot at each lifecycle boundary.
 routines:
   record_event:
-    params:
+    inputs:
       path: {type: string}
     actions:
       - type: write_json
-        path: "${{ params.path }}"
+        path: "${{ inputs.path }}"
         content: "${{ event }}"
 events:
   - on: pipeline_started

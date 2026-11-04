@@ -129,7 +129,7 @@ test("Flow holds peak GPU reservation through finally and terminal hooks while C
   expect(scheduler.snapshot().devices[0]!.freeUnits).toBe(3);
 });
 
-test("concurrent Requests share scheduler capacity, prepare once and isolate dependencies/params", async () => {
+test("concurrent Requests share scheduler capacity, prepare once and isolate dependencies/inputs", async () => {
   const scheduler = new Scheduler([], 2);
   let active = 0, maximum = 0, preparations = 0;
   const seen: string[] = [];
@@ -140,9 +140,9 @@ test("concurrent Requests share scheduler capacity, prepare once and isolate dep
       return { returncode: 0, stdout: "", stderr: "" };
     }
   }
-  const spec = parseSpec(JSON.stringify({ pipeline: { p: { params: { label: { type: "string" } }, prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
-    { name: "a", run: [{ type: "execute_command", target: "fake", args: ["${{ params.label }}", "a"] }] },
-    { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake", args: ["${{ params.label }}", "b"] }] },
+  const spec = parseSpec(JSON.stringify({ pipeline: { p: { inputs: { label: { type: "string" } }, prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
+    { name: "a", run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "a"] }] },
+    { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "b"] }] },
   ] } } }));
   const flow = new Flow(spec, { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), "master_flow", scheduler);
   await flow.initialize(signal());

@@ -21,20 +21,20 @@ events:
 workloads:
   generate:
     units: 0
-    params:
-      path: {type: string}
-      message: {type: string}
-      request_id: {type: string}
+    inputs:
+      path: {type: string, value: "${{ with.path }}"}
+      message: {type: string, value: "${{ with.message }}"}
+      request_id: {type: string, value: "${{ with.request_id }}"}
     target: bun
-    args:
+    argv:
       - -e
       - 'await Bun.write(process.argv[1], JSON.stringify({message: process.argv[2], requestId: process.argv[3]}) + "\n");'
-      - '${{ params.path }}'
-      - '${{ params.message }}'
-      - '${{ params.request_id }}'
+      - '${{ inputs.path }}'
+      - '${{ inputs.message }}'
+      - '${{ inputs.request_id }}'
 pipeline:
   demo:
-    params:
+    inputs:
       message: {type: string, default: Hello from MU CLI v2}
     nodes:
       - name: publish
@@ -46,20 +46,20 @@ pipeline:
         run:
           - type: execute_workload
             workload: generate
-            args:
-              path: '${{ result_path }}'
-              message: '${{ params.message }}'
+            with:
+              path: '${{ node.result_path }}'
+              message: '${{ inputs.message }}'
               request_id: '${{ request.requestId }}'
         after_run:
           - type: upload_artifact
             artifact_id: result
             content_type: application/json
-            target: '${{ result_path }}'
+            target: '${{ node.result_path }}'
             label: CPU smoke output
             save_state: published
         postcondition:
           operator: file_exists
-          path: '${{ result_path }}'
+          path: '${{ node.result_path }}'
       - name: verify
         depends_on: [publish]
         run:

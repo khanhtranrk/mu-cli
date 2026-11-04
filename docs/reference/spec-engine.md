@@ -9,7 +9,7 @@ with later [scheduling/recovery](../tasks/completed/phase-3.md) and [artifact in
 - YAML/JSON parsing and declaration/DAG validation; pinned YAML 1.1 scalar behavior.
 - CEL is the only expression engine, including omitted declarations. Whole-value
   expressions preserve JSON types; supplied payloads are literal, not rerendered.
-- Strict string/number/boolean/array/object parameters, defaults and isolated contexts.
+- Shared typed Input Fields, explicit Workload invocation context, defaults and isolated contexts.
 - Actions: `execute_command`, `execute_workload`, `execute_routine`, `create_dir`,
   `write_json`, `inspect_file`, `send_http_request`, `report_request`, `report_node`,
   `upload_artifact`, `download_artifact`. See [parameters and results](reporting-actions.md).
@@ -46,3 +46,128 @@ become TypeScript features by being documented there.
 Publishing shared packages and replacing MasterFlow validation remain proposals.
 Server Specs are mutable; local recovery pins exact text and rejects changed source,
 without claiming immutable server-side snapshots. See [architecture](../architecture/overview.md).
+
+## Shared Input Fields
+
+Pipeline, Node, Workload and Routine `inputs` use the same Field declaration:
+
+```yaml
+inputs:
+  message:
+    type: string
+    value: "${{ request.requestId }}"
+    default: hello
+```
+
+`type` is required: `string`, `number`, `boolean`, `array`, `object`, or
+`artifact`. Fields allow only `type`, optional `value`, and optional `default`.
+Values are bounded JSON and are validated after resolution without coercion.
+`artifact` currently validates an opaque JSON object; identity, required metadata,
+and the Workload Output protocol are not defined by this input contract.
+
+Resolution precedence is an explicitly supplied caller value, then a Spec-owned
+`value`, then a Spec-owned `default`. A Field with none of these is required and
+fails resolution. Defaults apply only when the Field has no supplied value or
+`value` declaration. A missing property accessed by a CEL expression is an error,
+not a fallback trigger; use `has(...)` and a conditional to select a fallback.
+Explicit null is present, never replaced by a default, and fails all six Field
+types. Nested nulls inside arrays/objects remain JSON null. Nullable Fields are
+not supported; a future nullable contract needs a separate decision.
+
+Supplied Request JSON remains literal, including nested strings that look like
+CEL. Routine `args` render once at the caller and then remain literal. Only
+Spec-owned Field `value`/`default` declarations are evaluated by the resolver.
+Fields resolve independently against the owning context, not sequentially against
+other Fields in the same declaration.
+
+- Pipeline Fields accept Request payload overrides. Resolved values are available
+  as `inputs` and `pipeline.inputs` in Request execution, after pipeline context
+  evaluation and intake validation. Shared preparation remains Request-independent.
+- Node Fields resolve after Node context and before conditions/actions, with access
+  to Pipeline inputs and runtime namespaces. Values are available as `node.inputs`;
+  top-level `inputs` continues to refer to Pipeline inputs in Node actions.
+- Routine Fields accept the existing rendered `execute_routine.args` overrides.
+  Routine actions/returns use a private top-level `inputs` object.
+- Workload Fields have no implicit caller overrides. They explicitly select values
+  from `with` or runtime namespaces through their declarations.
+
+## Node context namespace
+
+A Node's `context` renders once against its initial execution context, including
+Pipeline inputs, captured Registry values, `session`, `request`, and Node runtime
+metadata. The resulting mapping is injected only into that Node's private `node`
+object, before Node Input Fields and conditions resolve. Keys are accessed as
+`node.<key>`; no bare root aliases are created. Fields in the same context mapping
+are rendered together, not sequentially against one another.
+
+```yaml
+context:
+  result_path: "${{ session.output_dir }}/result.json"
+run:
+  - type: execute_workload
+    workload: generate
+    with:
+      path: "${{ node.result_path }}"
+```
+
+`name`, `status`, `inputs`, `outputs`, `actions`, `state`, `total_units`, `device`,
+`skipped`, `blocked`, and `ignored_error` are reserved Node fields. Internal and
+prototype keys are also forbidden. Literal collisions fail Spec validation;
+collisions in a whole-value context template fail at runtime before any values
+are injected. This reservation does not implement additional runtime namespaces.
+Values remain private to the owning Node and are available to its later phases
+and terminal event snapshot; they do not leak to the Pipeline, sibling Nodes,
+or subsequent Requests. Pipeline and Action context behavior is unchanged.
+
+## Workload invocation context and process arguments
+
+```yaml
+workloads:
+  generate:
+    inputs:
+      message:
+        type: string
+        value: "${{ with.upper ? with.message + '!' : with.message }}"
+    target: bun
+    argv: [-e, 'console.log(process.argv[1])', "${{ inputs.message }}"]
+pipeline:
+  demo:
+    inputs:
+      message: {type: string}
+    nodes:
+      - name: generate
+        inputs:
+          message: {type: string, value: "${{ pipeline.inputs.message }}"}
+        run:
+          - type: execute_workload
+            workload: generate
+            with:
+              message: "${{ node.inputs.message }}"
+              upper: true
+              unused: 123
+```
+
+`execute_workload.with` is rendered once in the caller's context and must resolve
+to an object. That object is bound as `with` only during Workload Field resolution.
+A same-named key never supplies an Input automatically: a Field with only `type`
+still fails even if `with` contains that name. Extra keys are allowed in `with`
+and remain unconsumed unless a Field explicitly selects them.
+
+During Workload Field resolution, top-level `inputs` starts empty; caller Pipeline
+inputs remain accessible through `pipeline.inputs`, Node inputs through
+`node.inputs`. After resolution, `inputs` contains only the declared Workload
+values. `target`, `argv` and `env` render using those inputs, with no invocation
+`with` binding. Device allocation and `device_args` behavior are unchanged.
+Workload-local values are isolated from caller actions and sibling executions.
+
+Migration is intentional: declaration `params` is rejected with a field path;
+rename it to `inputs`. Replace Workload process `args` with `argv`, invocation
+`execute_workload.args` with `with`, and add explicit Field `value` expressions
+such as `${{ with.message }}`. Command `args`, Routine invocation `args`, and
+`device_args` retain their existing meanings. The shared CEL conformance fixture
+keeps its historical variable names to preserve byte-identical engine coverage.
+
+MasterFlow currently retains a separate `params`-based editor/Request validator;
+this CLI issue does not migrate that UI, saved Specs, or Convex schema. Coordinate
+the companion migration before using these Specs through its Request editor.
+See the [CPU example](../../examples/cpu-artifacts/spec.yaml).

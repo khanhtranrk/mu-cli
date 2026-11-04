@@ -29,7 +29,7 @@ test("real CLI loads Spec, initializes before claiming, executes CPU workload an
       { on: "node_finished", do: [report(null, { "${{ node.name }}": { status: "${{ node.status == 'success' ? 'succeeded' : 'failed' }}" } })] },
       { on: "pipeline_finished", do: [report("${{ event.pipeline.status == 'success' ? 'succeeded' : 'process_failed' }}")] },
     ],
-    workloads: { work: { target: "bun", units: 0, args: ["-e", "await Bun.write('completed', 'ok');"] } },
+    workloads: { work: { target: "bun", units: 0, argv: ["-e", "await Bun.write('completed', 'ok');"] } },
     pipeline: { p: { nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "work" }] }] } },
   });
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(incoming) {

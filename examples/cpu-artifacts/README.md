@@ -1,6 +1,9 @@
 # CPU artifact round trip
 
-Import `spec.yaml` into MasterFlow and create a `demo` pipeline request. Optional
+This example uses the Issue #8 `inputs`/`with`/`argv` contract. MasterFlow’s
+separate editor and Request validator still require a companion migration from
+`params`; do not assume its current Request form supports this schema. The CLI
+integration test seeds this Spec and its Request directly. Optional
 payload: `{"message":"hello"}`. Authorize the Spec slug for the worker token and
 configure `runtime.devices: []` to force CPU-only execution.
 
@@ -14,3 +17,7 @@ results and legacy checksum handling. Both transfer failures report `process_fai
 availability is represented by registered artifacts.
 
 See [Phase 4](../../docs/tasks/completed/phase-4.md) for setup, test commands and recovery limits.
+
+The Workload explicitly resolves each Input Field from `with`; extra invocation
+keys never become inputs. `argv` uses the resolved Workload `inputs`. See the
+[Field and null semantics](../../docs/reference/spec-engine.md#shared-input-fields).

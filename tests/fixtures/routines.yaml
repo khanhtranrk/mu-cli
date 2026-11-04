@@ -2,33 +2,33 @@ expression_engine: cel-v1
 # Safe local demo: uv run mu run --spec examples/routines/spec.yaml --working_dir /tmp/mu-routines-demo --pipeline demo,examples/routines/input.yaml
 routines:
   inspect_artifact:
-    params:
+    inputs:
       path: {type: string}
     actions:
       - type: inspect_file
-        target: "${{ params.path }}"
+        target: "${{ inputs.path }}"
         save_state: file_info
     returns: "${{ actions.file_info }}"
   record_artifact:
-    params:
+    inputs:
       path: {type: string}
       logs: {type: array, default: []}
     actions:
       - type: execute_routine
         routine: inspect_artifact
         args:
-          path: "${{ params.path }}"
+          path: "${{ inputs.path }}"
         save_state: inspected
       - type: write_json
         path: "${{ session.output_dir }}/manifest.json"
         content:
           "${{ node.name }}":
             file: "${{ actions.inspected.output }}"
-            logs: "${{ params.logs }}"
+            logs: "${{ inputs.logs }}"
     returns: "${{ actions.inspected.output }}"
 pipeline:
   demo:
-    params: {}
+    inputs: {}
     nodes:
       - name: artifact-demo
         run:
