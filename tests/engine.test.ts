@@ -240,3 +240,71 @@ test("Pipeline, Node and Routine Fields resolve in their owner scope with caller
   await setup.execute({ label: "${{ literal }}" });
   expect(await setup.json("scopes.json")).toEqual({ pipeline: { n: 2, label: "${{ literal }}" }, node: { n: 6 }, routine: { n: 7, text: "${{ literal }}" } });
 });
+
+test("Node context resolves parent namespaces under node only, before Node inputs and conditions", async () => {
+  const setup = await fixture({pipeline: {p: {
+    inputs: {message: {type: "string"}},
+    nodes: [{name: "publish", context: {
+      result_path: "${{ session.working_dir }}/node-context.json",
+      message: "${{ inputs.message + ':' + request.requestId + ':' + node.name }}",
+      captured: "${{ Request.Registry.Tag }}",
+    }, inputs: {path: {type: "string", value: "${{ node.result_path }}"}},
+    precondition: {operator: "cel", expression: "${{ node.message == 'hello:r:publish' }}"},
+    run: [{type: "write_json", path: "${{ node.inputs.path }}", content: {message: "${{ node.message }}", captured: "${{ node.captured }}", name: "${{ node.name }}"}}],
+    finally: [write("node-context-final.json", "${{ node.result_path }}")],
+    events: [{on: "node_finished", do: [write("node-context-event.json", "${{ event.node.result_path }}")]}],
+    }],
+  }}});
+  await setup.execute({message: "hello"}, {Request: {Tag: "captured"}});
+  expect(await setup.json("node-context.json")).toEqual({message: "hello:r:publish", captured: "captured", name: "publish"});
+  expect(await setup.json("node-context-final.json")).toBe(join(setup.cwd, "node-context.json"));
+  expect(await setup.json("node-context-event.json")).toBe(join(setup.cwd, "node-context.json"));
+});
+
+test("Node context does not create bare root variables or replace parent values", async () => {
+  const setup = await fixture({pipeline: {p: {
+    context: {shared: "parent"}, nodes: [{name: "n", context: {result_path: "private", shared: "node"}, run: [
+      write("node-shadow.json", {root: "${{ shared }}", local: "${{ node.shared }}"}),
+      write("bare-must-fail.json", "${{ result_path }}"),
+    ]}],
+  }}});
+  await expect(setup.execute()).rejects.toThrow("nodes failed");
+  expect(await setup.json("node-shadow.json")).toEqual({root: "parent", local: "node"});
+  expect(await setup.effects.exists(join(setup.cwd, "bare-must-fail.json"), "file")).toBe(false);
+});
+
+test("Node context remains private across sibling Nodes, Pipeline hooks and repeated Requests", async () => {
+  const setup = await fixture({pipeline: {p: {
+    inputs: {private: {type: "boolean"}},
+    events: [{on: "pipeline_finished", do: [{...write("pipeline-context.json", "${{ private_key }}"), ignore_error: true}]}],
+    nodes: [
+      {name: "owner", context: "${{ inputs.private ? {'private_key': 'owned'} : {} }}", run: [write("owner-context.json", "${{ has(node.private_key) }}")]},
+      {name: "sibling", depends_on: ["owner"], run: [write("sibling-context.json", "${{ has(node.private_key) }}")]},
+    ],
+  }}});
+  await setup.execute({private: true});
+  expect(await setup.json("owner-context.json")).toBe(true);
+  expect(await setup.json("sibling-context.json")).toBe(false);
+  expect(await setup.effects.exists(join(setup.cwd, "pipeline-context.json"), "file")).toBe(false);
+  await setup.execute({private: false});
+  expect(await setup.json("owner-context.json")).toBe(false);
+  expect(await setup.json("sibling-context.json")).toBe(false);
+});
+
+test("literal and dynamic Node context collisions reject reserved fields without modifying Node metadata", async () => {
+  const reserved = ["name", "status", "inputs", "outputs", "actions", "state", "total_units", "device", "skipped", "blocked", "ignored_error"];
+  for (const key of reserved) expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", context: {[key]: "forged"}}]}}}))).toThrow(`node.n.context.${key}: reserved Node field`);
+  const setup = await fixture({pipeline: {p: {
+    inputs: {context: {type: "object"}}, nodes: [{name: "n", context: "${{ inputs.context }}",
+      run: [write("collision-ran.json", true)],
+      finally: [write("collision-metadata.json", "${{ node }}")],
+      events: [{on: "node_finished", do: [write("collision-error.json", "${{ event.error.message }}")]}],
+    }],
+  }}});
+  for (const key of reserved) {
+    await expect(setup.execute({context: {safe: "not-injected", [key]: "forged"}})).rejects.toThrow("nodes failed");
+    expect(await setup.json("collision-error.json")).toBe(`node.n.context.${key}: reserved Node field`);
+    expect(await setup.json("collision-metadata.json")).toEqual({name: "n", status: "failed", total_units: 0, device: {family: "cpu", index: null}});
+  }
+  expect(await setup.effects.exists(join(setup.cwd, "collision-ran.json"), "file")).toBe(false);
+});

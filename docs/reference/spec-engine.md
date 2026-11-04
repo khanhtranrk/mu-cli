@@ -91,6 +91,34 @@ other Fields in the same declaration.
 - Workload Fields have no implicit caller overrides. They explicitly select values
   from `with` or runtime namespaces through their declarations.
 
+## Node context namespace
+
+A Node's `context` renders once against its initial execution context, including
+Pipeline inputs, captured Registry values, `session`, `request`, and Node runtime
+metadata. The resulting mapping is injected only into that Node's private `node`
+object, before Node Input Fields and conditions resolve. Keys are accessed as
+`node.<key>`; no bare root aliases are created. Fields in the same context mapping
+are rendered together, not sequentially against one another.
+
+```yaml
+context:
+  result_path: "${{ session.output_dir }}/result.json"
+run:
+  - type: execute_workload
+    workload: generate
+    with:
+      path: "${{ node.result_path }}"
+```
+
+`name`, `status`, `inputs`, `outputs`, `actions`, `state`, `total_units`, `device`,
+`skipped`, `blocked`, and `ignored_error` are reserved Node fields. Internal and
+prototype keys are also forbidden. Literal collisions fail Spec validation;
+collisions in a whole-value context template fail at runtime before any values
+are injected. This reservation does not implement additional runtime namespaces.
+Values remain private to the owning Node and are available to its later phases
+and terminal event snapshot; they do not leak to the Pipeline, sibling Nodes,
+or subsequent Requests. Pipeline and Action context behavior is unchanged.
+
 ## Workload invocation context and process arguments
 
 ```yaml

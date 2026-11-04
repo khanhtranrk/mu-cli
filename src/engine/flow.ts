@@ -1,5 +1,5 @@
 import { render } from "../spec/expressions";
-import { applyContext, mapping, type Context, type Node, type NodeStatus, type Spec, type States } from "../spec/types";
+import { applyContext, mapping, nodeContextValues, type Context, type Node, type NodeStatus, type Spec, type States } from "../spec/types";
 import { Actions, errorValue } from "./actions";
 import { condition } from "./conditions";
 import { requestScopes } from "./context";
@@ -85,7 +85,7 @@ export class Flow {
     let status: NodeStatus = "success", error: unknown, skipped = false;
     try {
       signal.throwIfAborted();
-      applyContext(local, render(node.context ?? {}, local));
+      Object.assign(mapping(local.node), nodeContextValues(render(node.context ?? {}, local), `node.${node.name}.context`));
       mapping(local.node).inputs = resolveFields(node.inputs, {}, local, "node " + node.name);
       if (node.skip_if && await condition(node.skip_if, local, states, this.effects, signal)) skipped = true;
       else {

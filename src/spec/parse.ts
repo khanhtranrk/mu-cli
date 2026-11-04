@@ -1,7 +1,7 @@
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
 import { validateFields } from "./fields";
 import { validateTemplates } from "./expressions";
-import { mapping, type Spec } from "./types";
+import { mapping, nodeContextValues, type Spec } from "./types";
 
 const has = (value: object, key: string) => Object.hasOwn(value, key);
 const defaultValue = <Value>(value: unknown, fallback: Value) => value === undefined ? fallback : value;
@@ -65,13 +65,14 @@ export function parseSpec(source: string): Spec {
   const routines = mapping(defaultValue(root.routines, {}), "routines");
   const pipelines = mapping(defaultValue(root.pipeline, {}), "pipeline");
 
-  function common(item: Record<string, unknown>, label: string): void {
+  function common(item: Record<string, unknown>, label: string, nodeScope = false): void {
     if (has(item, "ignore_error") && typeof item.ignore_error !== "boolean") throw new Error(`${label}.ignore_error must be boolean`);
     if (item.context !== undefined) {
       renderedMapping(item.context, label + ".context");
       if (!templateValue(item.context)) {
         const context = mapping(item.context);
-        if (["CreationSpace", "Session", "Request", "__mu_expression_engine"].some(key => has(context, key))) throw new Error(`${label}.context cannot override captured Registry scopes`);
+        if (nodeScope) nodeContextValues(context, label + ".context");
+        else if (["CreationSpace", "Session", "Request", "__mu_expression_engine"].some(key => has(context, key))) throw new Error(`${label}.context cannot override captured Registry scopes`);
       }
     }
     for (const key of ["skip_if", "precondition", "postcondition"]) condition(item[key], label + "." + key);
@@ -163,7 +164,7 @@ export function parseSpec(source: string): Spec {
       if (edges.has(nodeName)) throw new Error("Node names must be unique");
       const dependencies = list(defaultValue(node.depends_on, []), "depends_on").map(dependency => literalName(dependency, "depends_on"));
       edges.set(nodeName, dependencies);
-      common(node, `node.${nodeName}`);
+      common(node, `node.${nodeName}`, true);
       inputs(node, `pipeline.${name}.nodes.${nodeName}`);
       for (const phase of ["before_run", "run", "after_run", "finally"]) actions(node[phase], `node.${nodeName}.${phase}`, phase !== "finally");
       events(node.events, `node.${nodeName}.events`, true);

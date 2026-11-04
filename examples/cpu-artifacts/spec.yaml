@@ -47,19 +47,19 @@ pipeline:
           - type: execute_workload
             workload: generate
             with:
-              path: '${{ result_path }}'
+              path: '${{ node.result_path }}'
               message: '${{ inputs.message }}'
               request_id: '${{ request.requestId }}'
         after_run:
           - type: upload_artifact
             artifact_id: result
             content_type: application/json
-            target: '${{ result_path }}'
+            target: '${{ node.result_path }}'
             label: CPU smoke output
             save_state: published
         postcondition:
           operator: file_exists
-          path: '${{ result_path }}'
+          path: '${{ node.result_path }}'
       - name: verify
         depends_on: [publish]
         run:

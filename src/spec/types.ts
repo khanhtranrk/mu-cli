@@ -80,3 +80,17 @@ export function applyContext(target: Context, values: unknown): void {
   if (["CreationSpace", "Session", "Request", "__mu_expression_engine", "__proto__", "constructor", "prototype"].some(key => Object.hasOwn(additions, key))) throw new Error("context cannot override captured Registry scopes or internal keys");
   Object.assign(target, additions);
 }
+
+// Node-owned data cannot replace execution metadata or reserved runtime namespaces.
+const reservedNodeFields = new Set([
+  "name", "status", "inputs", "outputs", "actions", "state", "total_units", "device",
+  "skipped", "blocked", "ignored_error", "__mu_expression_engine", "__proto__", "constructor", "prototype",
+]);
+
+export function nodeContextValues(value: unknown, label: string): Context {
+  const values = mapping(value, label);
+  for (const key of Object.keys(values)) {
+    if (reservedNodeFields.has(key)) throw new Error(`${label}.${key}: reserved Node field`);
+  }
+  return values;
+}
