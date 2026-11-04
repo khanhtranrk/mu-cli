@@ -61,3 +61,7 @@ Cancellation reports process_failed while retaining the node-boundary checkpoint
 explicit --resume/--retry-incomplete can repeat uncertain Node effects. Old execution
 checkpoints are rejected with reset guidance. Entry finalization is worker-wide;
 a failure exits the worker unsuccessfully without rewriting completed Request results.
+
+Fake execution can acknowledge an empty captured output contract, but cannot
+synthesize declared typed Outputs. Such a simulation fails explicitly rather
+than publishing a false successful result. It still claims real Requests.

@@ -1,6 +1,6 @@
 # Mu CLI — Bun/TypeScript Worker
 
-Mu CLI is the active **Bun + TypeScript** worker and execution runtime for the [MU workspace](https://github.com/khanhtranrk/mu). It claims authorized Requests from Mu Data Center (MasterFlow), evaluates Specs, schedules local CPU/GPU-capable workloads, reports progress through Spec-defined actions, and handles artifact transfers.
+Mu CLI is the active **Bun + TypeScript** worker and execution runtime for the [MU workspace](https://github.com/khanhtranrk/mu). It claims authorized Requests from Mu Data Center (MasterFlow), evaluates Specs, schedules local CPU/GPU-capable workloads, reports lifecycle progress and typed results automatically, and handles Spec-defined artifact transfers.
 
 > **Implementation status:** Phase 1–4 delivery records cover the CLI foundation, Spec engine, scheduler/recovery, and CPU artifact integration. GPU placement has been simulation-tested; live GPU operation and production deployment are **not** verified. This is a migration from [mu-cli-legacy](https://github.com/khanhtranrk/mu-cli-legacy), not a claim of full Python feature parity.
 
