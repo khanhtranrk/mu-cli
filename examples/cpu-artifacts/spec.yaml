@@ -1,168 +1,23 @@
 expression_engine: cel-v1
-routines:
-  report_request:
-    params:
-      status: {type: string}
-    actions:
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/report'
-        method: post
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-          Content-Type: application/json
-        body:
-          id: '${{ request.requestId }}'
-          status: '${{ params.status }}'
-  report_node:
-    params:
-      status: {type: string}
-    actions:
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/report'
-        method: post
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-          Content-Type: application/json
-        body:
-          id: '${{ request.requestId }}'
-          node_states:
-            '${{ node.name }}':
-              status: '${{ params.status }}'
-  upload_result:
-    params:
-      path: {type: string}
-    actions:
-      - type: inspect_file
-        target: '${{ params.path }}'
-        save_state: source
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/artifacts/upload-url'
-        method: post
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-          Content-Type: application/json
-        body:
-          requestId: '${{ request.requestId }}'
-          artifactId: result
-          size: '${{ actions.source.size }}'
-          sha256: '${{ actions.source.sha256 }}'
-          contentType: application/json
-        save_state: upload
-        postcondition:
-          operator: cel
-          expression: '${{ actions.upload.body.method == "PUT" }}'
-      - type: send_http_request
-        url: '${{ actions.upload.body.uploadUrl }}'
-        method: '${{ actions.upload.body.method }}'
-        header: '${{ actions.upload.body.headers }}'
-        body_file: '${{ params.path }}'
-        timeout: 120
-      - type: inspect_file
-        target: '${{ params.path }}'
-        save_state: unchanged
-        postcondition:
-          operator: cel
-          expression: '${{ actions.unchanged.size == actions.source.size && actions.unchanged.sha256 == actions.source.sha256 }}'
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-          Content-Type: application/json
-        body:
-          requestId: '${{ request.requestId }}'
-          uploadId: '${{ actions.upload.body.uploadId }}'
-          name: '${{ actions.source.name }}'
-          nodeName: '${{ node.name }}'
-          label: CPU smoke output
-        save_state: registered
-        ignore_error: true
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/artifacts/complete'
-        method: post
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-          Content-Type: application/json
-        body:
-          requestId: '${{ request.requestId }}'
-          uploadId: '${{ actions.upload.body.uploadId }}'
-          name: '${{ actions.source.name }}'
-          nodeName: '${{ node.name }}'
-          label: CPU smoke output
-        save_state: registered
-        precondition:
-          operator: or
-          props:
-            - {operator: action_state, target: [registered, status_code], expected: null}
-            - {operator: action_state, target: [registered, status_code], expected: 500}
-            - {operator: action_state, target: [registered, status_code], expected: 502}
-            - {operator: action_state, target: [registered, status_code], expected: 503}
-            - {operator: action_state, target: [registered, status_code], expected: 504}
-    returns: '${{ actions.registered.body.artifact }}'
-  download_and_verify:
-    params:
-      source: {type: string}
-      destination: {type: string}
-    actions:
-      - type: inspect_file
-        target: '${{ params.source }}'
-        save_state: original
-      - type: send_http_request
-        url: '${{ session.server }}/api/requests/artifacts/download-url?requestId=${{ request.requestId }}&artifactId=result'
-        header:
-          Authorization: 'Bearer ${{ session.token }}'
-        save_state: link
-        postcondition:
-          operator: cel
-          expression: '${{ actions.link.body.size == actions.original.size }}'
-      - type: send_http_request
-        url: '${{ actions.link.body.url }}'
-        response_file: '${{ params.destination }}'
-        timeout: 120
-      - type: inspect_file
-        target: '${{ params.destination }}'
-        save_state: downloaded
-        postcondition:
-          operator: cel
-          expression: '${{ actions.downloaded.size == actions.original.size && actions.downloaded.sha256 == actions.original.sha256 }}'
-    returns: '${{ actions.downloaded }}'
 events:
   - on: pipeline_started
     do:
-      - type: execute_routine
-        routine: report_request
-        args: {status: processing}
+      - type: report_node
+        request_status: processing
+        request_events: [{level: info, message: Request started}]
   - on: node_started
     do:
-      - type: execute_routine
-        routine: report_node
-        args: {status: running}
+      - type: report_node
+        status: running
   - on: node_finished
     do:
-      - type: execute_routine
-        routine: report_node
-        args:
-          status: '${{ node.status == "success" ? "succeeded" : "failed" }}'
+      - type: report_node
+        status: '${{ node.status == "success" ? "succeeded" : "failed" }}'
+        events: [{level: info, message: Node finished}]
   - on: pipeline_finished
     do:
-      - type: execute_routine
-        routine: report_request
-        args:
-          status: '${{ event.pipeline.status == "success" ? "succeeded" : "process_failed" }}'
-        precondition:
-          operator: and
-          props:
-            - {operator: node_status, node: publish, expected: success}
-            - {operator: node_status, node: verify, expected: failed}
-          expected: false
-      - type: execute_routine
-        routine: report_request
-        args: {status: retrieve_artifact_failed}
-        precondition:
-          operator: and
-          props:
-            - {operator: node_status, node: publish, expected: success}
-            - {operator: node_status, node: verify, expected: failed}
+      - type: report_node
+        request_status: '${{ event.pipeline.status == "success" ? "succeeded" : "process_failed" }}'
 workloads:
   generate:
     units: 0
@@ -196,24 +51,21 @@ pipeline:
               message: '${{ params.message }}'
               request_id: '${{ request.requestId }}'
         after_run:
-          - type: execute_routine
-            routine: upload_result
-            args: {path: '${{ result_path }}'}
+          - type: upload_artifact
+            artifact_id: result
+            content_type: application/json
+            target: '${{ result_path }}'
+            label: CPU smoke output
             save_state: published
-          - type: execute_routine
-            routine: report_request
-            args: {status: artifact_available}
         postcondition:
           operator: file_exists
           path: '${{ result_path }}'
       - name: verify
         depends_on: [publish]
         run:
-          - type: execute_routine
-            routine: download_and_verify
-            args:
-              source: '${{ session.output_dir }}/requests/${{ request.requestId }}/result.json'
-              destination: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
+          - type: download_artifact
+            artifact_id: result
+            target: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
         postcondition:
           operator: file_exists
           path: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'

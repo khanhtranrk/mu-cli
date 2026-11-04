@@ -11,7 +11,8 @@ with later [scheduling/recovery](../tasks/completed/phase-3.md) and [artifact in
   expressions preserve JSON types; supplied payloads are literal, not rerendered.
 - Strict string/number/boolean/array/object parameters, defaults and isolated contexts.
 - Actions: `execute_command`, `execute_workload`, `execute_routine`, `create_dir`,
-  `write_json`, `inspect_file`, `send_http_request`.
+  `write_json`, `inspect_file`, `send_http_request`, `report_node`,
+  `upload_artifact`, `download_artifact`. See [parameters and results](reporting-actions.md).
 - Conditions: `and`, `or`, `cel`, `file_exists`, `folder_exists`, `path_exists`,
   `exit_code`, `action_state`, `node_state`, `node_status`. There is no `not` operator.
 - Events: `pipeline_started`, `pipeline_finished`, `node_started`, `node_finished`.

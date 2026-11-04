@@ -10,11 +10,13 @@ export interface ClaimedRequest {
   artifacts: ArtifactMetadata[];
   registryContext?: unknown;
 }
-export type RequestStatus = "processing" | "process_failed" | "artifact_available" | "retrieve_artifact_failed" | "succeeded";
+export type RequestStatus = "processing" | "process_failed" | "succeeded";
+export interface ReportEvent { level: "info" | "warning" | "error"; message: string; details?: object; createdAt: number }
 export interface Report {
+  events?: ReportEvent[];
   id: string;
   status?: RequestStatus;
-  node_states?: Record<string, { status?: "queue" | "running" | "failed" | "succeeded"; reason?: string; device?: { family: string; index: number }; artifacts?: ArtifactMetadata[]; logs?: string[] }>;
+  node_states?: Record<string, { status?: "queue" | "running" | "failed" | "succeeded"; reason?: string; device?: { family: string; index: number }; artifacts?: ArtifactMetadata[]; events?: ReportEvent[]; logs?: string[] }>;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number) { super(`Data Center HTTP ${status}`); }

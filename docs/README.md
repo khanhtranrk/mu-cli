@@ -44,3 +44,5 @@ work; verify current source before changing behavior. No completion date is infe
 
 CEL conformance vectors are synchronized in all three implementations. Shared
 packages and replacing MasterFlow validation remain proposals, not installed packages.
+
+- [Built-in reporting and artifact actions](reference/reporting-actions.md) — parameters, results, events and integrity/retry semantics.

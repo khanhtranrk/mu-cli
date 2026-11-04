@@ -6,6 +6,9 @@ status: completed
 
 # Phase 4 — MasterFlow and artifact integration
 
+Historical delivery record. Issue #6 replaces manual artifact/report routines and
+artifact-specific statuses; see the [current action reference](../../reference/reporting-actions.md).
+
 The CPU-only path is validated against current MasterFlow source (`17a9433`):
 connect/heartbeat → claim → fetch Spec → execute Bun subprocess → report nodes →
 upload artifact → download and verify → report request success. No backend schema,

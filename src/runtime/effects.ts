@@ -74,7 +74,7 @@ export class BunEffects implements Effects {
       const after = await source.stat({ bigint: true }), current = await stat(resolved, { bigint: true });
       const signature = (info: typeof before) => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(":");
       if (signature(before) !== signature(after) || signature(after) !== signature(current)) throw new Error("File changed during inspection");
-      return { path: resolved, name: basename(resolved), size: Number(after.size), sha256: digest.digest("hex") };
+      return { path: resolved, name: basename(resolved), size: Number(after.size), contentType: Bun.file(resolved).type || "application/octet-stream", sha256: digest.digest("hex") };
     } finally { await source.close(); }
   }
 
@@ -143,10 +143,14 @@ export class BunEffects implements Effects {
       const temporary = join(dirname(options.responseFile), `.mu-download-${crypto.randomUUID()}`);
       const file = await open(temporary, "wx", 0o600);
       let size = 0;
+      const digest = createHash("sha256");
       try {
-        if (response.body) for await (const chunk of response.body) { await file.writeFile(chunk); size += chunk.byteLength; }
+        if (response.body) for await (const chunk of response.body) { await file.writeFile(chunk); size += chunk.byteLength; digest.update(chunk); }
         const length = response.headers.get("content-length");
         if (length !== null && !response.headers.has("content-encoding") && Number(length) !== size) throw new Error("Incomplete HTTP download");
+        if (options.expectedSize !== undefined && size !== options.expectedSize) throw new Error("Artifact size mismatch");
+        if (options.expectedSha256 !== undefined && digest.digest("hex") !== options.expectedSha256) throw new Error("Artifact SHA-256 mismatch");
+        timeout.throwIfAborted();
         await file.sync(); await file.close();
         await rename(temporary, options.responseFile);
         result.response_file = options.responseFile; result.size = size;

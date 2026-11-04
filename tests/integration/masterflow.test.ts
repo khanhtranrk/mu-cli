@@ -103,6 +103,9 @@ integration("real MasterFlow HTTP handlers: claim, CPU generation, signed upload
     expect(await setup.run()).toBe(0);
     const state = await setup.backend.run(async ctx => ({ request: await ctx.db.get(setup.ids.requestId), artifacts: await ctx.db.query("artifacts").collect(), files: await ctx.db.query("physicalFiles").collect(), uploads: await ctx.db.query("storageUploads").collect() }));
     expect(state.request?.status).toBe("succeeded");
+    expect(state.request?.events?.[0]?.message).toBe("Request started");
+    expect(state.request?.nodeStates.publish.events?.[0]?.message).toBe("Node finished");
+    expect(state.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(state.request?.nodeStates.publish.status).toBe("succeeded"); expect(state.request?.nodeStates.verify.status).toBe("succeeded");
     expect(state.artifacts).toHaveLength(1); expect(state.files).toHaveLength(1);
     const rows = await setup.backend.withIdentity({ issuer: "https://test.clerk.accounts.dev", subject: "user_owner" }).query(makeFunctionReference<"query">("artifactStore:list"), { requestId: setup.ids.requestId });
@@ -110,7 +113,7 @@ integration("real MasterFlow HTTP handlers: claim, CPU generation, signed upload
     expect(outputs[0]?.id).toBe("result"); expect(outputs[0]?.nodeName).toBe("publish");
     expect(outputs[0]?.id).not.toBe(state.artifacts[0]?._id);
     const requestStatuses = setup.apiCalls.filter(call => call.path.endsWith("/report") && call.body?.status).map(call => call.body!.status);
-    expect(requestStatuses).toEqual(["processing", "artifact_available", "succeeded"]);
+    expect(requestStatuses).toEqual(["processing", "succeeded"]);
     expect(setup.storageCalls.some(call => call.copy)).toBe(true);
     const upload = state.uploads[0]!;
     const completion = await setup.call("/api/requests/artifacts/complete", { requestId: setup.ids.requestId, uploadId: upload._id, name: "result.json", nodeName: "publish", label: "CPU smoke output" });
@@ -133,11 +136,11 @@ integration("failed storage PUT blocks completion and dependent download, report
   } finally { await setup.close(); }
 });
 
-integration("equal-size corrupted download fails SHA verification and reports retrieve_artifact_failed", async () => {
+integration("equal-size corrupted download fails SHA verification and reports process_failed", async () => {
   const setup = await fixture({ corruptDownload: true });
   try {
     expect(await setup.run()).toBe(6);
-    expect((await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId)))?.status).toBe("retrieve_artifact_failed");
+    expect((await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId)))?.status).toBe("process_failed");
     expect(await setup.backend.run(ctx => ctx.db.query("artifacts").collect())).toHaveLength(1);
   } finally { await setup.close(); }
 });
