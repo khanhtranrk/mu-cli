@@ -82,3 +82,17 @@ test("concurrent Requests share one initialized captured Spec and do not execute
     await failed.finalize(true);
   } finally {await rm(workspace, {recursive: true, force: true});}
 });
+
+for (const outputs of [false, true]) test(`fake execution respects captured output contract (${outputs ? "typed outputs" : "no outputs"})`, async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "mu-fake-outputs-"));
+  try {
+    const config: WorkerConfig = {server: "http://server", token: "token", unitId: "cpu", specs: ["s"], workspace, maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: true};
+    const specYaml = outputs ? 'pipeline: {p: {outputs: {result: {type: number, value: 3}}}}' : 'pipeline: {p: {nodes: []}}';
+    const reports: Context[] = [];
+    const transport = (async (url: unknown, options?: RequestInit) => {const path = new URL(String(url)).pathname; if (path.endsWith("claim")) return Response.json([{requestId: "r", assignmentVersion: 1, specSlug: "s", pipelineName: "p", payload: {}, artifacts: [], specYaml}]); if (path.endsWith("report")) reports.push(JSON.parse(String(options?.body))); return Response.json({ok: true});}) as typeof fetch;
+    const worker = new Worker(config, new DataCenterClient(config, transport), {execute: async () => {}});
+    expect(await worker.run("once", new AbortController().signal)).toBe(outputs ? 6 : 0);
+    expect(reports.at(-1)?.status).toBe(outputs ? "process_failed" : "succeeded");
+    expect(reports.at(-1)?.pipelineState).toEqual(outputs ? undefined : {status: "success", outputs: {}});
+  } finally {await rm(workspace, {recursive: true, force: true});}
+});

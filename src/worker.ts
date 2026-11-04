@@ -82,6 +82,7 @@ export class Worker {
     try {
       signal.throwIfAborted();
       const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      if (this.executor.reporting !== "spec" && request.specYaml && Object.keys(parseSpec(request.specYaml).pipeline[request.pipelineName]?.outputs ?? {}).length) throw new Error("Fake execution cannot publish declared Outputs");
       await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
         snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
         save: snapshot => {
@@ -103,7 +104,7 @@ export class Worker {
       await this.store.save(terminal); await this.deliver(terminal);
       return succeeded;
     }
-    const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded" };
+    const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded", ...(!failed && request.specYaml && this.executor.reporting !== "spec" ? {pipelineState: {status: "success", outputs: {}}} : {}) };
     const terminal: Checkpoint = this.executor.reporting === "spec" ? { ...state, phase: "reported", report } : { ...state, phase: "terminal", report };
     await this.store.save(terminal);
     if (this.executor.reporting !== "spec") await this.deliver(terminal);
