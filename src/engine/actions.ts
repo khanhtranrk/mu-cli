@@ -1,6 +1,6 @@
 import { workloadModules } from "../spec/workload-modules";
 import { render } from "../spec/expressions";
-import { applyContext, mapping, type Action, type Context, type Spec, type States } from "../spec/types";
+import { applyContext, mapping, type Action, type Context, type Spec, type States, type Workload } from "../spec/types";
 import { resolveFields } from "../spec/fields";
 import { condition } from "./conditions";
 import type { Effects, HttpOptions } from "./ports";
@@ -21,18 +21,26 @@ function environment(value: unknown): Record<string, string> {
   return entries as Record<string, string>;
 }
 
+/** Shared Workload Field resolution for invocation preflight and execution. */
+export function workloadInputs(workload: Workload, context: Context, bindings: unknown, name: string): Context {
+  return resolveFields(workload.inputs, {}, { ...context, inputs: {}, with: mapping(bindings, "execute_workload.with") }, "workload " + name);
+}
+
 export class Actions {
-  constructor(private spec: Spec, private effects: Effects) {}
+  constructor(private spec: Spec, private effects: Effects, private serverActions = true) {}
 
   async runAll(actions: Action[] = [], context: Context, states: States, signal: AbortSignal): Promise<void> {
     for (const action of actions) await this.run(action, context, states, signal);
   }
 
-  async run(action: Action, context: Context, states: States, signal: AbortSignal): Promise<void> {
+  async run(action: Action, context: Context, states: States, signal: AbortSignal, literalWorkloadBindings?: Context): Promise<void> {
     applyContext(context, render(action.context ?? {}, context));
     if (action.skip_if && await condition(action.skip_if, context, states, this.effects, signal)) return;
     if (!await condition(action.precondition, context, states, this.effects, signal)) return;
-    const values = mapping(render(Object.fromEntries(Object.entries(action).filter(([key]) => !["context", "skip_if", "precondition", "postcondition", "body", "content"].includes(key))), context));
+    if (!this.serverActions && ["report_request", "report_node", "upload_artifact", "download_artifact", "send_notification"].includes(action.type)) throw new Error(`${action.type} requires authenticated server/Request context and is unavailable in standalone workload execution`);
+    const values = mapping(render(Object.fromEntries(Object.entries(action).filter(([key]) => !["context", "skip_if", "precondition", "postcondition", "body", "content"].includes(key) && !(action.type === "execute_workload" && literalWorkloadBindings !== undefined && key === "with"))), context));
+    // Local callers already parsed bindings as literal JSON; never rerender them.
+    if (action.type === "execute_workload" && literalWorkloadBindings !== undefined) values.with = literalWorkloadBindings;
     const key = values.save_to;
     if (key !== undefined && (typeof key !== "string" || !key.trim())) throw new Error("save_to must resolve to a nonempty name");
     if (key !== undefined) mapping(context.actions ?? {}, "context.actions");
@@ -69,7 +77,7 @@ export class Actions {
             if (!this.effects.withWorkloadLock) throw new Error("External workload preparation requires a workload lock adapter");
             const local = structuredClone(context);
             local.actions = {};
-            await this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal, () => new Actions(module.spec, this.effects).runAll(module.prepare, local, {}, signal));
+            await this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal, () => new Actions(module.spec, this.effects, this.serverActions).runAll(module.prepare, local, {}, signal));
           }
           break;
         }
@@ -78,8 +86,7 @@ export class Actions {
           const local = structuredClone(context);
           delete local.with;
           local.inputs = {};
-          const invocation = { ...local, with: mapping(values.with === undefined ? {} : values.with, "execute_workload.with") };
-          local.inputs = resolveFields(workload.inputs, {}, invocation, "workload " + action.workload);
+          local.inputs = workloadInputs(workload, local, values.with === undefined ? {} : values.with, action.workload!);
           delete (local as Context).schedule;
           const placement = mapping(mapping(context.node ?? {}).device ?? {});
           const gpu = (workload.units ?? 0) > 0 && placement.family !== "cpu" && placement.index != null;

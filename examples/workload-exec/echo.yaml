@@ -1,0 +1,29 @@
+# CPU-only module usable both locally and as an external pipeline workload.
+routines:
+  check_runtime:
+    actions:
+      - type: execute_command
+        target: bun
+        args: [--version]
+prepare:
+  - type: execute_routine
+    routine: check_runtime
+workload:
+  target: bun
+  units: 0
+  inputs:
+    message:
+      type: string
+      value: "${{ with.message }}"
+    repeat:
+      type: number
+      value: "${{ has(with.repeat) ? with.repeat : 1 }}"
+  argv:
+    - -e
+    - 'console.log(process.argv[1].repeat(Number(process.argv[2])))'
+    - "${{ inputs.message }}"
+    - "${{ inputs.repeat }}"
+  outputs:
+    text:
+      type: string
+      value: "${{ result.stdout }}"

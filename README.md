@@ -33,7 +33,15 @@ mu version
 mu help
 ```
 
-There is no public local `mu run <spec>` mode. `worker once` processes a claimed batch; `worker start` continues polling. `--fake` simulates execution but still claims real server Requests.
+Run a workload module locally without server credentials:
+
+```bash
+mu workload exec ./examples/workload-exec/echo.yaml --with message=hello --json
+```
+
+See [standalone workload execution](docs/guides/cli.md#standalone-workload-execution)
+for module format, typed bindings, preparation, paths and exit codes.
+There is no public local `mu run <spec>` mode for complete pipelines. `worker once` processes a claimed batch; `worker start` continues polling. `--fake` simulates execution but still claims real server Requests.
 
 ## Architecture
 
