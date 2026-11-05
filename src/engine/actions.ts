@@ -37,7 +37,7 @@ export class Actions {
     if (key !== undefined) mapping(context.actions ?? {}, "context.actions");
     const result: Context = { success: false, error: null };
     if (action.type === "execute_command") Object.assign(result, { returncode: null, stdout: "", stderr: "" });
-    if (action.type === "send_http_request") Object.assign(result, { status_code: null, headers: {}, body: null });
+    if (action.type === "send_http_request" || action.type === "send_notification") Object.assign(result, { status_code: null, headers: {}, body: null });
     const save = () => {
       if (typeof key === "string") {
         const actions = mapping(context.node && !context.routine ? mapping(context.node).actions ?? {} : context.actions ?? {});
@@ -102,6 +102,21 @@ export class Actions {
           await this.effects.writeJson(this.effects.path(String(values.path), "."), render(Object.hasOwn(action, "content") ? action.content : {}, context, true)); break;
         case "inspect_file":
           Object.assign(result, await this.effects.inspect(this.effects.path(String(values.target), cwd))); break;
+        case "send_notification": {
+          const session = mapping(context.session);
+          const server = new URL(String(session.server));
+          if (!["http:", "https:"].includes(server.protocol) || server.username || server.password) throw new Error("Invalid server URL");
+          if (typeof session.token !== "string" || !session.token.trim()) throw new Error("Missing session token");
+          for (const name of ["title", "message"]) if (typeof values[name] !== "string" || !(values[name] as string).trim()) throw new Error(`${name} requires a nonempty string`);
+          if (values.tags !== undefined && typeof values.tags !== "string") throw new Error("tags must be a string");
+          Object.assign(result, await this.effects.http({
+            url: new URL("/api/notifications/send", server).href, method: "POST",
+            headers: {Authorization: `Bearer ${session.token}`, "Content-Type": "application/json"},
+            body: {title: values.title, message: values.message, ...(values.tags === undefined ? {} : {tags: values.tags})}, timeout: 30,
+          }, signal));
+          if (Number(result.status_code) < 200 || Number(result.status_code) >= 300) throw new Error(`HTTP ${result.status_code}`);
+          break;
+        }
         case "send_http_request": {
           const url = new URL(String(values.url));
           if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error("HTTP action requires an HTTP(S) URL without credentials");

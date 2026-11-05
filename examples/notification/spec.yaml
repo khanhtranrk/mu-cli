@@ -1,0 +1,13 @@
+expression_engine: cel-v1
+pipeline:
+  notify:
+    nodes:
+      - name: notify
+        run:
+          - type: send_notification
+            title: "Example title"
+            message: "Example message"
+            tags: "Example tag"
+          - type: send_notification
+            title: "Example title"
+            message: "Example message"

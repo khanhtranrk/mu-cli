@@ -349,14 +349,12 @@ pipeline:
           - type: upload_artifact
             target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.mp3
             artifact_id: song-mp3
-            node_name: ${{ node.name }}
             label: Song audio
             content_type: audio/mpeg
             save_to: song_mp3
           - type: upload_artifact
             target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/${{ pipeline.inputs.name }}.abc
             artifact_id: song-abc
-            node_name: ${{ node.name }}
             label: ABC notation
             content_type: text/vnd.abc
             save_to: song_abc
@@ -397,7 +395,6 @@ pipeline:
           - type: upload_artifact
             target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/cover.png
             artifact_id: cover-png
-            node_name: ${{ node.name }}
             label: Cover image
             content_type: image/png
             save_to: cover_png
@@ -453,7 +450,6 @@ pipeline:
           - type: upload_artifact
             target: ${{ session.output_dir }}/${{ pipeline.inputs.name }}/transcript/vocals.json
             artifact_id: transcript-json
-            node_name: ${{ node.name }}
             label: Vocal transcript
             content_type: application/json
             save_to: transcript_json

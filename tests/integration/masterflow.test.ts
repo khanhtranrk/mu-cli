@@ -110,15 +110,17 @@ integration("real MasterFlow HTTP handlers: claim, CPU generation, signed upload
     expect(state.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(state.request?.nodeStates.publish.status).toBe("succeeded"); expect(state.request?.nodeStates.verify.status).toBe("succeeded");
     expect(state.artifacts).toHaveLength(1); expect(state.files).toHaveLength(1);
+    expect(state.uploads[0]).not.toHaveProperty("nodeName");
+    expect(setup.apiCalls.filter(call => call.path.endsWith("/complete")).every(call => !Object.hasOwn(call.body!, "nodeName"))).toBe(true);
     const rows = await setup.backend.withIdentity({ issuer: "https://test.clerk.accounts.dev", subject: "user_owner" }).query(makeFunctionReference<"query">("artifactStore:list"), { requestId: setup.ids.requestId });
     const outputs = parseArtifacts(rows);
-    expect(outputs[0]?.id).toBe("result"); expect(outputs[0]?.nodeName).toBe("publish");
+    expect(outputs[0]?.id).toBe("result"); expect(outputs[0]?.nodeName).toBeUndefined();
     expect(outputs[0]?.id).not.toBe(state.artifacts[0]?._id);
     const requestStatuses = setup.apiCalls.filter(call => call.path.endsWith("/report") && call.body?.status).map(call => call.body!.status);
     expect(requestStatuses).toEqual(["processing", "succeeded"]);
     expect(setup.storageCalls.some(call => call.copy)).toBe(true);
     const upload = state.uploads[0]!;
-    const completion = await setup.call("/api/requests/artifacts/complete", { requestId: setup.ids.requestId, uploadId: upload._id, name: "result.json", nodeName: "publish", label: "CPU smoke output" });
+    const completion = await setup.call("/api/requests/artifacts/complete", { requestId: setup.ids.requestId, uploadId: upload._id, name: "result.json", label: "CPU smoke output" });
     expect(completion.status).toBe(200); expect((await completion.json() as { artifact: unknown }).artifact).toEqual(outputs[0]);
     const legacy = await setup.call(`/api/requests/artifacts/download?requestId=${setup.ids.requestId}&artifactId=result`);
     expect(legacy.status).toBe(200); expect(legacy.headers.get("content-type")).toContain("application/json");
@@ -200,5 +202,25 @@ integration("report_request appends through MasterFlow without coupling events/s
     row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
     expect(row?.status).toBe("process_failed"); expect(row?.events).toEqual([first, second]);
     expect(row?.nodeStates).toBeUndefined();
+  } finally { await setup.close(); }
+});
+
+integration("native notification delivers expression strings through real authenticated handler", async () => {
+  const setup = await fixture();
+  try {
+    const context = {session: {working_dir: setup.config.workspace, server: setup.config.server, token: setup.config.token}, inputs: {title: "Native title", message: "Native message", tags: "Example tag"}};
+    const actions = new Actions({pipeline: {}}, new BunEffects());
+    for (const tags of [undefined, "${{ inputs.tags }}"]) await actions.run({type: "send_notification", title: "${{ inputs.title }}", message: "${{ inputs.message }}", ...(tags === undefined ? {} : {tags})}, context, {}, new AbortController().signal);
+    const rows = await setup.backend.run(ctx => ctx.db.query("notifications").collect());
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row: any) => ({title: row.title, message: row.message, tags: row.tags}))).toEqual([
+      {title: "Native title", message: "Native message", tags: undefined},
+      {title: "Native title", message: "Native message", tags: ["Example tag"]},
+    ]);
+    const calls = setup.apiCalls.filter(call => call.path.endsWith("/notifications/send"));
+    expect(calls.every(call => call.method === "POST")).toBe(true);
+    expect((await setup.call("/api/notifications/send", {title: "array client", message: "m", tags: ["one", "two"]})).status).toBe(200);
+    expect((await setup.call("/api/notifications/send", {title: "invalid client", message: "m", tags: 123})).status).toBe(400);
+    await expect(actions.run({type: "send_notification", title: "t", message: "m"}, {...context, session: {...context.session, token: "invalid"}}, {}, new AbortController().signal)).rejects.toThrow("HTTP 401");
   } finally { await setup.close(); }
 });
