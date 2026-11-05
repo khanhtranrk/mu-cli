@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { addWorkloadCommand } from "./workload-command";
 import { Command, CommanderError } from "commander";
 import { mkdir, open, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,7 +44,7 @@ function options(command: Command): Command {
 
 export async function main(args = Bun.argv.slice(2)): Promise<number> {
   let result = 0;
-  const program = new Command().name("mu").description("MU CLI v2 — CPU/GPU Spec worker").exitOverride().addHelpCommand(true);
+  const program = new Command().name("mu").description("MU CLI v2 — CPU/GPU worker and local workloads").exitOverride().addHelpCommand(true);
   const route = (command: Command, run: (flags: Flags) => Promise<number>) => {
     options(command).action(async (parsed: Flags) => {
       const flags = Object.fromEntries(Object.entries(parsed).map(([key, value]) =>
@@ -51,6 +52,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       result = await run(flags);
     });
   };
+  addWorkloadCommand(program, code => { result = code; });
   const worker = program.command("worker").description("Execute and inspect authorized server work");
   route(worker.command("once").description("Drain one batch"), flags => runWorker("once", flags));
   route(worker.command("start").description("Continuously claim and execute work"), flags => runWorker("start", flags));
@@ -60,7 +62,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
   route(config.command("init").description("Write example YAML"), initConfig);
   route(config.command("show").description("Print resolved configuration"), flags => runWorker("show", flags));
   program.command("version").description("Print CLI version and capabilities").action(() => {
-    console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration)");
+    console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration; workload modules; standalone workload exec)");
   });
   program.action(() => program.outputHelp());
   try { await program.parseAsync(args, { from: "user" }); }

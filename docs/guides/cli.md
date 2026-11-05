@@ -180,3 +180,119 @@ cwd or its run directory. Local module files are provisioned separately on the
 worker; uploading a Spec does not upload them. `worker doctor` validates sources
 without running their preparation. See [external workload modules](../reference/spec-engine.md#external-workload-modules)
 for pinning, installation locking, limits, and recovery.
+
+## Standalone workload execution
+
+A CLI build that includes standalone workload execution (issue #25) can prepare
+and run the same module used by pipeline external workloads, without a full Spec,
+server URL, token or unit identity. This command is independent of `mu.yaml` and
+worker environment credentials; it never claims Requests, sends heartbeats, or
+publishes automatic lifecycle reports.
+
+```bash
+mu workload exec ./workloads/real-esrgan.yaml \
+  --with input=./cover.png \
+  --with output=./upscaled \
+  --with-json outscale=1.05
+
+mu workload exec https://example.com/real-esrgan.yaml \
+  --sha256 <digest> \
+  --with-file ./parameters.json \
+  --with-json outscale=1.05 \
+  --json
+```
+
+The positional source is a [workload module](../reference/spec-engine.md#external-workload-modules):
+one `workload`, optional private `routines`, and optional `prepare`. Source/hash
+rules, HTTPS limits, and installation locks are shared with pipeline execution.
+SHA-256 remains optional; when supplied it verifies raw bytes before module parsing.
+
+### Bindings
+
+- Repeat `--with key=value` for strings. `code=001` stays `"001"` and
+  `enabled=false` stays `"false"`. Splitting uses the first `=`; `key=` is an
+  empty string and `url=a=b` preserves `a=b`.
+- Repeat `--with-json key=value` for strict JSON. Examples: `scale=1.05`,
+  `enabled=false`, `'sizes=[512,1024]'`, `'options={"fast":true}'`, and `value=null`.
+  Shell-quote structured values as needed. Non-finite numbers are rejected.
+- `--with-file path` reads a local JSON object (up to 1 MiB); malformed JSON and
+  non-object roots fail. Explicit flags shallowly override matching file keys.
+- Duplicate explicit flag keys, including duplicates across the two flag types,
+  fail. Empty and internal/prototype keys fail. Dotted keys remain literal names,
+  not nested paths. Binding values also obey the engine's bounded JSON rules.
+
+Bindings map to `execute_workload.with`, not implicit Input Field overrides.
+Extra keys are allowed. Workload Fields explicitly select values, for example:
+
+```yaml
+workload:
+  target: bun
+  units: 0
+  inputs:
+    message:
+      type: string
+      value: "${{ with.message }}"
+  argv: [-e, 'console.log(process.argv[1])', "${{ inputs.message }}"]
+  outputs:
+    text: {type: string, value: "${{ result.stdout }}"}
+```
+
+CLI values remain literal, even if they look like CEL. Only module-owned Field
+expressions execute. Missing keys, defaults and explicit null keep existing Field
+semantics: accessing a missing `with.key` in `value` is an error, not a trigger for
+`default`. Use `has(with.key) ? with.key : fallback` when selecting an optional key.
+
+### Preparation, context and devices
+
+The command resolves/validates the module and Input Fields before installer
+side effects, runs module preparation automatically under the shared installation
+lock, refreshes discovered models, and then acquires resources and executes through
+the shared Actions engine. Invalid invocation Fields fail before setup. Fields
+requiring unavailable local namespaces cannot pass preflight. Installation scripts
+must tolerate repeated calls and partial installs. There is no standalone resume,
+`--skip-prepare`, or separate `workload prepare` command in this version.
+
+- The default process cwd is the caller's current directory. `--cwd path` must
+  identify an existing directory.
+- The module source, binding file and relative `--cwd` resolve from the original
+  caller cwd. Selecting `--cwd` does not change which module/file is loaded.
+- Binding strings are never guessed to be paths or rewritten; the workload process
+  interprets relative path values against its selected cwd.
+- `sys.cache_dir` is `~/.cache`; `sys.models` uses the normal model discovery.
+  `session.working_dir` and `session.output_dir` are the selected cwd.
+  `session.cache_dir` is `~/.cache/mu/standalone`.
+- No authenticated Request, server, token or captured Registry namespaces are
+  supplied. Server reporting, Artifact transfers, and server notifications fail
+  explicitly when reached, including inside private routines. Explicit generic
+  `send_http_request` actions retain their normal HTTP behavior.
+- Devices auto-detect unless repeatable `--device FAMILY,INDEX,MAX_UNITS` flags are
+  provided (cuda/rocm; nvidia normalizes to cuda). Scheduler placement and CPU
+  fallback match worker behavior. `units: 0` stays CPU-only. GPU device_args are
+  appended only when placed on a GPU. Preparation holds no GPU reservation.
+
+### Results and exit codes
+
+Normal mode prints a success message and declared Outputs. Process stdout/stderr
+are forwarded to CLI stderr after each process completes, using the shared adapter's
+bounded capture. Workload stdout is not guessed or parsed into Outputs.
+
+`--json` reserves stdout for one result object after command parsing:
+
+```json
+{"success":true,"outputs":{"text":"hello\n"}}
+```
+
+Failures emit `{"success":false,"error":{"message":"..."},"exitCode":6}`
+with the appropriate exit code. Commander usage errors (unknown flags, missing
+arguments) are written to stderr and do not emit a result object.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Success; declared Outputs returned |
+| 2 | Invalid usage, source/module, bindings, cwd, device configuration or Input Fields |
+| 6 | Preparation, admission, process or Output resolution failure |
+| 130 | Interrupted by SIGINT or SIGTERM |
+
+Cancellation propagates through source loading, device probes, installation locks,
+and subprocess execution. Process groups and scheduler reservations are cleaned up.
+See [CPU standalone example](../../examples/workload-exec/README.md).
