@@ -1,4 +1,5 @@
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
+import { validateWorkloadSource } from "./workload-source";
 import { validateFields } from "./fields";
 import { validateTemplates } from "./expressions";
 import { mapping, nodeContextValues, type Spec } from "./types";
@@ -51,13 +52,18 @@ function condition(value: unknown, label: string): void {
   } else throw new Error(`${label}: unknown condition operator`);
 }
 
-export function parseSpec(source: string): Spec {
+export function parseYamlMapping(source: string): Record<string, unknown> {
   const document = parseDocument(source, { uniqueKeys: true, version: "1.1", schema: "yaml-1.1" });
   if (document.errors.length) throw new Error("Invalid Spec YAML/JSON");
   visit(document, { Pair(_key, pair) {
     if (isScalar(pair.key) && pair.key.source === "on" && typeof pair.key.value === "boolean") pair.key = new Scalar("on");
   } });
   const root = mapping(document.toJS({ maxAliasCount: 100 }), "Spec");
+  return root;
+}
+
+export function parseSpec(source: string, options: { allowExternal?: boolean } = {}): Spec {
+  const root = parseYamlMapping(source);
   if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
   if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
   validateTemplates(root);
@@ -78,7 +84,7 @@ export function parseSpec(source: string): Spec {
     for (const key of ["skip_if", "precondition", "postcondition"]) condition(item[key], label + "." + key);
   }
 
-  function actions(value: unknown, label: string, allowWorkload = false): void {
+  function actions(value: unknown, label: string, allowWorkload = false, allowEnsure = false): void {
     list(defaultValue(value, []), label).forEach((raw, index) => {
       const item = mapping(raw, `${label}[${index}]`);
       const path = `${label}[${index}]`;
@@ -90,7 +96,12 @@ export function parseSpec(source: string): Spec {
         if (!["execute_workload", "execute_command", "send_http_request", "send_notification", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
         text(item.save_to, path + ".save_to");
       }
-      if (type === "execute_workload" || type === "execute_routine") {
+      if (type === "ensure_workload") {
+        if (!allowEnsure) throw new Error(`${path}: ensure_workload only allowed in pipeline prepare`);
+        const name = literalName(item.workload, path + ".workload");
+        if (!has(workloads, name)) throw new Error(`${path}: undefined workload ${name}`);
+        if (Object.keys(item).some(key => !["type", "workload", "context", "skip_if", "precondition", "postcondition", "ignore_error"].includes(key))) throw new Error(`${path}: unsupported ensure_workload property`);
+      } else if (type === "execute_workload" || type === "execute_routine") {
         const key = type === "execute_workload" ? "workload" : "routine";
         const name = literalName(item[key], path + "." + key);
         if (type === "execute_workload" && !allowWorkload) throw new Error(`${path}: execute_workload only allowed in node before_run/run/after_run`);
@@ -143,6 +154,12 @@ export function parseSpec(source: string): Spec {
   for (const [name, raw] of Object.entries(workloads)) {
     literalName(name, "workload name");
     const item = mapping(raw, "workload " + name);
+    if (has(item, "source")) {
+      validateWorkloadSource(item, `workloads.${name}`);
+      if (!options.allowExternal) throw new Error(`workloads.${name}: external workload requires resolution`);
+      continue;
+    }
+    if (has(item, "sha256")) throw new Error(`workloads.${name}.sha256 requires source`);
     inputs(item, `workloads.${name}`);
     if (has(item, "outputs")) validateFields(item.outputs, `workloads.${name}.outputs`);
     if (has(item, "args")) throw new Error(`workloads.${name}.args was removed; use argv`);
@@ -174,7 +191,7 @@ export function parseSpec(source: string): Spec {
     inputs(item, `pipeline.${name}`);
     if (has(item, "outputs")) validateFields(item.outputs, `pipeline.${name}.outputs`);
     if (item.context !== undefined) common({ context: item.context }, `pipeline.${name}`);
-    actions(item.prepare, `pipeline.${name}.prepare`); events(item.events, `pipeline.${name}.events`);
+    actions(item.prepare, `pipeline.${name}.prepare`, false, true); events(item.events, `pipeline.${name}.events`);
     const edges = new Map<string, string[]>();
     for (const rawNode of list(defaultValue(item.nodes, []), `pipeline.${name}.nodes`)) {
       const node = mapping(rawNode, "node");

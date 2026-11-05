@@ -1,5 +1,5 @@
 import { runDirectoryOptions, type RunDirectoryScope } from "./run-directory";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { validateDevices, type Device } from "./scheduler/scheduler";
 
 export interface WorkerConfig {
@@ -8,6 +8,7 @@ export interface WorkerConfig {
   unitId: string;
   specs: string[];
   workspace: string;
+  workloadBaseDir?: string;
   runDirectoryScope?: RunDirectoryScope;
   runDirectoryName?: string;
   maxClaim: number;
@@ -69,6 +70,7 @@ export async function loadConfig(flags: Record<string, string | string[] | boole
     unitId: required(flags["unit-id"] ?? env.MU_UNIT_ID ?? worker.unitId, "worker.unitId"),
     specs: specs as string[],
     workspace: resolve(required(flags.workspace ?? runtime.workspace ?? ".mu", "runtime.workspace")),
+    ...(runtime.workloadBaseDir === undefined ? {} : { workloadBaseDir: resolve(dirname(resolve(path)), required(runtime.workloadBaseDir, "runtime.workloadBaseDir")) }),
     ...runDirectoryOptions(flags["run-directory-scope"] ?? runtime.runDirectoryScope, flags["run-directory-name"] ?? runtime.runDirectoryName),
     maxClaim,
     pollInterval: positive(flags["poll-interval"] ?? polling.interval ?? 15, "pollInterval"),

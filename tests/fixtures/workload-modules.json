@@ -1,0 +1,685 @@
+[
+  {
+    "name": "inline",
+    "valid": true,
+    "spec": {
+      "workloads": {
+        "w": {
+          "target": "python",
+          "argv": [
+            "script.py"
+          ],
+          "units": 0
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "relative local",
+    "valid": true,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "./workload.yaml"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "absolute local",
+    "valid": true,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "/opt/workload.yaml"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "HTTPS optional hash",
+    "valid": true,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "https://example.com/module.yaml"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "HTTPS pinned",
+    "valid": true,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "https://example.com/module.yaml",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "mixed target",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x",
+          "target": "python"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "mixed inputs",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x",
+          "inputs": {}
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "empty source",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": " "
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "dynamic source",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "${{ request.url }}"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "HTTP",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "http://example.com/x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "credentials",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "https://user:pass@example.com/x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "scheme",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "file:///tmp/x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "protocol relative",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "//example.com/x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "fragment",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "https://example.com/x#x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "bad digest",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x",
+          "sha256": "bad"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "null digest",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x",
+          "sha256": null
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "orphan digest",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "target": "python",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "unknown alias",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "missing"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "dynamic alias",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "${{ request.name }}"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "unsupported ensure arguments",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w",
+              "with_": {}
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "execute_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "ensure in node",
+    "valid": false,
+    "spec": {
+      "workloads": {
+        "w": {
+          "source": "x"
+        }
+      },
+      "pipeline": {
+        "p": {
+          "prepare": [
+            {
+              "type": "ensure_workload",
+              "workload": "w"
+            }
+          ],
+          "nodes": [
+            {
+              "name": "n",
+              "run": [
+                {
+                  "type": "ensure_workload",
+                  "workload": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+]

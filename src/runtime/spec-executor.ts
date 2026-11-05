@@ -1,13 +1,13 @@
 import { resolveRunDirectory, verifyRunDirectoryContainment } from "../run-directory";
 import {reportingAction} from "../engine/reporting-actions";
-import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ClaimedRequest } from "../api";
 import type { WorkerConfig } from "../config";
 import { Flow } from "../engine/flow";
 import type { Effects } from "../engine/ports";
-import { parseSpec } from "../spec/parse";
+import { resolveWorkloadModules, sha256, type ModuleSnapshot, type ModuleLoader } from "../spec/workload-modules";
+import { workloadLoader } from "./workload-loader";
 import type { RequestExecutor } from "./types";
 import { Scheduler } from "../scheduler/scheduler";
 import { RecoveryError, type ExecutionPersistence, type ExecutionSnapshot } from "../engine/checkpoint";
@@ -18,21 +18,33 @@ export class SpecExecutor implements RequestExecutor {
   readonly concurrent = true;
   private scheduler: Scheduler;
   private preparations = new Map<string, Promise<void>>();
-  private flows = new Map<string, { source: string; flow: Flow }>();
-  constructor(private config: WorkerConfig, private effects: Effects) {
+  private flows = new Map<string, { source: string; flow: Flow; modules: ModuleSnapshot[] }>();
+  private resolutions = new Map<string, ReturnType<typeof resolveWorkloadModules>>();
+  private loadModule: ModuleLoader;
+  private key(source: string, slug: string, restored?: ExecutionSnapshot): string {
+    return slug + ":" + sha256(source) + (restored ? ":restore:" + sha256(JSON.stringify(restored.workloadModules ?? [])) : "");
+  }
+  private resolve(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot) {
+    const key = this.key(source, slug, restored);
+    if (!this.resolutions.has(key)) this.resolutions.set(key, resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined));
+    return this.resolutions.get(key)!;
+  }
+  async validate(source: string, slug: string, signal: AbortSignal): Promise<void> { await this.resolve(source, slug, signal); }
+  constructor(private config: WorkerConfig, private effects: Effects, loadModule?: ModuleLoader) {
+    this.loadModule = loadModule ?? workloadLoader(config.workloadBaseDir);
     this.scheduler = new Scheduler(config.devices ?? [], config.concurrency ?? 32, message => effects.warning(message));
   }
 
   async prepare(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
-    const key = slug + ":" + createHash("sha256").update(source).digest("hex");
+    const key = this.key(source, slug, restored);
     if (!this.preparations.has(key)) this.preparations.set(key, this.prepareFlow(source, slug, signal, restored));
     return this.preparations.get(key)!;
   }
 
   private async prepareFlow(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
-    const flowKey = slug + ":" + createHash("sha256").update(source).digest("hex");
+    const flowKey = this.key(source, slug, restored);
     if (this.flows.has(flowKey)) return;
-    const spec = parseSpec(source);
+    const { spec, modules } = await this.resolve(source, slug, signal, restored);
     const cwd = resolveRunDirectory(this.config, slug, source).path, cache = join(homedir(), ".cache");
     await verifyRunDirectoryContainment(this.config.workspace, cwd);
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
@@ -45,7 +57,7 @@ export class SpecExecutor implements RequestExecutor {
       },
     };
     const flow = new Flow(spec, base, this.effects, "master_flow", this.scheduler, (this.config.shutdownTimeout ?? 30) * 1000);
-    this.flows.set(flowKey, { source, flow });
+    this.flows.set(flowKey, { source, flow, modules });
     if (restored) flow.restore(restored);
     else await flow.initialize(signal);
   }
@@ -64,7 +76,7 @@ export class SpecExecutor implements RequestExecutor {
       await reportingAction("report_request", {status: "process_failed", events: [{level: "error", message: "Request initialization failed", details: {message: error instanceof Error ? error.message : "Initialization failed"}, createdAt: Date.now()}]}, reportContext, this.effects, AbortSignal.timeout(10000), true);
       throw error;
     }
-    const prepared = this.flows.get(request.specSlug + ":" + createHash("sha256").update(source).digest("hex"))!;
+    const prepared = this.flows.get(this.key(source, request.specSlug, snapshot))!;
     if (source !== prepared.source) throw new Error("Spec changed within the current worker invocation");
     if (snapshot) prepared.flow.restore(snapshot);
     await prepared.flow.execute({
@@ -73,7 +85,7 @@ export class SpecExecutor implements RequestExecutor {
       registryContext: request.registryContext,
     }, signal, persistence ? {
       snapshot, retryIncomplete: persistence.retryIncomplete,
-      save: value => persistence.save(this.sanitize(value)),
+      save: value => persistence.save(this.sanitize({ ...value, workloadModules: prepared.modules })),
     } : undefined);
   }
 
@@ -104,6 +116,7 @@ export class SpecExecutor implements RequestExecutor {
     }
     this.flows.clear();
     this.preparations.clear();
+    this.resolutions.clear();
     if (error) throw error;
   }
 }

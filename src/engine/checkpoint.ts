@@ -1,6 +1,7 @@
 import type { Context, States } from "../spec/types";
 
 export interface ExecutionSnapshot {
+  workloadModules?: import("../spec/workload-modules").ModuleSnapshot[];
   version: 2;
   stage: "intake" | "nodes" | "finishing" | "finished";
   pipelineName: string;
