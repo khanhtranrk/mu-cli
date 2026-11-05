@@ -83,8 +83,7 @@ export async function reportingAction(type: string, values: Context, context: Co
     if (Number(response.status_code) < 200 || Number(response.status_code) >= 300) throw new Error(`Storage HTTP ${response.status_code}`);
     const after = await effects.inspect(target);
     if (after.size !== source.size || after.sha256 !== source.sha256) throw new Error("Upload source changed during transfer");
-    const nodeName = values.node_name ?? node.name;
-    const completed = await call("/api/requests/artifacts/complete", { requestId, uploadId: text(upload.uploadId, "uploadId"), name: source.name, ...(nodeName === undefined ? {} : { nodeName: text(nodeName, "node_name") }), ...(values.label === undefined ? {} : { label: text(values.label, "label") }) }, true);
+    const completed = await call("/api/requests/artifacts/complete", { requestId, uploadId: text(upload.uploadId, "uploadId"), name: source.name, ...(values.label === undefined ? {} : { label: text(values.label, "label") }) }, true);
     const registered = mapping(completed.artifact);
     return { artifact: {artifactId: text(registered.artifactId, "canonical artifactId"), name: registered.name} };
   }

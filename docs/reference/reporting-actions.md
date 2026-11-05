@@ -17,7 +17,7 @@ relative to `session.working_dir`.
 | `report_request` | Optional request `events`; `timeout` (seconds, default 120) | No additional fields |
 | `report_node` | Optional node `events`; `timeout` (seconds, default 120) | No additional fields |
 | `inspect_file` | Required `target` local path | `path` (absolute), `name`, `size` (bytes), `sha256`, `contentType` |
-| `upload_artifact` | Required `target`, `artifact_id`; optional `connection_id`, `content_type`, `node_name`, `label`, `timeout` (default 120 seconds per call) | `artifact` registered Request output metadata |
+| `upload_artifact` | Required `target`, `artifact_id`; optional `connection_id`, `content_type`, `label`, `timeout` (default 120 seconds per call) | `artifact` registered Request output metadata |
 | `download_artifact` | Required destination `target`, canonical `artifact` object; optional expected `sha256`, `timeout` (default 120 seconds per call) | `path`, `name`, `size`, `sha256`, `contentType` for downloaded local file |
 
 `report_request` and `report_node` append events for their own scope. Spec-authored
@@ -81,3 +81,21 @@ See the runnable [CPU round trip](../../examples/cpu-artifacts/spec.yaml) and
 contract before using these actions. Existing persisted artifact-specific statuses
 are projected as lifecycle statuses there: `artifact_available` → `processing`,
 `retrieve_artifact_failed` → `process_failed`. New reports cannot write them.
+
+## Notifications
+
+`send_notification` requires nonempty string `title` and `message`, and accepts
+optional string `tags`. All three support CEL expressions. It sends JSON to
+`POST {session.server}/api/notifications/send` with the active session bearer
+token. It needs no Request or Node identity. Omitted tags are absent from JSON;
+Data Center stores a supplied string as one tag (no splitting). Existing API
+clients may continue sending tag arrays.
+
+`save_to` captures `status_code`, `headers`, `body`, `success` and `error`, like
+`send_http_request`. Delivery errors fail the action; normal `ignore_error` and
+hook warning behavior apply. The call has a 30-second timeout and is not retried
+automatically, avoiding duplicate notifications after uncertain delivery.
+
+See the runnable [notification Spec](../../examples/notification/spec.yaml).
+Uploads now complete with filename and optional label only. Deploy the companion
+Data Center contract and follow its receipt cleanup runbook before schema removal.

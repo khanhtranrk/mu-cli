@@ -87,7 +87,7 @@ export function parseSpec(source: string): Spec {
       const type = item.type;
       if (has(item, "save_state")) throw new Error(`${path}.save_state was removed; use save_to`);
       if (has(item, "save_to")) {
-        if (!["execute_workload", "execute_command", "send_http_request", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
+        if (!["execute_workload", "execute_command", "send_http_request", "send_notification", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
         text(item.save_to, path + ".save_to");
       }
       if (type === "execute_workload" || type === "execute_routine") {
@@ -111,10 +111,17 @@ export function parseSpec(source: string): Spec {
         if (has(item, "status")) throw new Error(`${path}.status is owned by the worker`);
         if (has(item, "events")) renderedList(item.events, path + ".events");
       } else if (type === "upload_artifact" || type === "download_artifact") {
-        if (type === "upload_artifact") text(item.artifact_id, path + ".artifact_id");
+        if (type === "upload_artifact") {
+          text(item.artifact_id, path + ".artifact_id");
+          if (has(item, "node_name")) throw new Error(`${path}.node_name was removed from artifact uploads`);
+        }
         else if (!has(item, "artifact")) throw new Error(`${path}.artifact is required`);
         text(item.target, path + ".target");
       } else if (type === "inspect_file") text(item.target, path + ".target");
+      else if (type === "send_notification") {
+        text(item.title, path + ".title"); text(item.message, path + ".message");
+        if (has(item, "tags") && typeof item.tags !== "string") throw new Error(`${path}.tags must be a string`);
+      }
       else if (type === "send_http_request") {
         text(item.url, path + ".url"); renderedMapping(defaultValue(item.header, {}), path + ".header");
         if (has(item, "body") && has(item, "body_file")) throw new Error(`${path}: body and body_file are mutually exclusive`);

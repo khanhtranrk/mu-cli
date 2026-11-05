@@ -134,3 +134,40 @@ test("report_request validates events/status, saves HTTP failures and preserves 
     for (const type of ["report_request", "report_node"]) expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type, request_status: "processing"}]}]}}}))).toThrow("report_request");
   } finally { await f.cleanup(); }
 });
+
+test("upload completion carries filename and label without node identity", async () => {
+  const f = await fixture(() => Response.json({artifact: {artifactId: "canonical-result", name: "source.txt"}}));
+  try {
+    await f.actions.run({...upload, label: "Result", content_type: "text/plain"}, f.context, {}, signal());
+    expect(f.calls.find(call => call.url.endsWith("complete"))!.body).toEqual({requestId: "r", uploadId: "u", name: "source.txt", label: "Result"});
+    expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{...upload, node_name: "n"}]}]}}}))).toThrow("removed");
+  } finally { await f.cleanup(); }
+});
+
+for (const tags of [undefined, "Example tag", ""]) test(`native notification with tags ${JSON.stringify(tags)}`, async () => {
+  const f = await fixture(() => Response.json({ok: true}));
+  try {
+    const action = parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type: "send_notification", title: "${{ node.name }}", message: "Example message", ...(tags === undefined ? {} : {tags}), save_to: "notice"}]}]}}})).pipeline.p!.nodes![0]!.run![0]!;
+    await f.actions.run(action, f.context, {}, signal());
+    const call = f.calls[0]!;
+    expect(call.url).toBe("http://server/api/notifications/send");
+    expect(call.headers.get("authorization")).toBe("Bearer secret");
+    expect(call.headers.get("content-type")).toBe("application/json");
+    expect(call.body).toEqual({title: "publish", message: "Example message", ...(tags === undefined ? {} : {tags})});
+    expect((f.context.node as any).actions.notice).toMatchObject({success: true, status_code: 200, body: {ok: true}});
+  } finally { await f.cleanup(); }
+});
+
+test("notification validates required and resolved strings and propagates delivery failures", async () => {
+  for (const args of [{message: "m"}, {title: "t"}, {title: "t", message: "m", tags: []}]) expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", run: [{type: "send_notification", ...args}]}]}}}))).toThrow();
+  const f = await fixture(() => Response.json({ok: true}));
+  try {
+    for (const transport of [(async () => new Response(null, {status: 403})), (async () => {throw new Error("offline");})]) {
+      const actions = new Actions({pipeline: {}}, new BunEffects(transport as unknown as typeof fetch));
+      await expect(actions.run({type: "send_notification", title: "t", message: "m", save_to: "notice"}, f.context, {}, signal())).rejects.toThrow();
+      expect((f.context.node as any).actions.notice.success).toBe(false);
+    }
+    await expect(f.actions.run({type: "send_notification", title: "t", message: "m", tags: "${{ 123 }}"}, f.context, {}, signal())).rejects.toThrow("tags");
+    expect(f.calls).toHaveLength(0);
+  } finally { await f.cleanup(); }
+});
