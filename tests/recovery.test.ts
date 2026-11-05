@@ -26,9 +26,9 @@ const source = JSON.stringify({
   ] } },
 });
 
-async function fixture() {
+async function fixture(overrides: Partial<WorkerConfig> = {}) {
   const workspace = await mkdtemp(join(tmpdir(), "mu-recovery-")); directories.push(workspace);
-  const config: WorkerConfig = { workspace, server: "http://localhost:3211", token: "private-worker-credential", unitId: "unit", specs: ["test"], maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false, concurrency: 2, devices: [] };
+  const config: WorkerConfig = { workspace, server: "http://localhost:3211", token: "private-worker-credential", unitId: "unit", specs: ["test"], maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false, concurrency: 2, devices: [], ...overrides };
   let remoteSource = source, stale = false;
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   const transport = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -49,8 +49,8 @@ async function fixture() {
   return { config, api, transport, calls, store, changeSpec: () => { remoteSource += "\n"; }, stale: () => { stale = true; } };
 }
 
-async function interrupted() {
-  const setup = await fixture(), controller = new AbortController();
+async function interrupted(overrides: Partial<WorkerConfig> = {}) {
+  const setup = await fixture(overrides), controller = new AbortController();
   const seen: string[] = [];
   let interrupt = true;
   class Effects extends BunEffects {
@@ -168,4 +168,45 @@ test("resume rechecks completed-node postconditions before continuing and refuse
   await Bun.write(output, "{}");
   expect(await resumed.execute({ pipelineName: "p", payload: {}, metadata: {} }, new AbortController().signal, { snapshot, async save() {} })).toEqual({ a: "success", b: "success" });
   expect(pendingRuns).toBe(1); expect(writes).toBe(1);
+});
+
+
+test("stable named scope persists its binding and resumes without replaying completed work", async () => {
+  const setup = await interrupted({runDirectoryScope: "spec", runDirectoryName: "music"});
+  const [checkpoint] = await setup.store.load();
+  expect(checkpoint?.runDirectory).toMatchObject({scope: "spec", name: "music"});
+  expect(checkpoint?.runDirectory?.path).toBe((checkpoint?.execution?.base.session as any).working_dir);
+  setup.continue(); setup.config.retryIncomplete = true;
+  expect(await new Worker(setup.config, setup.api, new SpecExecutor(setup.config, setup.effects)).run("once", new AbortController().signal)).toBe(0);
+  for (const label of ["init", "prepare", "first", "third"]) expect(setup.seen.filter(value => value === label)).toHaveLength(1);
+});
+
+test("resume refuses changed scope/name or stored directory before verification reports and actions", async () => {
+  for (const change of ["scope", "name", "path", "auto"] as const) {
+    const setup = await interrupted({runDirectoryScope: "spec", runDirectoryName: "music"});
+    setup.continue(); setup.config.retryIncomplete = true;
+    if (change === "scope") {setup.config.runDirectoryScope = "spec-version"; delete setup.config.runDirectoryName;}
+    if (change === "name") setup.config.runDirectoryName = "other";
+    if (change === "auto") delete setup.config.runDirectoryName;
+    if (change === "path") {
+      const [saved] = await setup.store.load(); saved!.runDirectory!.path += "-moved"; await setup.store.save(saved!);
+    }
+    const count = setup.seen.length, reports = setup.calls.filter(call => call.path.endsWith("report")).length;
+    await expect(new Worker(setup.config, setup.api, new SpecExecutor(setup.config, setup.effects)).run("once", new AbortController().signal)).rejects.toThrow("Run directory");
+    expect(setup.seen).toHaveLength(count);
+    expect(setup.calls.filter(call => call.path.endsWith("report"))).toHaveLength(reports);
+    expect(setup.calls.filter(call => call.path.endsWith("claim"))).toHaveLength(1);
+  }
+});
+
+test("legacy checkpoints without directory metadata resume only with the original versioned path", async () => {
+  for (const change of [false, true]) {
+    const setup = await interrupted();
+    const [saved] = await setup.store.load(); delete saved!.runDirectory; await setup.store.save(saved!);
+    setup.continue(); setup.config.retryIncomplete = true;
+    if (change) setup.config.runDirectoryScope = "spec";
+    const worker = new Worker(setup.config, setup.api, new SpecExecutor(setup.config, setup.effects));
+    if (change) await expect(worker.run("once", new AbortController().signal)).rejects.toThrow("Run directory");
+    else expect(await worker.run("once", new AbortController().signal)).toBe(0);
+  }
 });

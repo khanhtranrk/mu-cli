@@ -4,7 +4,10 @@ import { createHash } from "node:crypto";
 import type { ClaimedRequest, Report } from "./api";
 import type { ExecutionSnapshot } from "./engine/checkpoint";
 
+import type { RunDirectory } from "./run-directory";
+
 export interface Checkpoint {
+  runDirectory?: RunDirectory;
   request: ClaimedRequest;
   phase: "claimed" | "executing" | "terminal" | "reported";
   report?: Report;

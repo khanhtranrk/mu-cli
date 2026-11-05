@@ -1,3 +1,4 @@
+import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
 import {parseSpec} from "./spec/parse";
 import type { WorkerConfig } from "./config";
 import type { DataCenterClient, ClaimedRequest, Report } from "./api";
@@ -51,6 +52,9 @@ export class Worker {
           if (!this.config.specs.includes(state.request.specSlug)) throw new RecoveryError("Recovered assignment requires its --spec filter");
           const source = state.request.specYaml ?? this.sources.get(state.request.specSlug) ?? await this.api.spec(state.request.specSlug);
           if (source !== state.source) throw new RecoveryError("Remote Spec changed since checkpoint; inspect/reset the request");
+          const currentDirectory = resolveRunDirectory(this.config, state.request.specSlug, source);
+          const savedDirectory = state.runDirectory ?? resolveRunDirectory({...this.config, runDirectoryScope: "spec-version", runDirectoryName: undefined}, state.request.specSlug, state.source);
+          verifyRunDirectory(currentDirectory, savedDirectory);
           this.sources.set(state.request.specSlug, source);
           await this.api.verifyAssignment(state.request);
           resumable.push(state);
@@ -82,6 +86,11 @@ export class Worker {
     try {
       signal.throwIfAborted();
       const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      if (this.executor.reporting === "spec") {
+        state.source = source;
+        state.runDirectory = resolveRunDirectory(this.config, request.specSlug, source);
+        await this.store.save(state);
+      }
       if (this.executor.reporting !== "spec" && request.specYaml && Object.keys(parseSpec(request.specYaml).pipeline[request.pipelineName]?.outputs ?? {}).length) throw new Error("Fake execution cannot publish declared Outputs");
       await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
         snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
@@ -112,6 +121,7 @@ export class Worker {
   }
 
   async run(mode: "once" | "start", signal: AbortSignal): Promise<number> {
+    runDirectoryOptions(this.config.runDirectoryScope, this.config.runDirectoryName);
     if (!this.config.fake && this.executor.reporting !== "spec") throw new Error("Fake execution requires --fake");
     if (!this.config.specs.length) throw new Error("At least one --spec is required; the API cannot enumerate allowed specs");
     await this.api.health();
@@ -146,7 +156,8 @@ export class Worker {
             const assignment = request.requestId + ":" + request.assignmentVersion;
             if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
             this.seen.add(assignment);
-            await this.store.save({ request, phase: "claimed", source: request.specYaml ?? this.sources.get(request.specSlug), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
+            const source = request.specYaml ?? this.sources.get(request.specSlug);
+            await this.store.save({ request, phase: "claimed", source, ...(this.executor.reporting === "spec" && source !== undefined ? {runDirectory: resolveRunDirectory(this.config, request.specSlug, source)} : {}), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
           }
           batch.push(...claimed);
         }

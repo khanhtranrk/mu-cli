@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {resolveRunDirectory, type RunDirectoryScope} from "../src/run-directory";
 
-test("fresh CLI process resumes after SIGINT without replaying completed CPU work or claiming again", async () => {
+for (const runDirectoryScope of ["spec-version", "spec"] as RunDirectoryScope[]) test(`fresh CLI process resumes after SIGINT without replaying completed CPU work or claiming again (${runDirectoryScope})`, async () => {
   const workspace = await mkdtemp(join(tmpdir(), "mu-cli-resume-"));
   const statuses: unknown[] = []; let claims = 0;
   const command = (code: string) => ({ type: "execute_command", target: "bun", args: ["-e", code] });
@@ -25,7 +26,7 @@ test("fresh CLI process resumes after SIGINT without replaying completed CPU wor
   const children: ReturnType<typeof Bun.spawn>[] = [];
   try {
     const config = join(workspace, "config.json");
-    await Bun.write(config, JSON.stringify({ server: { url: server.url.origin }, worker: { unitId: "unit", specs: ["test"] }, runtime: { workspace, devices: [], concurrency: 1, shutdownTimeout: 1 } }));
+    await Bun.write(config, JSON.stringify({ server: { url: server.url.origin }, worker: { unitId: "unit", specs: ["test"] }, runtime: { workspace, runDirectoryScope, ...(runDirectoryScope === "spec" ? {runDirectoryName: "resume-shared"} : {}), devices: [], concurrency: 1, shutdownTimeout: 1 } }));
     const spawn = (extra: string[] = []) => {
       const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", config, ...extra], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "private-token" }, stdout: "pipe", stderr: "pipe" });
       children.push(child); return child;
@@ -34,8 +35,8 @@ test("fresh CLI process resumes after SIGINT without replaying completed CPU wor
     let run = "";
     for (let attempt = 0; attempt < 200; attempt++) {
       try {
-        const entries = await readdir(join(workspace, "runs"));
-        if (entries[0]) { run = join(workspace, "runs", entries[0]); if (await Bun.file(join(run, "ready")).exists()) break; }
+        run = resolveRunDirectory({workspace, server: server.url.origin, unitId: "unit", runDirectoryScope, ...(runDirectoryScope === "spec" ? {runDirectoryName: "resume-shared"} : {})}, "test", source).path;
+        if (await Bun.file(join(run, "ready")).exists()) break;
       } catch {}
       await Bun.sleep(10);
     }

@@ -1,3 +1,4 @@
+import { resolveRunDirectory, verifyRunDirectoryContainment } from "../run-directory";
 import {reportingAction} from "../engine/reporting-actions";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -32,8 +33,8 @@ export class SpecExecutor implements RequestExecutor {
     const flowKey = slug + ":" + createHash("sha256").update(source).digest("hex");
     if (this.flows.has(flowKey)) return;
     const spec = parseSpec(source);
-    const scope = createHash("sha256").update(this.config.server + "\n" + this.config.unitId + "\n" + slug + "\n" + source).digest("hex");
-    const cwd = join(this.config.workspace, "runs", scope), cache = join(homedir(), ".cache");
+    const cwd = resolveRunDirectory(this.config, slug, source).path, cache = join(homedir(), ".cache");
+    await verifyRunDirectoryContainment(this.config.workspace, cwd);
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
     const base = {
       sys: { cache_dir: cache, models: await this.effects.discoverModels(cache) },
@@ -53,6 +54,7 @@ export class SpecExecutor implements RequestExecutor {
     const snapshot = persistence?.snapshot ? this.hydrate(persistence.snapshot) : undefined;
     if (snapshot && (snapshot.version !== 2 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
     if (snapshot) {
+      if (mapping(snapshot.base.session).working_dir !== resolveRunDirectory(this.config, request.specSlug, source).path) throw new RecoveryError("Run directory changed since checkpoint; restore the original configuration before --resume");
       const metadata = mapping(snapshot.context.request);
       if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
     }

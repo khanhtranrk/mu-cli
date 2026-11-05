@@ -8,6 +8,7 @@ import { FakeExecutor } from "./runtime/fake";
 import { BunEffects } from "./runtime/effects";
 import { SpecExecutor } from "./runtime/spec-executor";
 import { parseSpec } from "./spec/parse";
+import { resolveRunDirectory } from "./run-directory";
 import { Worker } from "./worker";
 import { detectDevices } from "./runtime/devices";
 
@@ -23,6 +24,8 @@ function options(command: Command): Command {
     .option("--unit-id <id>", "Worker unit identity")
     .option("--spec <slug>", "Authorized Spec slug (repeatable)", repeat)
     .option("--workspace <path>", "Worker state directory")
+    .option("--run-directory-scope <scope>", "Run directory scope: spec-version (default) or spec")
+    .option("--run-directory-name <name>", "Shared run directory name (requires scope spec)")
     .option("--max-claim <count>", "Batch limit (integer 1–100)")
     .option("--poll-interval <seconds>", "Positive polling interval")
     .option("--heartbeat-interval <seconds>", "Positive heartbeat interval")
@@ -72,7 +75,7 @@ async function initConfig(flags: Flags): Promise<number> {
   try {
     const path = typeof flags.output === "string" ? flags.output : "mu.yaml";
     const file = await open(path, flags.force ? "w" : "wx", 0o600);
-    try { await file.writeFile("server:\n  url: http://127.0.0.1:3211\nworker:\n  unitId: disposable-cpu\n  specs: [disposable-cpu]\n  maxClaim: 1\nruntime:\n  workspace: .mu\npolling:\n  interval: 15\n  heartbeatInterval: 30\n"); }
+    try { await file.writeFile("server:\n  url: http://127.0.0.1:3211\nworker:\n  unitId: disposable-cpu\n  specs: [disposable-cpu]\n  maxClaim: 1\nruntime:\n  workspace: .mu\n  runDirectoryScope: spec-version\npolling:\n  interval: 15\n  heartbeatInterval: 30\n"); }
     finally { await file.close(); }
     return 0;
   } catch { console.error("Local file unavailable"); return 2; }
@@ -96,8 +99,13 @@ async function runWorker(command: "once" | "start" | "doctor" | "info" | "show",
       await probe.close(); await unlink(probePath);
       await api.health();
       if (!config.specs.length) throw new Error("doctor requires --spec to verify token authorization");
-      for (const slug of config.specs) parseSpec(await api.spec(slug));
-      console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, claims: 0 }));
+      const runDirectories: Record<string, ReturnType<typeof resolveRunDirectory>> = {};
+      for (const slug of config.specs) {
+        const source = await api.spec(slug);
+        parseSpec(source);
+        runDirectories[slug] = resolveRunDirectory(config, slug, source);
+      }
+      console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, runDirectoryScope: config.runDirectoryScope, runDirectoryName: config.runDirectoryName, runDirectories, claims: 0 }));
       return 0;
     }
     const lockPath = join(config.workspace, "worker.lock");

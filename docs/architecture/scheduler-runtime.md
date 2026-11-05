@@ -53,3 +53,27 @@ Concurrent Requests must use distinct Spec-defined output paths.
 Receiver-side idempotency, richer structured observability and server-assisted
 reconciliation may improve recovery, but are not current protocol guarantees or
 assigned implementation work. Historical target designs must not override these limits.
+
+## Local execution directories
+
+`runtime.runDirectoryScope` / `--run-directory-scope` defaults to `spec-version`,
+retaining the existing YAML-sensitive run hash and layout. `spec` removes YAML
+from the directory identity while preserving server/unit isolation. An optional
+`runtime.runDirectoryName` / `--run-directory-name` selects an explicit shared name
+inside that worker scope; otherwise a reserved automatic component hashes the slug.
+See [configuration, paths and safe names](../guides/cli.md#run-directory-scope-and-shared-names).
+
+Execution initialization/preparation still uses Spec source hashes. A shared path
+must not reuse a prepared Flow from another YAML revision. `session.cache_dir` and
+`session.output_dir` share that run root; the global `sys.cache_dir` is unchanged.
+Reuse and output validity are Spec-owned; there is no automatic content-based cache
+invalidation or concurrency serialization.
+
+Checkpoint metadata records the selected directory scope/name/path independently
+of the engine snapshot. Resume compares these before executing pending work and
+also verifies the snapshot's base working directory. Legacy checkpoints imply the
+original `spec-version` scope. Changing options does not relocate data or redirect
+old resumed contexts. Assignment-version checks and explicit whole-node retry
+requirements remain in effect. A reset/new assignment executes fresh nodes even
+when the filesystem path matches. Terminal outbox recovery only resends reports
+and is independent of directory selection.

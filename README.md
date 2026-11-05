@@ -19,6 +19,11 @@ MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config ./mu.yaml
 
 The installed command is `mu`; the source entry point is `src/index.ts`. Configure the server URL, unit ID, allowed Spec slugs and device capacity in `mu.yaml`; supply the worker token through `MU_WORKER_TOKEN`, **not** the YAML file. See the [CLI/configuration guide](docs/guides/cli.md) for the exact flags and examples.
 
+To retain local cache/output files across Spec edits, opt into a stable run
+directory with `--run-directory-scope spec`; add `--run-directory-name music-production`
+to choose its name. The default remains the existing YAML-versioned directory.
+See [scope, names and recovery](docs/guides/cli.md#run-directory-scope-and-shared-names).
+
 Common commands:
 
 ```text

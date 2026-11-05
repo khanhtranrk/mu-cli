@@ -1,3 +1,4 @@
+import { runDirectoryOptions, type RunDirectoryScope } from "./run-directory";
 import { resolve } from "node:path";
 import { validateDevices, type Device } from "./scheduler/scheduler";
 
@@ -7,6 +8,8 @@ export interface WorkerConfig {
   unitId: string;
   specs: string[];
   workspace: string;
+  runDirectoryScope?: RunDirectoryScope;
+  runDirectoryName?: string;
   maxClaim: number;
   pollInterval: number;
   heartbeatInterval: number;
@@ -66,6 +69,7 @@ export async function loadConfig(flags: Record<string, string | string[] | boole
     unitId: required(flags["unit-id"] ?? env.MU_UNIT_ID ?? worker.unitId, "worker.unitId"),
     specs: specs as string[],
     workspace: resolve(required(flags.workspace ?? runtime.workspace ?? ".mu", "runtime.workspace")),
+    ...runDirectoryOptions(flags["run-directory-scope"] ?? runtime.runDirectoryScope, flags["run-directory-name"] ?? runtime.runDirectoryName),
     maxClaim,
     pollInterval: positive(flags["poll-interval"] ?? polling.interval ?? 15, "pollInterval"),
     heartbeatInterval: positive(flags["heartbeat-interval"] ?? polling.heartbeatInterval ?? 30, "heartbeatInterval"),
