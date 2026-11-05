@@ -1,3 +1,5 @@
+import { RegistryClient } from "./registry-client";
+import type { RegistryLock } from "../spec/registry-reference";
 import { resolveRunDirectory, verifyRunDirectoryContainment } from "../run-directory";
 import {reportingAction} from "../engine/reporting-actions";
 import { homedir } from "node:os";
@@ -6,7 +8,7 @@ import type { ClaimedRequest } from "../api";
 import type { WorkerConfig } from "../config";
 import { Flow } from "../engine/flow";
 import type { Effects } from "../engine/ports";
-import { resolveWorkloadModules, sha256, type ModuleSnapshot, type ModuleLoader } from "../spec/workload-modules";
+import { resolveWorkloadModules, hasRegistryReferences, sha256, type ModuleSnapshot, type ModuleLoader } from "../spec/workload-modules";
 import { workloadLoader } from "./workload-loader";
 import type { RequestExecutor } from "./types";
 import { Scheduler } from "../scheduler/scheduler";
@@ -21,30 +23,35 @@ export class SpecExecutor implements RequestExecutor {
   private flows = new Map<string, { source: string; flow: Flow; modules: ModuleSnapshot[] }>();
   private resolutions = new Map<string, ReturnType<typeof resolveWorkloadModules>>();
   private loadModule: ModuleLoader;
-  private key(source: string, slug: string, restored?: ExecutionSnapshot): string {
-    return slug + ":" + sha256(source) + (restored ? ":restore:" + sha256(JSON.stringify(restored.workloadModules ?? [])) : "");
+  private registry: RegistryClient;
+  private key(source: string, slug: string, restored?: ExecutionSnapshot, lock?: RegistryLock): string {
+    return slug + ":" + sha256(source) + (lock ? ":lock:" + sha256(JSON.stringify(lock)) : "") + (restored ? ":restore:" + sha256(JSON.stringify(restored.workloadModules ?? [])) : "");
   }
-  private resolve(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot) {
-    const key = this.key(source, slug, restored);
-    if (!this.resolutions.has(key)) this.resolutions.set(key, resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined));
+  private resolve(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot, lock?: RegistryLock, request?: ClaimedRequest) {
+    const key = this.key(source, slug, restored, lock);
+    if (!this.resolutions.has(key)) this.resolutions.set(key, resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined, hasRegistryReferences(source) ? {
+      origin: this.registry.origin, lock: lock ?? (() => {throw new Error("Registry Spec requires its matching dependency lock");})(),
+      read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion} : {specSlug: slug, yamlSha256: sha256(source)}),
+    } : undefined));
     return this.resolutions.get(key)!;
   }
-  async validate(source: string, slug: string, signal: AbortSignal): Promise<void> { await this.resolve(source, slug, signal); }
-  constructor(private config: WorkerConfig, private effects: Effects, loadModule?: ModuleLoader) {
+  async validate(source: string, slug: string, signal: AbortSignal): Promise<void> { const lock = hasRegistryReferences(source) ? await this.registry.specLock(source, slug, signal) : undefined; await this.resolve(source, slug, signal, undefined, lock); }
+  constructor(private config: WorkerConfig, private effects: Effects, loadModule?: ModuleLoader, registry?: RegistryClient) {
+    this.registry = registry ?? new RegistryClient(config.server, config.token);
     this.loadModule = loadModule ?? workloadLoader(config.workloadBaseDir);
     this.scheduler = new Scheduler(config.devices ?? [], config.concurrency ?? 32, message => effects.warning(message));
   }
 
-  async prepare(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
-    const key = this.key(source, slug, restored);
-    if (!this.preparations.has(key)) this.preparations.set(key, this.prepareFlow(source, slug, signal, restored));
+  async prepare(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot, lock?: RegistryLock, request?: ClaimedRequest): Promise<void> {
+    const key = this.key(source, slug, restored, lock);
+    if (!this.preparations.has(key)) this.preparations.set(key, this.prepareFlow(source, slug, signal, restored, lock, request));
     return this.preparations.get(key)!;
   }
 
-  private async prepareFlow(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot): Promise<void> {
-    const flowKey = this.key(source, slug, restored);
+  private async prepareFlow(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot, lock?: RegistryLock, request?: ClaimedRequest): Promise<void> {
+    const flowKey = this.key(source, slug, restored, lock);
     if (this.flows.has(flowKey)) return;
-    const { spec, modules } = await this.resolve(source, slug, signal, restored);
+    const { spec, modules } = await this.resolve(source, slug, signal, restored, lock, request);
     const cwd = resolveRunDirectory(this.config, slug, source).path, cache = join(homedir(), ".cache");
     await verifyRunDirectoryContainment(this.config.workspace, cwd);
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
@@ -71,12 +78,12 @@ export class SpecExecutor implements RequestExecutor {
       if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
     }
     const reportContext = {session: {server: this.config.server, token: this.config.token, working_dir: this.config.workspace}, request: {...request}};
-    try { await this.prepare(source, request.specSlug, signal, snapshot); }
+    try { await this.prepare(source, request.specSlug, signal, snapshot, request.workloadLock, request); }
     catch (error) {
       await reportingAction("report_request", {status: "process_failed", events: [{level: "error", message: "Request initialization failed", details: {message: error instanceof Error ? error.message : "Initialization failed"}, createdAt: Date.now()}]}, reportContext, this.effects, AbortSignal.timeout(10000), true);
       throw error;
     }
-    const prepared = this.flows.get(this.key(source, request.specSlug, snapshot))!;
+    const prepared = this.flows.get(this.key(source, request.specSlug, snapshot, request.workloadLock))!;
     if (source !== prepared.source) throw new Error("Spec changed within the current worker invocation");
     if (snapshot) prepared.flow.restore(snapshot);
     await prepared.flow.execute({

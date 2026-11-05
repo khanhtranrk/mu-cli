@@ -51,7 +51,7 @@ test("invalid bindings/Fields/hash/module fail before any installation effect", 
     override async mkdir() {effects++;}
     override async process() {effects++; return {returncode: 0, stdout: "", stderr: ""};}
   }
-  for (const bindings of [{}, {message: 12}, {message: null}]) await expect(executeStandaloneWorkload({source: "m", cwd, bindings, devices: []}, new Effects(), async () => bytes(module), signal())).rejects.toThrow();
+  for (const bindings of [{}, {message: 12}, {message: null}]) await expect(executeStandaloneWorkload({source: "./m", cwd, bindings, devices: []}, new Effects(), async () => bytes(module), signal())).rejects.toThrow();
   await expect(executeStandaloneWorkload({source: "https://example.com/m", sha256: "0".repeat(64), cwd, bindings: {message: "x"}, devices: []}, new Effects(), async () => Buffer.from("invalid: ["), signal())).rejects.toThrow("SHA-256 mismatch");
   expect(effects).toBe(0);
 });
@@ -63,7 +63,7 @@ test("setup failure prevents dispatch and nonzero workload exit is an execution 
     class Effects extends BunEffects {
       override async process(argv: string[]) {calls.push(argv[0]!); return {returncode: argv[0] === failing ? 1 : 0, stdout: "", stderr: ""};}
     }
-    await expect(executeStandaloneWorkload({source: "m", cwd, bindings: {message: "x"}, devices: []}, new Effects(), async () => bytes(module), signal())).rejects.toBeInstanceOf(WorkloadExecutionError);
+    await expect(executeStandaloneWorkload({source: "./m", cwd, bindings: {message: "x"}, devices: []}, new Effects(), async () => bytes(module), signal())).rejects.toBeInstanceOf(WorkloadExecutionError);
     expect(calls).toEqual(failing === "install" ? ["install"] : ["install", "run"]);
   }
 });
@@ -77,7 +77,7 @@ test("server-only actions fail clearly inside private preparation routines witho
     {type: "send_notification", title: "title", message: "body"},
   ]) {
     const value = {...module, routines: {install: {actions: [action]}}};
-    await expect(executeStandaloneWorkload({source: "m", cwd, bindings: {message: "x"}, devices: []}, new BunEffects((async () => {throw new Error("unexpected HTTP");}) as unknown as typeof fetch), async () => bytes(value), signal())).rejects.toThrow("unavailable in standalone");
+    await expect(executeStandaloneWorkload({source: "./m", cwd, bindings: {message: "x"}, devices: []}, new BunEffects((async () => {throw new Error("unexpected HTTP");}) as unknown as typeof fetch), async () => bytes(value), signal())).rejects.toThrow("unavailable in standalone");
   }
 });
 
@@ -124,7 +124,7 @@ test("cancellation kills the real child and releases installation locks", async 
       return super.process(...args);
     }
   }
-  await expect(executeStandaloneWorkload({source: "m", cwd, bindings: {}, devices: []}, new Effects(), async () => bytes(value), controller.signal)).rejects.toThrow("cancelled");
+  await expect(executeStandaloneWorkload({source: "./m", cwd, bindings: {}, devices: []}, new Effects(), async () => bytes(value), controller.signal)).rejects.toThrow("cancelled");
   await new BunEffects().withWorkloadLock(join((await import("node:os")).homedir(), ".cache"), signal(), async () => {});
 });
 
@@ -154,7 +154,7 @@ test("preparation does not receive invocation bindings", async () => {
     override async process() {processes++; return {returncode: 0, stdout: "", stderr: ""};}
   }
   const value = {...module, prepare: [{type: "execute_command", target: "install", args: ["${{ invocation.message }}"]}]};
-  await expect(executeStandaloneWorkload({source: "m", cwd, bindings: {message: "x"}, devices: []}, new Effects(), async () => bytes(value), signal())).rejects.toThrow();
+  await expect(executeStandaloneWorkload({source: "./m", cwd, bindings: {message: "x"}, devices: []}, new Effects(), async () => bytes(value), signal())).rejects.toThrow();
   expect(processes).toBe(0);
 });
 

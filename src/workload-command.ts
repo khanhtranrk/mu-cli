@@ -1,3 +1,5 @@
+import { registryProfile } from "./registry-profile";
+import { workloadSourceKind } from "./spec/registry-reference";
 import { resolve } from "node:path";
 import { Command } from "commander";
 import { workloadBindings } from "./workload-bindings";
@@ -18,11 +20,12 @@ class LocalEffects extends BunEffects {
 
 export function addWorkloadCommand(program: Command, finish: (code: number) => void): void {
   const repeat = (value: string, previous: string[] = []) => [...previous, value];
-  const group = program.command("workload").description("Run workload modules locally without a server");
-  group.command("exec <source>").description("Prepare and execute a local or HTTPS workload module")
+  const group = program.command("workload").description("Execute workload modules locally");
+  group.command("exec <source>").description("Prepare and execute a local, HTTPS or MU registry module")
     .option("--with <key=value>", "Literal string binding (repeatable)", repeat)
     .option("--with-json <key=value>", "Strict JSON binding (repeatable)", repeat)
     .option("--with-file <path>", "Read bindings from a JSON object file; flags override keys")
+    .option("--profile <name>", "MU registry profile (named sources only)")
     .option("--sha256 <digest>", "Optional SHA-256 of raw module bytes")
     .option("--cwd <path>", "Process working directory (default: caller cwd)")
     .option("--device <family,index,max_units>", "GPU capacity (repeatable; otherwise auto-detect)", repeat)
@@ -39,12 +42,13 @@ export function addWorkloadCommand(program: Command, finish: (code: number) => v
           catch (error) { throw new Error(`--with-file: ${error instanceof Error ? error.message : "invalid JSON"}`); }
         }
         const bindings = workloadBindings(flags, file);
+        const registry = workloadSourceKind(source) === "registry" ? await registryProfile(flags.profile) : undefined;
         const devices = flags.device === undefined ? await detectDevices(undefined, controller.signal) : validateDevices(flags.device.map((value: string) => {
           const [family, index, maxUnits, extra] = value.split(",");
           if (!index || !maxUnits || extra !== undefined) throw new Error("--device requires FAMILY,INDEX,MAX_UNITS");
           return {family: family === "nvidia" ? "cuda" : family, index: Number(index), maxUnits: Number(maxUnits)};
         }));
-        const outputs = await executeStandaloneWorkload({source, sha256: flags.sha256, cwd: resolve(caller, flags.cwd ?? "."), bindings, devices}, new LocalEffects(), load, controller.signal);
+        const outputs = await executeStandaloneWorkload({source, sha256: flags.sha256, cwd: resolve(caller, flags.cwd ?? "."), bindings, devices, ...(registry ? {registry: {origin: registry.origin, read: registry.read.bind(registry)}} : {})}, new LocalEffects(), load, controller.signal);
         if (flags.json) console.log(JSON.stringify({success: true, outputs}));
         else console.log(`Workload succeeded\n${JSON.stringify(outputs, null, 2)}`);
         finish(0);
