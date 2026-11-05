@@ -20,7 +20,7 @@ export interface Common {
   ignore_error?: boolean;
 }
 export interface Action extends Common {
-  type: "execute_command" | "execute_workload" | "execute_routine" | "create_dir" | "write_json" | "inspect_file" | "report_request" | "report_node" | "upload_artifact" | "download_artifact" | "send_http_request" | "send_notification";
+  type: "ensure_workload" | "execute_command" | "execute_workload" | "execute_routine" | "create_dir" | "write_json" | "inspect_file" | "report_request" | "report_node" | "upload_artifact" | "download_artifact" | "send_http_request" | "send_notification";
   target?: string;
   args?: unknown[] | Context | string;
   env?: Record<string, unknown> | string;

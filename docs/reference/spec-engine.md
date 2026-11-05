@@ -202,3 +202,101 @@ Node outputs and download's `artifact` parameter directly.
 Breaking migration: use save_to instead of save_state; named Routine outputs
 instead of returns; execute_routine.with instead of args; event-only report actions
 instead of status-report hooks. No parser alias silently accepts removed syntax.
+
+## External workload modules
+
+Workloads may remain inline or reference a local/HTTPS YAML module. Each
+external declaration contains only `source` and optional `sha256`; overrides and
+nested imports are rejected. Sources are static literals, never Request/CEL values.
+
+```yaml
+workloads:
+  inline:
+    target: bun
+    units: 0
+    argv: [--version]
+  external:
+    source: ./workloads/echo.yaml
+    # sha256: "<64 hexadecimal characters>"  # optional
+pipeline:
+  demo:
+    prepare:
+      - type: ensure_workload
+        workload: external
+    nodes:
+      - name: echo
+        run:
+          - type: execute_workload
+            workload: external
+            with: {message: hello}
+```
+
+The referenced module is a mapping with exactly one `workload`, optional
+`routines`, and optional `prepare`:
+
+```yaml
+routines:
+  install:
+    actions:
+      - type: execute_command
+        target: bun
+        args: [--version]
+prepare:
+  - type: execute_routine
+    routine: install
+workload:
+  target: bun
+  units: 0
+  inputs:
+    message: {type: string, value: "${{ with.message }}"}
+  argv: [-e, 'console.log(process.argv[1])', "${{ inputs.message }}"]
+```
+
+Module routines are private: they resolve only module-local routine references
+and cannot collide with or call global routines. Preparation runs in a copied,
+Request-independent context; local context/result changes do not leak to the
+caller. Installation files can be shared through explicit cache paths.
+`ensure_workload` is allowed only directly in `pipeline.<name>.prepare`. It runs
+module preparation under an installation lock; existing inline workloads have
+no module preparation and are a no-op. `execute_workload` never installs implicitly.
+Successful pipeline preparation is reused within that Flow/pipeline. Preparation
+failure prevents dispatch and is retained for the rest of that Flow/pipeline.
+Scripts must tolerate repeats and partial installation; use versioned environments
+and write readiness markers only after successful verification.
+
+The runtime resolver loads modules before full validation and scheduling, so
+resolved `units`, `device_args`, Inputs and Outputs retain the inline semantics.
+Worker preflight and `worker doctor` resolve/validate without executing preparation.
+The parser has no filesystem/HTTP/process effects. Library callers can supply a
+`ModuleLoader` and resolve before constructing a Flow. For local Specs, pass the
+Spec directory to `workloadLoader`; server-provided Specs have no implicit local
+base. Configure `runtime.workloadBaseDir` explicitly for their relative sources
+(relative configuration values resolve from the configuration file's directory).
+Absolute local source paths do not require a base.
+
+HTTPS loads omit credentials and worker headers, allow at most five redirects
+(HTTPS only), and time out after 30 seconds per module. Sources must be at most
+1 MiB each, with at most 64 modules and 8 MiB total resolved bytes per Spec.
+SHA-256, when supplied, is checked against raw bytes before parsing. Without a
+supplied digest, the computed hash identifies content but does not authenticate
+its origin. Module bytes (base64), source and digest are included in execution
+checkpoints, verified again on recovery, and never refetched during resume.
+Old external checkpoints missing their manifests are rejected. Inline checkpoints
+remain readable. These are worker-local pins, not immutable server snapshots.
+
+Resolution is cached only in the executor for the current Flow/source; no URL-only
+disk cache or offline fallback is used on a fresh run. Restart to refresh unpinned
+sources. Resume instead uses pinned bytes and works without the module source.
+
+The Bun adapter serializes installation across processes using
+`${sys.cache_dir}/mu/workload-install.lock`, shared across module aliases/versions
+because arbitrary scripts can modify the same environment. Waits cancel with the
+execution signal and fail after 30 seconds if busy. Failures release the lock;
+a crashed owner may leave a stale lock. Inspect `owner.json` and ensure no installer
+is running before manually removing it. Locks are never automatically stolen.
+Injected effects must provide `withWorkloadLock` to prepare external modules.
+
+MasterFlow performs structural validation only and shows external metadata as
+unresolved; it never fetches modules or executes preparation. Use a worker with
+external-module support; CEL capability negotiation alone does not certify this
+feature. See [MasterFlow companion](https://github.com/khanhtranrk/mu-masterflow/issues/30).

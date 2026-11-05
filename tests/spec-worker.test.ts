@@ -83,3 +83,48 @@ test("invalid Specs fail before assignment", async () => {
     expect(claims).toBe(0);
   }
 });
+
+test("worker executes a local module with real CPU processes after claiming and resolves only once", async () => {
+  const configuration = await config();
+  configuration.maxClaim = 2;
+  configuration.workloadBaseDir = configuration.workspace;
+  const paths: string[] = [];
+  const source = JSON.stringify({
+    workloads: { external: { source: "module.yaml" } },
+    pipeline: { p: { prepare: [{type: "ensure_workload", workload: "external"}], nodes: [{name: "n", run: [{type: "execute_workload", workload: "external"}]}] } },
+  });
+  await Bun.write(join(configuration.workspace, "module.yaml"), JSON.stringify({
+    prepare: [{type: "execute_command", target: "bun", args: ["-e", "await Bun.write('installed', 'ready')"]}],
+    workload: {target: "bun", units: 0, argv: ["-e", "if (await Bun.file('installed').text() !== 'ready') process.exit(1); await Bun.write('module-result', 'ok')"]},
+  }));
+  let claims = 0;
+  const transport = (async (url: string | URL | Request) => {
+    const path = new URL(String(url)).pathname; paths.push(path);
+    if (path.startsWith("/api/specs/")) return new Response(source);
+    if (path.endsWith("claim")) {claims++; return Response.json([request, {...request, requestId: "r2"}]);}
+    return Response.json({ok: true});
+  }) as typeof fetch;
+  class Effects extends BunEffects {
+    override async process(argv: string[], env: Record<string, string>, cwd: string, signal: AbortSignal) {
+      expect(claims).toBe(1);
+      return super.process(argv, env, cwd, signal);
+    }
+  }
+  expect(await new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new Effects(transport))).run("once", new AbortController().signal)).toBe(0);
+  const runs = await readdir(join(configuration.workspace, "runs"));
+  expect(await Bun.file(join(configuration.workspace, "runs", runs[0]!, "module-result")).text()).toBe("ok");
+});
+
+test("malformed external modules fail before claiming without running installation", async () => {
+  const configuration = await config(); let claims = 0;
+  const source = JSON.stringify({workloads: {external: {source: "bad.yaml"}}, pipeline: {p: {nodes: []}}});
+  const transport = (async (url: string | URL | Request) => {
+    const path = new URL(String(url)).pathname;
+    if (path.startsWith("/api/specs/")) return new Response(source);
+    if (path.endsWith("claim")) claims++;
+    return Response.json({ok: true});
+  }) as typeof fetch;
+  const executor = new SpecExecutor(configuration, new BunEffects(transport), async () => Buffer.from("workload: {units: 1}"));
+  await expect(new Worker(configuration, new DataCenterClient(configuration, transport), executor).run("once", new AbortController().signal)).rejects.toThrow("target");
+  expect(claims).toBe(0);
+});

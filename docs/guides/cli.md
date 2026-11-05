@@ -163,3 +163,20 @@ with the original versioned directory, not be silently moved into shared scope.
 Terminal outbox reports can still be delivered without executing filesystem work.
 Reset/reclaim uses a new assignment and never resumes completed-node state merely
 because it shares the old directory. See [recovery](../architecture/scheduler-runtime.md).
+
+### Local sources in server-provided Specs
+
+External workload modules support absolute local paths and HTTPS URLs. To use a
+relative source such as `./workloads/echo.yaml` in a server-provided Spec, set an
+explicit base in the worker configuration:
+
+```yaml
+runtime:
+  workloadBaseDir: ./spec-assets
+```
+
+This base resolves relative to the configuration file's directory, not the worker
+cwd or its run directory. Local module files are provisioned separately on the
+worker; uploading a Spec does not upload them. `worker doctor` validates sources
+without running their preparation. See [external workload modules](../reference/spec-engine.md#external-workload-modules)
+for pinning, installation locking, limits, and recovery.

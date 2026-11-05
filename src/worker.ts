@@ -145,7 +145,8 @@ export class Worker {
         signal.throwIfAborted();
         const source = await this.api.spec(slug);
         this.sources.set(slug, source);
-        parseSpec(source); // Reject invalid Specs before claiming, but prepare after assignment.
+        if (this.executor.validate) await this.executor.validate(source, slug, signal);
+        else parseSpec(source); // Reject invalid Specs before claiming; prepare only after assignment.
       }
       do {
         const batch: ClaimedRequest[] = [];

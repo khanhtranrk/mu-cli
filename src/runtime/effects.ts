@@ -10,6 +10,33 @@ const outputLimit = 16 * 1024 * 1024;
 export class BunEffects implements Effects {
   constructor(private transport: typeof fetch = fetch, private warn: (message: string) => void = console.warn) {}
 
+  async withWorkloadLock<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+    // One per-user cache lock serializes arbitrary installation scripts, even across
+    // different module versions/aliases that may modify the same environment.
+    const parent = join(cacheDir, "mu"), lock = join(parent, "workload-install.lock");
+    await this.mkdir(parent);
+    const deadline = Date.now() + 30_000;
+    while (true) {
+      signal.throwIfAborted();
+      try { await mkdir(lock); break; }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        if (Date.now() >= deadline) throw new Error(`Workload installation lock is busy: ${lock}. If its owner crashed, inspect and remove the stale lock before retrying.`);
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(signal.reason); };
+          const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 100);
+          signal.addEventListener("abort", abort, { once: true });
+          if (signal.aborted) abort();
+        });
+      }
+    }
+    try {
+      await Bun.write(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+      signal.throwIfAborted();
+      return await run();
+    } finally { await rm(lock, { recursive: true, force: true }); }
+  }
+
   path(path: string, cwd: string): string {
     return resolve(cwd, path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
   }

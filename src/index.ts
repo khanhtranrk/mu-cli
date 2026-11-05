@@ -7,7 +7,8 @@ import { loadConfig } from "./config";
 import { FakeExecutor } from "./runtime/fake";
 import { BunEffects } from "./runtime/effects";
 import { SpecExecutor } from "./runtime/spec-executor";
-import { parseSpec } from "./spec/parse";
+import { resolveWorkloadModules } from "./spec/workload-modules";
+import { workloadLoader } from "./runtime/workload-loader";
 import { resolveRunDirectory } from "./run-directory";
 import { Worker } from "./worker";
 import { detectDevices } from "./runtime/devices";
@@ -102,7 +103,7 @@ async function runWorker(command: "once" | "start" | "doctor" | "info" | "show",
       const runDirectories: Record<string, ReturnType<typeof resolveRunDirectory>> = {};
       for (const slug of config.specs) {
         const source = await api.spec(slug);
-        parseSpec(source);
+        await resolveWorkloadModules(source, workloadLoader(config.workloadBaseDir), AbortSignal.timeout(30_000));
         runDirectories[slug] = resolveRunDirectory(config, slug, source);
       }
       console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, runDirectoryScope: config.runDirectoryScope, runDirectoryName: config.runDirectoryName, runDirectories, claims: 0 }));

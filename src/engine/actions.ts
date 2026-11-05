@@ -1,3 +1,4 @@
+import { workloadModules } from "../spec/workload-modules";
 import { render } from "../spec/expressions";
 import { applyContext, mapping, type Action, type Context, type Spec, type States } from "../spec/types";
 import { resolveFields } from "../spec/fields";
@@ -60,6 +61,16 @@ export class Actions {
           if (typeof values.target !== "string" || !values.target || !Array.isArray(values.args ?? [])) throw new Error("Command requires target and argv list");
           Object.assign(result, await this.effects.process([values.target, ...(values.args as unknown[] ?? []).map(value => argumentText(value))], environment(values.env ?? {}), cwd, signal));
           if (result.returncode !== 0) throw new Error(`Command exited with status ${result.returncode}`);
+          break;
+        }
+        case "ensure_workload": {
+          const module = workloadModules.get(this.spec)?.get(action.workload!);
+          if (module) {
+            if (!this.effects.withWorkloadLock) throw new Error("External workload preparation requires a workload lock adapter");
+            const local = structuredClone(context);
+            local.actions = {};
+            await this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal, () => new Actions(module.spec, this.effects).runAll(module.prepare, local, {}, signal));
+          }
           break;
         }
         case "execute_workload": {
