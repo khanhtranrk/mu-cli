@@ -296,3 +296,102 @@ arguments) are written to stderr and do not emit a result object.
 Cancellation propagates through source loading, device probes, installation locks,
 and subprocess execution. Process groups and scheduler reservations are cleaned up.
 See [CPU standalone example](../../examples/workload-exec/README.md).
+
+## MU registry workloads
+
+Named workload modules can be downloaded from MU and executed locally using the
+same preparation, Field resolution, scheduler and process adapters:
+
+```bash
+mu workload exec real-esrgan --profile personal \
+  --with input=./cover.png --with output=./upscaled --with-json outscale=1.05
+mu workload exec real-esrgan@1.2.0 --profile personal --with-json sample=1
+mu workload exec mu://real-esrgan@1.2.0 --profile personal --with-json sample=1
+```
+
+A bare name selects the registry's explicitly chosen default version, not necessarily
+the most recently published release. Resolution returns that immutable version and
+content together; default changes cannot alter it mid-execution. Exact stable
+`MAJOR.MINOR.PATCH` versions are supported; ranges, tags and prereleases are not.
+The CLI verifies configured server origin, slug, selected version identity, format
+version 1, payload size and raw-byte SHA-256 before parsing or setup. `--sha256`
+is optional and, when supplied, must also match the registry's content digest.
+
+### Profiles and credentials
+
+Create `~/.config/mu/profiles.json` with nonsecret connection information:
+
+```json
+{
+  "defaultProfile": "personal",
+  "profiles": {
+    "personal": {
+      "server": "https://mu.example.com",
+      "tokenEnv": "MU_WORKLOAD_TOKEN"
+    }
+  }
+}
+```
+
+Use the MU HTTP site origin, not the Convex client/API origin. The server owner issues
+a read credential in MasterFlow's Workloads page, optionally scoped to specific slugs
+and an expiry. Supply its one-time `mu_workload_v1_…` plaintext through the named
+environment variable, using your shell/secret manager. Never put it in the profile,
+module YAML, arguments or committed files. Worker/agent credentials cannot substitute
+for this standalone capability. Expired or revoked reads fail without falling back.
+
+`--profile` selects explicitly; otherwise `MU_PROFILE`, then `defaultProfile` is used.
+`MU_PROFILES_FILE` overrides the profile file location. Profiles accept only `server`
+and `tokenEnv`; stored plaintext credentials are rejected. Local/HTTPS execution
+continues to work without a profile or MU token. Downloading a registry module does
+not create a Request, register a unit, send heartbeats or authorize server reporting,
+Artifact actions or server notifications during standalone execution.
+
+### Source grammar
+
+- `mu://name[@version]` is explicitly a registry reference.
+- HTTPS, explicit local path prefixes (`./`, `../`, absolute paths), paths containing
+  separators, and filenames ending in `.yaml`, `.yml` or `.json` use existing source
+  loading. `module.yaml` remains local even if missing.
+- Other bare identifiers are registry names. Use `./name` for an extensionless local
+  file that would otherwise be interpreted as a registry name.
+- There is no existence-based guessing, source fallback or cross-profile fallback.
+  Missing local files stay local failures; missing registry names stay registry failures.
+
+The profile selects one registry origin; `mu://` does not accept an arbitrary server
+host/path. Credential-bearing requests reject redirects, enforce timeouts and bounded
+JSON responses, and never forward credentials to module source URLs. Registry module
+YAML is limited to 256 KiB; the existing total module bounds still apply.
+
+### Pipeline references and recovery
+
+```yaml
+workloads:
+  upscale: real-esrgan@1.2.0
+  default_upscale: real-esrgan
+  explicit:
+    registry: real-esrgan
+    version: "1.2.0"
+```
+
+Each workload chooses inline, local/HTTPS source, or registry form; forms cannot be
+mixed. Alias names used by `ensure_workload`/`execute_workload` remain unchanged.
+Server saves pin references atomically with exact Spec YAML. Unchanged references
+keep their pins until explicit dependency refresh. Requests capture their matching
+pins and change only through permitted explicit Spec sync.
+
+Worker preflight loads the current saved lock with its authorized Spec token. After
+claim it uses the assigned Request's captured lock, even if the current Spec/default
+has moved. Missing, substituted or stale locks fail before module setup; workers
+never independently resolve a bare name against a new default. Registry capability
+is advertised separately from CEL support.
+
+Checkpoints keep the exact bytes/hash plus registry origin and version provenance.
+Resume verifies them against the captured lock without downloading a module or
+looking up a current default. Server assignment verification still applies. No
+persistent registry cache or standalone resume is introduced. Existing non-registry
+Specs and compatible checkpoints remain supported.
+
+Module versioning alone does not pin external Git/package/model dependencies. See
+[MasterFlow's registry contract](https://github.com/khanhtranrk/mu-masterflow/blob/master/docs/reference/workload-registry.md)
+for publication, archival and authorization semantics.

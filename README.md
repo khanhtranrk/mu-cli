@@ -41,6 +41,9 @@ mu workload exec ./examples/workload-exec/echo.yaml --with message=hello --json
 
 See [standalone workload execution](docs/guides/cli.md#standalone-workload-execution)
 for module format, typed bindings, preparation, paths and exit codes.
+Named/versioned MU modules are also supported with
+`mu workload exec name@1.2.0 --profile personal`; see
+[registry profiles](docs/guides/cli.md#mu-registry-workloads).
 There is no public local `mu run <spec>` mode for complete pipelines. `worker once` processes a claimed batch; `worker start` continues polling. `--fake` simulates execution but still claims real server Requests.
 
 ## Architecture

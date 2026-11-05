@@ -1,3 +1,6 @@
+import { RegistryClient } from "../../src/runtime/registry-client";
+import { executeStandaloneWorkload } from "../../src/runtime/workload-executor";
+import type { ExecutionSnapshot } from "../../src/engine/checkpoint";
 import { expect, test } from "bun:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference, type GenericSchema, type SchemaDefinition } from "convex/server";
@@ -69,9 +72,9 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
     await ctx.db.insert("storageSettings", { ownerId: "user_owner", defaultConnectionId: "local" });
     await ctx.db.insert("storageConnections", { connectionId: "local", name: "Test storage", provider: "r2", endpoint: storage.url.origin, region: "auto", bucket: "private", prefix: "mu", encryptedCredentials: s3Module.encrypt({ accessKeyId: "test-key", secretAccessKey: "test-secret" }, "local"), enabled: true, createdAt: 1 });
     const tokenId = await ctx.db.insert("unitTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", specSlugs: ["demo"], createdAt: 1 });
-    await ctx.db.insert("specs", { slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
+    const specId = await ctx.db.insert("specs", { slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
     const requestId = await ctx.db.insert("requests", { specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, specYaml: spec, status: "waiting" });
-    return { tokenId, requestId };
+    return { tokenId, requestId, specId };
   });
   const apiCalls: { path: string; method: string; body?: Record<string, unknown> }[] = [];
   let lostResponse = false;
@@ -82,6 +85,13 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
     if (options.loseCompletionResponse && !lostResponse && url.pathname.endsWith("/complete") && response.ok) {
       lostResponse = true; await response.body?.cancel();
       return Response.json({ error: "Simulated proxy failure after completion committed" }, { status: 503 });
+    }
+    // convex-test hardcodes https://some.convex.site as the HttpAction origin.
+    // Adapt that synthetic origin to the externally visible local test proxy.
+    if (url.pathname.startsWith("/api/workloads/") && response.ok) {
+      const payload = await response.json() as Record<string, unknown>;
+      expect(payload.registry).toBe("https://some.convex.site");
+      return Response.json({...payload, registry: url.origin});
     }
     return response;
   } });
@@ -223,4 +233,71 @@ integration("native notification delivers expression strings through real authen
     expect((await setup.call("/api/notifications/send", {title: "invalid client", message: "m", tags: 123})).status).toBe(400);
     await expect(actions.run({type: "send_notification", title: "t", message: "m"}, {...context, session: {...context.session, token: "invalid"}}, {}, new AbortController().signal)).rejects.toThrow("HTTP 401");
   } finally { await setup.close(); }
+});
+
+
+integration("registry publish/default/Spec lock/Request claim and standalone execution share immutable bytes", async () => {
+  const setup = await fixture();
+  try {
+    const owner = setup.backend.withIdentity({issuer: "https://test.clerk.accounts.dev", subject: "user_owner"});
+    const module = (text: string) => JSON.stringify({workload: {target: "bun", units: 0, argv: ["-e", `console.log('${text}')`], outputs: {text: {type: "string", value: "${{ result.stdout }}"}}}});
+    const workloadId = await owner.mutation(makeFunctionReference<"mutation">("workloads:create"), {slug: "example", name: "Example", description: "", yaml: module("one")});
+    const first = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "1.0.0", expectedRevision: 1, changelog: "", makeDefault: true});
+    const spec = JSON.stringify({
+      workloads: {w: "example"},
+      pipeline: {demo: {
+        nodes: [{name: "n", run: [{type: "execute_workload", workload: "w", save_to: "result"}], outputs: {text: {type: "string", value: "${{ node.actions.result.outputs.text }}"}}}],
+        outputs: {text: {type: "string", value: "${{ pipeline.nodes.n.outputs.text }}"}},
+      }},
+    });
+    await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
+    const specId = setup.ids.specId;
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Registry", description: "", yaml: spec});
+    const requestId = await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
+    await owner.mutation(makeFunctionReference<"mutation">("workloads:saveDraft"), {id: workloadId, expectedRevision: 1, yaml: module("two")});
+    const second = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "2.0.0", expectedRevision: 2, changelog: "", makeDefault: true});
+    const saved = await owner.query(makeFunctionReference<"query">("specs:get"), {slug: "demo"});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:refreshWorkloads"), {id: specId, expectedYaml: spec, expectedLock: JSON.stringify(saved.workloadLock)});
+    expect(await setup.run()).toBe(0);
+    const request = await setup.backend.run(ctx => ctx.db.get(requestId));
+    expect(request.workloadLock.pins[0].versionId).toBe(first);
+    expect(request.resolvedOutputs.text).toBe("one\n");
+    const issued = await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"), {name: "CLI", slugs: ["example"]});
+    const registry = new RegistryClient(setup.config.server, issued.token);
+    const outputs = await executeStandaloneWorkload({source: "example", cwd: setup.config.workspace, bindings: {}, devices: [], registry: {origin: registry.origin, read: registry.read.bind(registry)}}, new BunEffects(), async () => {throw new Error("no local/URL fallback");}, new AbortController().signal);
+    expect(outputs).toEqual({text: "two\n"});
+    const profile = join(setup.config.workspace, "profiles.json");
+    await Bun.write(profile, JSON.stringify({defaultProfile: "test", profiles: {test: {server: setup.config.server, tokenEnv: "MU_REGISTRY_TEST_TOKEN"}}}));
+    const claims = setup.apiCalls.filter(call => call.path.endsWith("claim")).length;
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "workload", "exec", "example@1.0.0", "--profile", "test", "--json"], {cwd: setup.config.workspace, env: {PATH: process.env.PATH, HOME: setup.config.workspace, MU_PROFILES_FILE: profile, MU_REGISTRY_TEST_TOKEN: issued.token}, stdout: "pipe", stderr: "pipe"});
+    const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(code).toBe(0); expect(JSON.parse(stdout)).toEqual({success: true, outputs: {text: "one\n"}}); expect(stderr).not.toContain(issued.token);
+    expect(setup.apiCalls.filter(call => call.path.endsWith("claim"))).toHaveLength(claims);
+    expect(second).not.toBe(first);
+  } finally {await setup.close();}
+});
+
+integration("registry recovery validates pinned provenance and never reloads module bytes or current defaults", async () => {
+  const setup = await fixture();
+  try {
+    const owner = setup.backend.withIdentity({issuer: "https://test.clerk.accounts.dev", subject: "user_owner"});
+    const module = JSON.stringify({workload: {target: "bun", units: 0, argv: ["-e", "console.log('pinned')"]}});
+    const workloadId = await owner.mutation(makeFunctionReference<"mutation">("workloads:create"), {slug: "recovery", name: "Recovery", description: "", yaml: module});
+    await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "1.0.0", expectedRevision: 1, changelog: "", makeDefault: true});
+    const spec = JSON.stringify({workloads: {w: "recovery"}, pipeline: {demo: {nodes: [{name: "n", run: [{type: "execute_workload", workload: "w"}]}]}}});
+    await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
+    const specId = setup.ids.specId;
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Recovery", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
+    await setup.api.heartbeat("online"); const request = (await setup.api.claim("demo", 1))[0]!;
+    const controller = new AbortController(); let interrupted = false, snapshot: ExecutionSnapshot | undefined;
+    class Effects extends BunEffects {override async process() {if (!interrupted) {interrupted = true; controller.abort(new Error("interrupted")); throw new Error("interrupted");} return {returncode: 0, stdout: "pinned\n", stderr: ""};}}
+    const effects = new Effects();
+    await expect(new SpecExecutor(setup.config, effects).execute(spec, request, controller.signal, {save: async value => {snapshot = value;}})).rejects.toThrow();
+    expect(snapshot!.workloadModules![0]!.registry!.version).toBe("1.0.0");
+    const offline = new RegistryClient(setup.config.server, setup.config.token, (async () => {throw new Error("module network is offline");}) as unknown as typeof fetch);
+    await new SpecExecutor(setup.config, effects, undefined, offline).execute(spec, request, new AbortController().signal, {snapshot, retryIncomplete: true, save: async () => {}});
+    const bad = structuredClone(snapshot!); bad.workloadModules![0]!.registry!.registry = "https://other.example";
+    await expect(new SpecExecutor(setup.config, effects, undefined, offline).execute(spec, request, new AbortController().signal, {snapshot: bad, retryIncomplete: true, save: async () => {}})).rejects.toThrow("provenance mismatch");
+  } finally {await setup.close();}
 });

@@ -1,0 +1,86 @@
+[
+  {
+    "name": "bare name",
+    "value": "example",
+    "valid": true
+  },
+  {
+    "name": "exact version",
+    "value": "example@1.2.0",
+    "valid": true
+  },
+  {
+    "name": "explicit URI",
+    "value": "mu://example@1.2.0",
+    "valid": true
+  },
+  {
+    "name": "object",
+    "value": {
+      "registry": "example",
+      "version": "1.2.0"
+    },
+    "valid": true
+  },
+  {
+    "name": "object default",
+    "value": {
+      "registry": "example"
+    },
+    "valid": true
+  },
+  {
+    "name": "range",
+    "value": "example@^1.0.0",
+    "valid": false
+  },
+  {
+    "name": "tag",
+    "value": "example@latest",
+    "valid": false
+  },
+  {
+    "name": "leading zero",
+    "value": "example@01.0.0",
+    "valid": false
+  },
+  {
+    "name": "empty",
+    "value": "",
+    "valid": false
+  },
+  {
+    "name": "bad name",
+    "value": "bad name",
+    "valid": false
+  },
+  {
+    "name": "source mixture",
+    "value": {
+      "registry": "example",
+      "source": "./x"
+    },
+    "valid": false
+  },
+  {
+    "name": "inline mixture",
+    "value": {
+      "registry": "example",
+      "target": "bun"
+    },
+    "valid": false
+  },
+  {
+    "name": "null version",
+    "value": {
+      "registry": "example",
+      "version": null
+    },
+    "valid": false
+  },
+  {
+    "name": "foreign origin",
+    "value": "mu://server/example",
+    "valid": false
+  }
+]

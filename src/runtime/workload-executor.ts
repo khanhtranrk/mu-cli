@@ -1,3 +1,5 @@
+import { registryReference, workloadSourceKind } from "../spec/registry-reference";
+import type { RegistryResolution } from "../spec/workload-modules";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Actions, workloadInputs } from "../engine/actions";
@@ -14,14 +16,18 @@ export interface StandaloneOptions {
   cwd: string;
   bindings: Context;
   devices: Device[];
+  registry?: RegistryResolution;
 }
 
 /** Small local orchestrator; Actions owns preparation and subprocess semantics. */
 export async function executeStandaloneWorkload(options: StandaloneOptions, effects: Effects, load: ModuleLoader, signal: AbortSignal): Promise<Context> {
   signal.throwIfAborted();
   const bindings = mapping(jsonValue(options.bindings), "workload bindings");
-  const declaration = { source: options.source, ...(options.sha256 === undefined ? {} : { sha256: options.sha256 }) };
-  const { spec } = await resolveWorkloadModules(JSON.stringify({ workloads: { standalone: declaration }, pipeline: {} }), load, signal);
+  const ref = workloadSourceKind(options.source) === "registry" ? registryReference(options.source) : null;
+  const declaration = ref ? {registry: ref.slug, ...(ref.version ? {version: ref.version} : {})} : { source: options.source, ...(options.sha256 === undefined ? {} : { sha256: options.sha256 }) };
+  if (ref && options.sha256 !== undefined && !/^[a-f0-9]{64}$/i.test(options.sha256)) throw new Error("Invalid registry SHA-256");
+  const registry = options.registry ? {...options.registry, read: async (...args: Parameters<RegistryResolution["read"]>) => {const result = await options.registry!.read(...args); if (options.sha256 !== undefined && result.sha256 !== options.sha256.toLowerCase()) throw new Error("Registry workload SHA-256 mismatch"); return result;}} : undefined;
+  const { spec } = await resolveWorkloadModules(JSON.stringify({ workloads: { standalone: declaration }, pipeline: {} }), load, signal, undefined, registry);
   const workload = spec.workloads!.standalone!;
   if (!await effects.exists(options.cwd, "folder")) throw new Error("--cwd must name an existing directory");
   const cache = join(homedir(), ".cache");

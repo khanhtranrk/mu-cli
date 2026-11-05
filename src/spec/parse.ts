@@ -1,3 +1,4 @@
+import { registryReference } from "./registry-reference";
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
 import { validateWorkloadSource } from "./workload-source";
 import { validateFields } from "./fields";
@@ -153,6 +154,7 @@ export function parseSpec(source: string, options: { allowExternal?: boolean } =
 
   for (const [name, raw] of Object.entries(workloads)) {
     literalName(name, "workload name");
+    if (registryReference(raw)) { if (!options.allowExternal) throw new Error(`workloads.${name}: registry workload requires resolution`); continue; }
     const item = mapping(raw, "workload " + name);
     if (has(item, "source")) {
       validateWorkloadSource(item, `workloads.${name}`);

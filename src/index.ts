@@ -8,8 +8,6 @@ import { loadConfig } from "./config";
 import { FakeExecutor } from "./runtime/fake";
 import { BunEffects } from "./runtime/effects";
 import { SpecExecutor } from "./runtime/spec-executor";
-import { resolveWorkloadModules } from "./spec/workload-modules";
-import { workloadLoader } from "./runtime/workload-loader";
 import { resolveRunDirectory } from "./run-directory";
 import { Worker } from "./worker";
 import { detectDevices } from "./runtime/devices";
@@ -62,7 +60,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
   route(config.command("init").description("Write example YAML"), initConfig);
   route(config.command("show").description("Print resolved configuration"), flags => runWorker("show", flags));
   program.command("version").description("Print CLI version and capabilities").action(() => {
-    console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration; workload modules; standalone workload exec)");
+    console.log("mu-cli 0.4.0-phase4 (cel-v1; CPU/GPU scheduler; S3 artifact integration; workload modules; standalone workload exec; registry workloads)");
   });
   program.action(() => program.outputHelp());
   try { await program.parseAsync(args, { from: "user" }); }
@@ -105,7 +103,7 @@ async function runWorker(command: "once" | "start" | "doctor" | "info" | "show",
       const runDirectories: Record<string, ReturnType<typeof resolveRunDirectory>> = {};
       for (const slug of config.specs) {
         const source = await api.spec(slug);
-        await resolveWorkloadModules(source, workloadLoader(config.workloadBaseDir), AbortSignal.timeout(30_000));
+        await new SpecExecutor(config, new BunEffects()).validate(source, slug, AbortSignal.timeout(30_000));
         runDirectories[slug] = resolveRunDirectory(config, slug, source);
       }
       console.log(JSON.stringify({ ok: true, bun: Bun.version, auth: "spec access verified", runtime: "spec-scheduler", devices: config.devices, concurrency: config.concurrency, runDirectoryScope: config.runDirectoryScope, runDirectoryName: config.runDirectoryName, runDirectories, claims: 0 }));

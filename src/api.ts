@@ -2,6 +2,7 @@ import { object, type WorkerConfig } from "./config";
 import { parseArtifacts, type ArtifactMetadata } from "./artifacts";
 
 export interface ClaimedRequest {
+  workloadLock?: import("./spec/registry-reference").RegistryLock;
   requestId: string;
   assignmentVersion: number;
   specSlug: string;
@@ -37,6 +38,7 @@ export class DataCenterClient {
           Authorization: `Bearer ${this.config.token}`,
           "Content-Type": "application/json",
           "X-Mu-Expression-Engines": "cel-v1",
+          "X-Mu-Workload-Registry": "1",
           ...(assignment === undefined ? {} : { "X-Mu-Assignment-Version": String(assignment) }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
