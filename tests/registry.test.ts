@@ -79,3 +79,8 @@ test("worker execution refuses a registry Request missing its captured lock befo
   await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipeline: {p: {nodes: []}}}), {requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
   expect(reads).toBe(0);
 });
+
+test("published module on-key routines use the same YAML 1.1 compatibility as the worker", async () => {
+  const yaml = 'routines:\n  on:\n    actions: []\nprepare:\n  - type: execute_routine\n    routine: "on"\nworkload: {target: bun, units: 0}\n';
+  await expect(resolveWorkloadModules(JSON.stringify({workloads: {w: {source: "./module"}}}), async () => Buffer.from(yaml), signal())).resolves.toHaveProperty("spec.workloads.w.target", "bun");
+});
