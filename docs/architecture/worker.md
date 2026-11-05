@@ -65,3 +65,14 @@ a failure exits the worker unsuccessfully without rewriting completed Request re
 Fake execution can acknowledge an empty captured output contract, but cannot
 synthesize declared typed Outputs. Such a simulation fails explicitly rather
 than publishing a false successful result. It still claims real Requests.
+
+## Filesystem placement
+
+Default execution retains `.mu/runs/<version-hash>/`. The optional `spec` run
+directory scope reuses a stable server/unit/Spec directory across YAML edits, or
+a chosen shared name with `--run-directory-name`. This only selects filesystem
+paths: Flow preparation stays keyed by exact Spec source, and assignment/checkpoint
+identity remains separate. Scope/name/path are persisted for recovery and a changed
+selection cannot silently redirect a node-boundary resume. No MasterFlow API change
+is required. See [run directory configuration](../guides/cli.md#run-directory-scope-and-shared-names)
+for defaults, naming, intentional sharing and stale-output/concurrency limits.

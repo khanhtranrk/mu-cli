@@ -131,3 +131,39 @@ test("fake once claims and reports without executing Spec actions, retaining bat
     expect(await Bun.file(join(cwd, ".mu/worker.lock")).exists()).toBe(false);
   } finally { server.stop(true); }
 });
+
+
+test("run directory flags appear in help and resolved config; invalid settings fail before network", async () => {
+  const cwd = await fixture();
+  for (const command of [["worker", "once"], ["worker", "start"], ["worker", "doctor"], ["worker", "info"], ["config", "show"]]) {
+    const help = await cli([...command, "--help"], cwd);
+    expect(help.out).toContain("--run-directory-scope"); expect(help.out).toContain("--run-directory-name");
+  }
+  const configPath = join(cwd, "scope.json");
+  await Bun.write(configPath, JSON.stringify({runtime: {runDirectoryScope: "spec", runDirectoryName: "file-name"}}));
+  const configured = await cli(["config", "show", ...auth, "--config", configPath, "--run-directory-name", "cli-name"], cwd);
+  expect(configured.code).toBe(0); expect(JSON.parse(configured.out)).toMatchObject({runDirectoryScope: "spec", runDirectoryName: "cli-name", token: "[REDACTED]"});
+  const omitted = await cli(["worker", "info", ...auth], cwd);
+  expect(JSON.parse(omitted.out).runDirectoryScope).toBe("spec-version");
+  let calls = 0;
+  const server = Bun.serve({port: 0, hostname: "127.0.0.1", fetch(request) {
+    calls++;
+    if (new URL(request.url).pathname.startsWith("/api/specs/")) return new Response("pipeline: {p: {nodes: []}}");
+    return Response.json({ok: true});
+  }});
+  try {
+    for (const extra of [["--run-directory-scope", "bad"], ["--run-directory-name", "music"], ["--run-directory-scope", "spec", "--run-directory-name", "../escape"]]) {
+      const result = await cli(["worker", "once", ...auth, "--server", server.url.origin, ...extra], cwd);
+      expect(result.code).toBe(2); expect(result.err).not.toContain("private");
+    }
+    expect(calls).toBe(0); expect(await Bun.file(join(cwd, ".mu/worker.lock")).exists()).toBe(false);
+    const doctor = await cli(["worker", "doctor", ...auth, "--server", server.url.origin, "--spec", "test", "--run-directory-scope", "spec", "--run-directory-name", "music"], cwd);
+    expect(doctor.code).toBe(0);
+    const diagnostics = JSON.parse(doctor.out);
+    expect(diagnostics).toMatchObject({claims: 0, runDirectoryScope: "spec", runDirectoryName: "music"});
+    expect(diagnostics.runDirectories.test).toMatchObject({scope: "spec", name: "music"});
+    expect(diagnostics.runDirectories.test.path).toEndWith("/music");
+    expect(calls).toBe(2); // health and Spec lookup only, no claim/heartbeat
+    expect(await Bun.file(join(diagnostics.runDirectories.test.path, "output")).exists()).toBe(false);
+  } finally { server.stop(true); }
+});
