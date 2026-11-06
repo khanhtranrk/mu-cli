@@ -2,7 +2,7 @@ import { RegistryClient } from "./registry-client";
 import type { RegistryLock } from "../spec/registry-reference";
 import { resolveRunDirectory, verifyRunDirectoryContainment } from "../run-directory";
 import {reportingAction} from "../engine/reporting-actions";
-import { homedir } from "node:os";
+import { muCacheDirectory } from "./cache-directory";
 import { join } from "node:path";
 import type { ClaimedRequest } from "../api";
 import type { WorkerConfig } from "../config";
@@ -52,7 +52,7 @@ export class SpecExecutor implements RequestExecutor {
     const flowKey = this.key(source, slug, restored, lock);
     if (this.flows.has(flowKey)) return;
     const { spec, modules } = await this.resolve(source, slug, signal, restored, lock, request);
-    const cwd = resolveRunDirectory(this.config, slug, source).path, cache = join(homedir(), ".cache");
+    const cwd = resolveRunDirectory(this.config, slug, source).path, cache = muCacheDirectory();
     await verifyRunDirectoryContainment(this.config.workspace, cwd);
     await this.effects.mkdir(join(cwd, "cache")); await this.effects.mkdir(join(cwd, "output"));
     const base = {

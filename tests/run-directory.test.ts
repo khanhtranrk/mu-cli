@@ -1,7 +1,8 @@
+import { muCacheDirectory } from "../src/runtime/cache-directory";
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig, type WorkerConfig } from "../src/config";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectoryContainment } from "../src/run-directory";
@@ -98,7 +99,7 @@ test("stable scope reuses old files but initializes/prepares/executes each revis
     for (const version of ["v1", "v2"]) await executor.execute(sources(version), {...request, assignmentVersion: version === "v1" ? 1 : 3}, new AbortController().signal);
     const path = resolveRunDirectory(config, "s", sources("v2")).path;
     expect(await Bun.file(join(path, "output/cached.json")).json()).toEqual({version: "v1"});
-    expect(await Bun.file(join(path, "output/current.json")).json()).toEqual({version: "v2", cache: join(path, "cache"), models: join(homedir(), ".cache")});
+    expect(await Bun.file(join(path, "output/current.json")).json()).toEqual({version: "v2", cache: join(path, "cache"), models: muCacheDirectory()});
     expect(operations).toEqual(["init-v1", "prepare-v1", "init-v2", "prepare-v2"]);
     // Switching scope selects a new directory, leaving old outputs unchanged.
     const versioned = new SpecExecutor({...config, runDirectoryScope: "spec-version"}, effects);

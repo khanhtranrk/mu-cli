@@ -1,3 +1,4 @@
+import { muCacheDirectory } from "../src/runtime/cache-directory";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
@@ -125,7 +126,7 @@ test("cancellation kills the real child and releases installation locks", async 
     }
   }
   await expect(executeStandaloneWorkload({source: "./m", cwd, bindings: {}, devices: []}, new Effects(), async () => bytes(value), controller.signal)).rejects.toThrow("cancelled");
-  await new BunEffects().withWorkloadLock(join((await import("node:os")).homedir(), ".cache"), signal(), async () => {});
+  await new BunEffects().withWorkloadLock(muCacheDirectory(), signal(), async () => {});
 });
 
 
@@ -175,4 +176,17 @@ test("CLI cancellation also terminates device detection probes", async () => {
     expect(code).toBe(130); expect(JSON.parse(out).exitCode).toBe(130);
     expect(() => process.kill(pid, 0)).toThrow();
   } finally {child.kill("SIGKILL"); await child.exited;}
+});
+
+
+test("standalone exposes the MU cache and its standalone child to workloads", async () => {
+  const cwd = await directory(), calls: string[][] = [], discovered: string[] = [];
+  class Effects extends BunEffects {
+    override async process(argv: string[]) { calls.push(argv); return {returncode: 0, stdout: "", stderr: ""}; }
+    override async discoverModels(cache: string) { discovered.push(cache); return {}; }
+  }
+  const value = {workload: {target: "run", units: 0, argv: ["${{ sys.cache_dir }}", "${{ session.cache_dir }}"]}};
+  await executeStandaloneWorkload({source: "./m", cwd, bindings: {}, devices: []}, new Effects(), async () => bytes(value), signal());
+  expect(calls).toEqual([["run", muCacheDirectory(), join(muCacheDirectory(), "standalone")]]);
+  expect(discovered).toEqual([muCacheDirectory(), muCacheDirectory()]);
 });

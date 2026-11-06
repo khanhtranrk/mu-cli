@@ -147,7 +147,7 @@ Changing scope/name selects another location; files are never automatically move
 copied, cleaned or deleted, and there is no fallback search of older directories.
 `session.working_dir` selects the run root; `session.cache_dir` and
 `session.output_dir` remain its `cache` and `output` children. `sys.cache_dir`
-remains the shared `~/.cache`. Spec source validation and preparation caches stay
+uses the per-user MU cache described below. Spec source validation and preparation caches stay
 version-specific even when the directory is shared.
 
 Reusing a directory does not establish that old output is valid for new inputs,
@@ -258,9 +258,13 @@ must tolerate repeated calls and partial installs. There is no standalone resume
   caller cwd. Selecting `--cwd` does not change which module/file is loaded.
 - Binding strings are never guessed to be paths or rewritten; the workload process
   interprets relative path values against its selected cwd.
-- `sys.cache_dir` is `~/.cache`; `sys.models` uses the normal model discovery.
+- `sys.cache_dir` is the per-user MU cache shared with worker execution:
+  Linux `$XDG_CACHE_HOME/mu` (default `~/.cache/mu`), macOS
+  `~/Library/Caches/mu`, Windows `%LOCALAPPDATA%\mu\Cache`
+  (fallback `~/AppData/Local/mu/Cache`). Empty or relative environment overrides
+  are ignored. `sys.models` discovers models under `${sys.cache_dir}/models`.
   `session.working_dir` and `session.output_dir` are the selected cwd.
-  `session.cache_dir` is `~/.cache/mu/standalone`.
+  `session.cache_dir` is `${sys.cache_dir}/standalone`.
 - No authenticated Request, server, token or captured Registry namespaces are
   supplied. Server reporting, Artifact transfers, and server notifications fail
   explicitly when reached, including inside private routines. Explicit generic

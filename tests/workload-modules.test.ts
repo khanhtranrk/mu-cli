@@ -111,7 +111,7 @@ test("installation lock serializes separate adapters, releases on failure, and s
   expect(max).toBe(1);
   await expect(first.withWorkloadLock(dir, signal(), async () => { throw new Error("failed installation"); })).rejects.toThrow("failed installation");
   await first.withWorkloadLock(dir, signal(), async () => {});
-  await mkdir(join(dir, "mu", "workload-install.lock"));
+  await mkdir(join(dir, "workload-install.lock"));
   await expect(first.withWorkloadLock(dir, AbortSignal.timeout(10), async () => {})).rejects.toThrow();
 });
 
