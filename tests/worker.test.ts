@@ -193,3 +193,16 @@ test("CLI subprocess completes worker flow over loopback HTTP and doctor never c
     expect((await readdir(setup.config.workspace)).some(name => name.startsWith(".probe") || name === "worker.lock")).toBe(false);
   } finally { server.stop(true); }
 });
+
+test("pinned assignments execute without loading the mutable/default Spec at startup", async () => {
+  const pinned = {...request, specYaml: source};
+  const setup = await fixture([pinned]);
+  const executed: string[] = [];
+  const executor: RequestExecutor = {
+    async prepare() { throw new Error("Preparation must happen after assignment"); },
+    async execute(yaml) { executed.push(yaml); },
+  };
+  expect(await new Worker(setup.config, setup.api, executor).run("once", new AbortController().signal)).toBe(0);
+  expect(executed).toEqual([source]);
+  expect(setup.calls.some(call => call.path.startsWith("/api/specs/"))).toBe(false);
+});

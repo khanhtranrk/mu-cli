@@ -5,8 +5,8 @@ Current implementation: `src/worker.ts`, `src/runtime/spec-executor.ts` and
 
 ## Intake and execution
 
-The worker loads configuration, discovers or accepts configured devices, bootstraps
-permitted Specs, maintains heartbeats and claims waiting Requests for explicit Spec
+The worker loads configuration, discovers or accepts configured devices, loads
+Request-pinned published Specs after claim, maintains heartbeats and claims waiting Requests for explicit Spec
 slugs. The server binds token/unit identity and supplies assignment generations.
 The local scheduler executes eligible nodes across claimed Requests and Specs.
 
@@ -24,7 +24,9 @@ embedded event shape; error details contain the execution failure. Transfers sti
 Claims include Request ID, pipeline, payload, assignment version, derived output
 metadata and optional frozen Registry values. They do not provide a server lease,
 arbitrary assignment inspection or authoritative node-state download. New claims
-include the exact Spec YAML captured with the Request. Local checkpoints retain exact Spec text and execution state.
+include the exact YAML from the immutable Spec version pinned by the Request.
+Startup does not fetch/validate the current default Spec before claiming; a draft
+or default change cannot block older pinned assignments. Local checkpoints retain exact Spec text and execution state.
 
 An execution session is Request-local; it is distinct from a Creation Space Session.
 Runtime `success` is mapped by the worker to API `succeeded`; failure reporting

@@ -72,9 +72,11 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
     await ctx.db.insert("storageSettings", { ownerId: "user_owner", defaultConnectionId: "local" });
     await ctx.db.insert("storageConnections", { connectionId: "local", name: "Test storage", provider: "r2", endpoint: storage.url.origin, region: "auto", bucket: "private", prefix: "mu", encryptedCredentials: s3Module.encrypt({ accessKeyId: "test-key", secretAccessKey: "test-secret" }, "local"), enabled: true, createdAt: 1 });
     const tokenId = await ctx.db.insert("unitTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", specSlugs: ["demo"], createdAt: 1 });
-    const specId = await ctx.db.insert("specs", { slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
-    const requestId = await ctx.db.insert("requests", { specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, specYaml: spec, status: "waiting" });
-    return { tokenId, requestId, specId };
+    const specId = await ctx.db.insert("specs", { draftRevision: 0, slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
+    const specVersionId = await ctx.db.insert("specVersions", {specId, version: "1.0.0", yaml: spec, yamlSha256: createHash("sha256").update(spec).digest("hex"), executionSha256: "fixture", changelog: "fixture", publishedBy: "test", publishedAt: 1});
+    await ctx.db.patch(specId, {defaultVersionId: specVersionId});
+    const requestId = await ctx.db.insert("requests", { specVersionId, specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, status: "waiting" });
+    return { tokenId, requestId, specId, specVersionId };
   });
   const apiCalls: { path: string; method: string; body?: Record<string, unknown> }[] = [];
   let lostResponse = false;
@@ -112,6 +114,7 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
 integration("real MasterFlow HTTP handlers: claim, CPU generation, signed upload, completion, verified download and reports", async () => {
   const setup = await fixture();
   try {
+    await setup.backend.run(async ctx => {const version = await ctx.db.get(setup.ids.specVersionId); await ctx.db.patch(version.specId, {yaml: "invalid: ["});});
     expect(await setup.run()).toBe(0);
     const state = await setup.backend.run(async ctx => ({ request: await ctx.db.get(setup.ids.requestId), artifacts: await ctx.db.query("artifacts").collect(), files: await ctx.db.query("physicalFiles").collect(), uploads: await ctx.db.query("storageUploads").collect() }));
     expect(state.request?.status).toBe("succeeded");
@@ -182,7 +185,7 @@ integration("real worker authorization rejects foreign/stale/revoked assignments
     expect((await setup.call("/api/requests?specSlug=demo")).status).toBe(403);
     expect((await setup.call("/api/requests/report", report, { "X-Mu-Assignment-Version": "0" })).status).toBe(400);
     expect((await setup.call("/api/requests/artifacts/upload-url", { requestId: request!.requestId, artifactId: "result", size: 1, sha256: "a".repeat(64) }, { "X-Mu-Assignment-Version": "0" })).status).toBe(400);
-    const foreign = await setup.backend.run(ctx => ctx.db.insert("requests", { specSlug: "demo", pipelineName: "demo", payload: {}, status: "waiting" }));
+    const foreign = await setup.backend.run(ctx => ctx.db.insert("requests", { specVersionId: setup.ids.specVersionId, specSlug: "demo", pipelineName: "demo", payload: {}, status: "waiting" }));
     expect((await setup.call("/api/requests/report", { id: foreign, status: "succeeded" })).status).toBe(400);
     await setup.backend.run(ctx => ctx.db.patch(setup.ids.tokenId, { deletedAt: Date.now() }));
     expect((await setup.call("/api/requests/report", report)).status).toBe(401);
@@ -252,7 +255,8 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     });
     await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
     const specId = setup.ids.specId;
-    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Registry", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Registry", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Registry", makeDefault: true});
     const requestId = await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
     await owner.mutation(makeFunctionReference<"mutation">("workloads:saveDraft"), {id: workloadId, expectedRevision: 1, yaml: module("two")});
     const second = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "2.0.0", expectedRevision: 2, changelog: "", makeDefault: true});
@@ -260,7 +264,7 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     await owner.mutation(makeFunctionReference<"mutation">("specs:refreshWorkloads"), {id: specId, expectedYaml: spec, expectedLock: JSON.stringify(saved.workloadLock)});
     expect(await setup.run()).toBe(0);
     const request = await setup.backend.run(ctx => ctx.db.get(requestId));
-    expect(request.workloadLock.pins[0].versionId).toBe(first);
+    expect((await setup.backend.run(ctx => ctx.db.get(request.specVersionId))).workloadLock.pins[0].versionId).toBe(first);
     expect(request.resolvedOutputs.text).toBe("one\n");
     const issued = await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"), {name: "CLI", slugs: ["example"]});
     const registry = new RegistryClient(setup.config.server, issued.token);
@@ -287,7 +291,8 @@ integration("registry recovery validates pinned provenance and never reloads mod
     const spec = JSON.stringify({workloads: {w: "recovery"}, pipeline: {demo: {nodes: [{name: "n", run: [{type: "execute_workload", workload: "w"}]}]}}});
     await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
     const specId = setup.ids.specId;
-    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Recovery", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Recovery", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Recovery", makeDefault: true});
     await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
     await setup.api.heartbeat("online"); const request = (await setup.api.claim("demo", 1))[0]!;
     const controller = new AbortController(); let interrupted = false, snapshot: ExecutionSnapshot | undefined;

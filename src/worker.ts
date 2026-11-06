@@ -141,13 +141,6 @@ export class Worker {
       const recovery = await this.recover(signal);
       failed ||= recovery.failed;
       if (mode === "once" && this.config.resume) { completed = true; return signal.aborted ? 130 : failed ? 6 : 0; }
-      if (this.executor.prepare) for (const slug of this.config.specs) {
-        signal.throwIfAborted();
-        const source = await this.api.spec(slug);
-        this.sources.set(slug, source);
-        if (this.executor.validate) await this.executor.validate(source, slug, signal);
-        else parseSpec(source); // Reject invalid Specs before claiming; prepare only after assignment.
-      }
       do {
         const batch: ClaimedRequest[] = [];
         for (const spec of this.config.specs) {
