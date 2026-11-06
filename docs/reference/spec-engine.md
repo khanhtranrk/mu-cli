@@ -232,7 +232,7 @@ pipeline:
 ```
 
 The referenced module is a mapping with exactly one `workload`, optional
-`routines`, and optional `prepare`:
+`routines`, optional `prepare`, and optional `installation.resources`:
 
 ```yaml
 routines:
@@ -288,15 +288,20 @@ Resolution is cached only in the executor for the current Flow/source; no URL-on
 disk cache or offline fallback is used on a fresh run. Restart to refresh unpinned
 sources. Resume instead uses pinned bytes and works without the module source.
 
-The Bun adapter serializes installation across processes using
-`${sys.cache_dir}/workload-install.lock`, shared across module aliases/versions
-because arbitrary scripts can modify the same environment. Waits cancel with the
-execution signal and fail after 30 seconds if busy. Failures release the lock;
-a crashed owner may leave a stale lock. Inspect `owner.json` and ensure no installer
-is running before manually removing it. Locks are never automatically stolen.
-Injected effects must provide `withWorkloadLock` to prepare external modules.
+The Bun adapter coordinates installation across processes with supervisor-owned
+OS locks. Unannotated modules take a cache-wide exclusive lock; resource-scoped
+modules/groups share a cache gate and take exclusive resource locks. Waiting has
+no default deadline and is cancellable; `MU_WORKLOAD_LOCK_WAIT_MS` optionally
+bounds acquisition. The supervisor stops and joins installer process groups on
+worker disconnect before releasing locks. Injected effects must provide
+`withWorkloadLock` for external preparation. See [preparation](workload-preparation.md)
+for parallel/group syntax, supported platforms and safe directory-lock upgrades.
 
 MasterFlow performs structural validation only and shows external metadata as
 unresolved; it never fetches modules or executes preparation. Use a worker with
 external-module support; CEL capability negotiation alone does not certify this
 feature. See [MasterFlow companion](https://github.com/khanhtranrk/mu-masterflow/issues/30).
+
+## Workload preparation locks and parallel groups
+
+See [workload preparation](workload-preparation.md) for `parallel`, `installation_group`, module resource keys, cancellable waiting and platform/upgrade requirements. These actions currently apply only to workload-module preparation.

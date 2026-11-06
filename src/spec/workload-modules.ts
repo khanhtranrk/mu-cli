@@ -1,3 +1,4 @@
+import { validatePreparation } from "./preparation";
 import { registryReference, referenceKey, workloadVersion, type RegistryLock, type RegistryModule, type RegistryReference, type RegistryPin } from "./registry-reference";
 import { createHash } from "node:crypto";
 import { parseSpec, parseYamlMapping } from "./parse";
@@ -6,7 +7,7 @@ import { validateWorkloadSource } from "./workload-source";
 
 export const moduleByteLimit = 1024 * 1024;
 export interface ModuleSnapshot { name: string; source: string; sha256: string; bytes: string; registry?: Omit<RegistryModule, "yaml"> }
-export interface ResolvedModule { spec: Spec; prepare: Action[]; sha256: string }
+export interface ResolvedModule { spec: Spec; prepare: Action[]; sha256: string; resources?: string[]; grouped: boolean }
 // Runtime metadata cannot be supplied through YAML or collide with user declarations.
 export const workloadModules = new WeakMap<Spec, Map<string, ResolvedModule>>();
 export type ModuleLoader = (source: string, signal: AbortSignal) => Promise<Uint8Array>;
@@ -59,13 +60,14 @@ export async function resolveWorkloadModules(source: string, load: ModuleLoader,
     if (saved && (hash !== saved.sha256 || Buffer.from(bytes).toString("base64") !== saved.bytes)) throw new Error(`Pinned workload ${name}: SHA-256/content mismatch`);
     if (declaration.sha256 !== undefined && hash !== (declaration.sha256 as string).toLowerCase()) throw new Error(`Workload ${name}: SHA-256 mismatch`);
     const module = parseYamlMapping(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    if (Object.keys(module).some(key => !["routines", "prepare", "workload"].includes(key))) throw new Error(`Workload module ${name}: only routines, prepare and workload are allowed; nested imports are unsupported`);
+    if (Object.keys(module).some(key => !["routines", "prepare", "workload", "installation"].includes(key))) throw new Error(`Workload module ${name}: only routines, prepare, installation and workload are allowed; nested imports are unsupported`);
     const workload = mapping(module.workload, `module ${name}.workload`);
     if (Object.hasOwn(workload, "source")) throw new Error(`Workload module ${name}: nested imports are unsupported`);
-    const scoped = parseSpec(JSON.stringify({ routines: module.routines === undefined ? {} : module.routines, workloads: { module: workload }, pipeline: { module: { prepare: module.prepare === undefined ? [] : module.prepare } } }));
+    const scoped = parseSpec(JSON.stringify({ routines: module.routines === undefined ? {} : module.routines, workloads: { module: workload }, pipeline: { module: { prepare: module.prepare === undefined ? [] : module.prepare } } }), { modulePreparation: true });
     // Modules cannot recursively ensure other workloads, even in preparation.
     if (scoped.pipeline.module!.prepare?.some(action => action.type === "ensure_workload")) throw new Error(`Workload module ${name}: nested ensure_workload is unsupported`);
-    scopes.set(name, { spec: scoped, prepare: scoped.pipeline.module!.prepare ?? [], sha256: hash });
+    const installation = validatePreparation(scoped, true, module.installation);
+    scopes.set(name, { spec: scoped, prepare: scoped.pipeline.module!.prepare ?? [], sha256: hash, ...installation });
     Object.defineProperty(declarations, name, { value: scoped.workloads!.module, enumerable: true, configurable: true, writable: true });
     modules.push({ name, source: location, sha256: hash, bytes: Buffer.from(bytes).toString("base64"), ...(provenance ? {registry: provenance} : {}) });
   }

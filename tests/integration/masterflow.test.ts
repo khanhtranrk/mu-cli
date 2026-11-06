@@ -306,3 +306,35 @@ integration("registry recovery validates pinned provenance and never reloads mod
     await expect(new SpecExecutor(setup.config, effects, undefined, offline).execute(spec, request, new AbortController().signal, {snapshot: bad, retryIncomplete: true, save: async () => {}})).rejects.toThrow("provenance mismatch");
   } finally {await setup.close();}
 });
+
+integration("registry parallel preparation survives publication, worker pins, standalone execution and offline module restore", async () => {
+  const setup = await fixture();
+  try {
+    const owner = setup.backend.withIdentity({issuer:"https://test.clerk.accounts.dev",subject:"user_owner"});
+    const prepare = (name:string) => ({type:"installation_group",resources:[`integration-${name}`],actions:[{type:"execute_command",target:process.execPath,args:["-e",`await Bun.write(${JSON.stringify(join(setup.config.workspace,name))},'ready')`]}]});
+    const yaml=JSON.stringify({prepare:[{type:"parallel",actions:[prepare("runtime"),prepare("model")]}],workload:{target:process.execPath,units:0,argv:["-e",`for(const f of ${JSON.stringify(['runtime','model'].map(name=>join(setup.config.workspace,name)))})if(!await Bun.file(f).exists())process.exit(9);console.log('prepared')`],outputs:{text:{type:"string",value:"${{ result.stdout }}"}}}});
+    const id=await owner.mutation(makeFunctionReference<"mutation">("workloads:create"),{slug:"parallel-test",name:"Parallel",description:"",yaml});
+    const version=await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"),{id,expectedRevision:1,version:"1.0.0",changelog:"",makeDefault:true});
+    const spec=JSON.stringify({workloads:{w:"parallel-test@1.0.0"},pipeline:{demo:{prepare:[{type:"ensure_workload",workload:"w"}],nodes:[{name:"n",run:[{type:"execute_workload",workload:"w",save_to:"result"}],outputs:{text:{type:"string",value:"${{ node.actions.result.outputs.text }}"}}}],outputs:{text:{type:"string",value:"${{ pipeline.nodes.n.outputs.text }}"}}}}});
+    await setup.backend.run(ctx=>ctx.db.delete(setup.ids.requestId));
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"),{id:setup.ids.specId,expectedRevision:0,name:"Parallel",description:"",yaml:spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:publish"),{id:setup.ids.specId,expectedRevision:1,version:"1.1.0",changelog:"",makeDefault:true});
+    const requestId=await owner.mutation(makeFunctionReference<"mutation">("requests:create"),{specSlug:"demo",pipelineName:"demo",inputs:{}});
+    expect(await setup.run()).toBe(0);
+    expect((await setup.backend.run(ctx=>ctx.db.get(requestId))).resolvedOutputs).toEqual({text:"prepared\n"});
+    const issued=await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"),{name:"parallel",slugs:["parallel-test"]});
+    const registry=new RegistryClient(setup.config.server,issued.token);
+    const outputs=await executeStandaloneWorkload({source:"parallel-test@1.0.0",cwd:setup.config.workspace,bindings:{},devices:[],registry:{origin:registry.origin,read:registry.read.bind(registry)}},new BunEffects(),async()=>{throw new Error("no fallback");},new AbortController().signal);
+    expect(outputs).toEqual({text:"prepared\n"});
+    const {resolveWorkloadModules}=await import("../../src/spec/workload-modules");
+    const loaded=await resolveWorkloadModules(spec,async()=>{throw new Error("no local source");},new AbortController().signal,undefined,{origin:registry.origin,read:registry.read.bind(registry)});
+    expect(loaded.modules[0]!.registry!.versionId).toBe(version);
+    const restored=await resolveWorkloadModules(spec,async()=>{throw new Error("offline");},new AbortController().signal,loaded.modules,{origin:registry.origin,read:async()=>{throw new Error("offline");}});
+    await new Actions(restored.spec,new BunEffects()).run({type:"ensure_workload",workload:"w"},{sys:{cache_dir:join(setup.config.workspace,"cache")},session:{working_dir:setup.config.workspace}}, {},new AbortController().signal);
+    expect(restored.modules).toEqual(loaded.modules);
+    // Worker execution uses the published dependency pin.
+    await setup.backend.run(async ctx=>{
+      const request=await ctx.db.get(requestId);expect((await ctx.db.get(request.specVersionId)).workloadLock.pins[0].versionId).toBe(version);
+    });
+  } finally {await setup.close();}
+});

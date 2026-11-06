@@ -13,7 +13,7 @@ export interface HttpOptions {
   expectedSha256?: string;
 }
 export interface Effects {
-  withWorkloadLock?<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>): Promise<T>;
+  withWorkloadLock?<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>, options?: { resources?: string[]; workload?: string }): Promise<T>;
   process(argv: string[], env: Record<string, string>, cwd: string, signal: AbortSignal): Promise<ProcessResult>;
   http(options: HttpOptions, signal: AbortSignal): Promise<Context>;
   path(path: string, cwd: string): string;

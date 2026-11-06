@@ -27,18 +27,23 @@ export function workloadInputs(workload: Workload, context: Context, bindings: u
 }
 
 export class Actions {
-  constructor(private spec: Spec, private effects: Effects, private serverActions = true) {}
+  constructor(private spec: Spec, private effects: Effects, private serverActions = true, private preparationWorkload?: string) {}
 
   async runAll(actions: Action[] = [], context: Context, states: States, signal: AbortSignal): Promise<void> {
     for (const action of actions) await this.run(action, context, states, signal);
   }
 
   async run(action: Action, context: Context, states: States, signal: AbortSignal, literalWorkloadBindings?: Context): Promise<void> {
+    if (action.type === "installation_group") {
+      if (!this.effects.withWorkloadLock) throw new Error("Installation group requires a workload lock adapter");
+      return this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal,
+        () => this.runAll(action.actions, context, states, signal), { resources: action.resources, workload: this.preparationWorkload ?? "installation_group" });
+    }
     applyContext(context, render(action.context ?? {}, context));
     if (action.skip_if && await condition(action.skip_if, context, states, this.effects, signal)) return;
     if (!await condition(action.precondition, context, states, this.effects, signal)) return;
     if (!this.serverActions && ["report_request", "report_node", "upload_artifact", "download_artifact", "send_notification"].includes(action.type)) throw new Error(`${action.type} requires authenticated server/Request context and is unavailable in standalone workload execution`);
-    const values = mapping(render(Object.fromEntries(Object.entries(action).filter(([key]) => !["context", "skip_if", "precondition", "postcondition", "body", "content"].includes(key) && !(action.type === "execute_workload" && literalWorkloadBindings !== undefined && key === "with"))), context));
+    const values = mapping(render(Object.fromEntries(Object.entries(action).filter(([key]) => !["context", "skip_if", "precondition", "postcondition", "body", "content", "actions", "resources"].includes(key) && !(action.type === "execute_workload" && literalWorkloadBindings !== undefined && key === "with"))), context));
     // Local callers already parsed bindings as literal JSON; never rerender them.
     if (action.type === "execute_workload" && literalWorkloadBindings !== undefined) values.with = literalWorkloadBindings;
     const key = values.save_to;
@@ -60,6 +65,22 @@ export class Actions {
     try {
       signal.throwIfAborted();
       switch (action.type) {
+        case "parallel": {
+          const controller = new AbortController();
+          const abort = () => controller.abort(signal.reason);
+          signal.addEventListener("abort", abort, { once: true });
+          if (signal.aborted) abort();
+          let failed = false, failure: unknown;
+          try {
+            await Promise.allSettled(action.actions!.map(async child => {
+              try { await this.run(child, structuredClone(context), { ...states }, controller.signal); }
+              catch (error) { if (!failed) { failed = true; failure = error; controller.abort(error); } }
+            }));
+            if (failed) throw failure;
+            signal.throwIfAborted();
+          } finally { signal.removeEventListener("abort", abort); }
+          break;
+        }
         case "report_request":
         case "report_node":
         case "upload_artifact":
@@ -77,7 +98,9 @@ export class Actions {
             if (!this.effects.withWorkloadLock) throw new Error("External workload preparation requires a workload lock adapter");
             const local = structuredClone(context);
             local.actions = {};
-            await this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal, () => new Actions(module.spec, this.effects, this.serverActions).runAll(module.prepare, local, {}, signal));
+            const prepare = () => new Actions(module.spec, this.effects, this.serverActions, action.workload).runAll(module.prepare, local, {}, signal);
+            if (module.grouped) await prepare();
+            else await this.effects.withWorkloadLock(String(mapping(context.sys).cache_dir), signal, prepare, { resources: module.resources, workload: action.workload });
           }
           break;
         }

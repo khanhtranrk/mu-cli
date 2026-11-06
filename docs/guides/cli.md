@@ -399,3 +399,7 @@ Specs and compatible checkpoints remain supported.
 Module versioning alone does not pin external Git/package/model dependencies. See
 [MasterFlow's registry contract](https://github.com/khanhtranrk/mu-masterflow/blob/master/docs/reference/workload-registry.md)
 for publication, archival and authorization semantics.
+
+### Installation lock waiting
+
+Workload preparation waits for installation locks without a default deadline. Set `MU_WORKLOAD_LOCK_WAIT_MS` to positive integer milliseconds to bound acquisition per lock scope. Installation duration is unaffected; cancellation remains supported. See [preparation and platform/upgrade requirements](../reference/workload-preparation.md).
