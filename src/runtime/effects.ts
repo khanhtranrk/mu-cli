@@ -13,7 +13,7 @@ export class BunEffects implements Effects {
   async withWorkloadLock<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
     // One per-user cache lock serializes arbitrary installation scripts, even across
     // different module versions/aliases that may modify the same environment.
-    const parent = join(cacheDir, "mu"), lock = join(parent, "workload-install.lock");
+    const parent = cacheDir, lock = join(parent, "workload-install.lock");
     await this.mkdir(parent);
     const deadline = Date.now() + 30_000;
     while (true) {

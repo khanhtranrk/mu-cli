@@ -1,6 +1,6 @@
 import { registryReference, workloadSourceKind } from "../spec/registry-reference";
 import type { RegistryResolution } from "../spec/workload-modules";
-import { homedir } from "node:os";
+import { muCacheDirectory } from "./cache-directory";
 import { join } from "node:path";
 import { Actions, workloadInputs } from "../engine/actions";
 import type { Effects } from "../engine/ports";
@@ -30,10 +30,10 @@ export async function executeStandaloneWorkload(options: StandaloneOptions, effe
   const { spec } = await resolveWorkloadModules(JSON.stringify({ workloads: { standalone: declaration }, pipeline: {} }), load, signal, undefined, registry);
   const workload = spec.workloads!.standalone!;
   if (!await effects.exists(options.cwd, "folder")) throw new Error("--cwd must name an existing directory");
-  const cache = join(homedir(), ".cache");
+  const cache = muCacheDirectory();
   const context: Context = {
     sys: { cache_dir: cache, models: await effects.discoverModels(cache) },
-    session: { working_dir: options.cwd, output_dir: options.cwd, cache_dir: join(cache, "mu", "standalone") },
+    session: { working_dir: options.cwd, output_dir: options.cwd, cache_dir: join(cache, "standalone") },
     actions: {},
   };
   // No installer effects before Field/type checks. The same resolver is used by Actions.

@@ -289,7 +289,7 @@ disk cache or offline fallback is used on a fresh run. Restart to refresh unpinn
 sources. Resume instead uses pinned bytes and works without the module source.
 
 The Bun adapter serializes installation across processes using
-`${sys.cache_dir}/mu/workload-install.lock`, shared across module aliases/versions
+`${sys.cache_dir}/workload-install.lock`, shared across module aliases/versions
 because arbitrary scripts can modify the same environment. Waits cancel with the
 execution signal and fail after 30 seconds if busy. Failures release the lock;
 a crashed owner may leave a stale lock. Inspect `owner.json` and ensure no installer
