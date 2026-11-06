@@ -121,3 +121,19 @@ test("parallel under a single global module lock cancels sibling process request
   const pid=Number(await readFile(join(root,"pid"),"utf8"));expect(()=>process.kill(pid,0)).toThrow();
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test("aliases sharing resources recheck routine readiness under the lock",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"mu-readiness-"));
+ try {
+  for(const grouped of [false,true]) {
+   const count=join(root,`count-${grouped}`), ready=join(root,`ready-${grouped}`);
+   const install={type:"execute_routine",routine:"install",skip_if:{operator:"file_exists",path:ready}};
+   const module={workload,routines:{install:{actions:[command(`const f=Bun.file(${JSON.stringify(count)});await Bun.write(f,String((await f.exists()?Number(await f.text()):0)+1));await Bun.sleep(100);await Bun.write(${JSON.stringify(ready)},'done')`)]}},
+    ...(grouped?{prepare:[group("shared",[install])]}:{installation:{resources:["shared"]},prepare:[install]})};
+   const {spec}=await resolveWorkloadModules(JSON.stringify({workloads:{first:{source:"/a.yaml"},second:{source:"/b.yaml"}},pipeline:{}}),async()=>Buffer.from(JSON.stringify(module)),signal());
+   const actions=new Actions(spec,new BunEffects(undefined,()=>{}));
+   await Promise.all(["first","second"].map(workload=>actions.run({type:"ensure_workload",workload},{sys:{cache_dir:root},session:{working_dir:root}}, {},signal())));
+   expect(await readFile(count,"utf8")).toBe("1");
+  }
+ }finally{await rm(root,{recursive:true,force:true});}
+});
