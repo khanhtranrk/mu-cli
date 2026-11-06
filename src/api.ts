@@ -26,14 +26,42 @@ export class ApiError extends Error {
   constructor(public readonly status: number) { super(`Data Center HTTP ${status}`); }
 }
 
+const networkCodes = new Set([
+  "ECONNRESET", "ECONNREFUSED", "ECONNABORTED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN",
+  "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT",
+  "CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "ERR_TLS_CERT_ALTNAME_INVALID", "ConnectionClosed", "ConnectionRefused", "ConnectionReset",
+  "FailedToOpenSocket",
+]);
+function networkCode(error: unknown): string {
+  let current = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const item = current as {code?: unknown; name?: unknown; cause?: unknown};
+    if (item.name === "TimeoutError") return "TIMEOUT";
+    if (typeof item.code === "string" && networkCodes.has(item.code)) return item.code;
+    current = item.cause;
+  }
+  return "NETWORK_ERROR";
+}
+export class DataCenterConnectionError extends Error {
+  readonly code: string;
+  constructor(readonly method: string, readonly path: string, readonly elapsedMs: number, error: unknown) {
+    const code = networkCode(error);
+    super(`Data Center connection failed; call was not retried (${method} ${path}; elapsed=${elapsedMs}ms; cause=${code})`);
+    this.name = "DataCenterConnectionError";
+    this.code = code;
+  }
+}
+
 export class DataCenterClient {
   constructor(private config: WorkerConfig, private transport: typeof fetch = fetch) {}
 
-  private async call(path: string, body?: unknown, assignment?: number): Promise<Response> {
+  private async call(path: string, body?: unknown, assignment?: number, signal?: AbortSignal): Promise<Response> {
     let response: Response;
+    const method = body === undefined ? "GET" : "POST", started = Date.now();
     try {
       response = await this.transport(this.config.server + path, {
-        method: body === undefined ? "GET" : "POST",
+        method,
         headers: {
           Authorization: `Bearer ${this.config.token}`,
           "Content-Type": "application/json",
@@ -42,21 +70,34 @@ export class DataCenterClient {
           ...(assignment === undefined ? {} : { "X-Mu-Assignment-Version": String(assignment) }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(10_000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
         redirect: "error",
       });
-    } catch { throw new Error("Data Center connection failed; call was not retried"); }
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      throw new DataCenterConnectionError(method, path, Date.now() - started, error);
+    }
     if (!response.ok) throw new ApiError(response.status);
     return response;
   }
 
   async health(): Promise<void> { await this.call("/api/health"); }
-  async heartbeat(status: "online" | "offline"): Promise<void> {
-    const result = object(await (await this.call("/api/units/heartbeat", {
-      unitId: this.config.unitId, unitType: this.config.fake ? "bun-cpu-fake" : this.config.devices?.length ? "bun-gpu" : "bun-cpu", workingDir: this.config.workspace,
-      devices: [{ family: "cpu", index: 0 }, ...(this.config.devices ?? []).map(({ family, index }) => ({ family, index }))], status,
-    })).json());
-    if (result.ok !== true) throw new Error("Invalid heartbeat response");
+  async heartbeat(status: "online" | "offline", signal?: AbortSignal): Promise<void> {
+    const started = Date.now();
+    try {
+      const result = object(await (await this.call("/api/units/heartbeat", {
+        unitId: this.config.unitId, unitType: this.config.fake ? "bun-cpu-fake" : this.config.devices?.length ? "bun-gpu" : "bun-cpu", workingDir: this.config.workspace,
+        devices: [{ family: "cpu", index: 0 }, ...(this.config.devices ?? []).map(({ family, index }) => ({ family, index }))], status,
+      }, undefined, signal)).json());
+      if (result.ok !== true) throw new Error("Invalid heartbeat response");
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      // fetch may succeed at headers and fail later while reading the body.
+      if (!(error instanceof DataCenterConnectionError) && networkCode(error) !== "NETWORK_ERROR") {
+        throw new DataCenterConnectionError("POST", "/api/units/heartbeat", Date.now() - started, error);
+      }
+      throw error;
+    }
   }
   async spec(slug: string): Promise<string> { return (await this.call(`/api/specs/${encodeURIComponent(slug)}`)).text(); }
   async claim(specSlug: string, maxCount: number): Promise<ClaimedRequest[]> {
