@@ -41,6 +41,7 @@ export async function withInstallationLock<T>(cacheDir: string, signal: AbortSig
   })();
   // Reader may reject before acquisition is awaited; retain it for cleanup below.
   void reader.catch(() => {});
+  let failed = false;
   try {
     child.stdin.write(JSON.stringify({ cacheDir, ...options, waitMs }) + "\n");
     if (signal.aborted) stop();
@@ -54,9 +55,12 @@ export async function withInstallationLock<T>(cacheDir: string, signal: AbortSig
       callSignal.addEventListener("abort", abort, { once: true });
       if (callSignal.aborted) abort();
     }) }, run);
+  } catch (error) {
+    failed = true;
+    throw signal.aborted ? signal.reason : error;
   } finally {
     signal.removeEventListener("abort", stop); stop();
     await child.exited;
-    await reader;
+    try { await reader; } catch (error) { if (!failed) throw error; }
   }
 }

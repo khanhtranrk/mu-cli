@@ -60,7 +60,7 @@ test("global fallback and scoped locks exclude each other; multi-key acquisition
       await until(()=>held); const controller=new AbortController();
       const waiter=effects.withWorkloadLock(root,controller.signal,async()=>{entered=true;},{resources:second ? [...second] : undefined});
       void waiter.catch(()=>{}); await Bun.sleep(150); expect(entered).toBe(false);
-      controller.abort(new Error("cancel wait")); await expect(waiter).rejects.toThrow(); release(); await owner;
+      controller.abort(new Error("cancel wait")); await expect(waiter).rejects.toThrow("cancel wait"); release(); await owner;
       await effects.withWorkloadLock(root,signal(),async()=>{}, {resources:["a","z"]});
     }
   } finally {await rm(root,{recursive:true,force:true});}
