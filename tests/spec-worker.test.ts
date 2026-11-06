@@ -66,10 +66,10 @@ test("Spec without reporting hooks reports lifecycle automatically", async () =>
   }) as typeof fetch;
   expect(await new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects(transport))).run("once", new AbortController().signal)).toBe(0);
   expect(paths.some(path => path.endsWith("report"))).toBe(true);
-  expect(paths.indexOf("/api/specs/cpu")).toBeLessThan(paths.indexOf("/api/requests/claim"));
+  expect(paths.indexOf("/api/requests/claim")).toBeLessThan(paths.indexOf("/api/specs/cpu"));
 });
 
-test("invalid Specs fail before assignment", async () => {
+test("invalid assigned Specs fail without startup preflight", async () => {
   const configuration = await config();
   for (const source of ["pipeline: {p: {nodes: [{name: n, run: {workload: w}}]}}"] ) {
     let claims = 0;
@@ -80,7 +80,7 @@ test("invalid Specs fail before assignment", async () => {
       return Response.json({ ok: true });
     }) as typeof fetch;
     await expect(new Worker(configuration, new DataCenterClient(configuration, transport), new SpecExecutor(configuration, new BunEffects(transport))).run("once", new AbortController().signal)).rejects.toThrow();
-    expect(claims).toBe(0);
+    expect(claims).toBe(1);
   }
 });
 
