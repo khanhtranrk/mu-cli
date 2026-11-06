@@ -85,3 +85,9 @@ Do not run older and newer installers against the same cache during upgrade. Sto
 Local, HTTPS and MU registry modules use the same preparation contract. Exact raw bytes/digests and installation declarations remain pinned in recovery snapshots; new syntax does not change module formatVersion or silently rewrite publications. Upgrade MasterFlow validation and workers together before publishing modules with the new syntax. Older readers reject unsupported syntax.
 
 A runnable CPU-only example is [parallel.yaml](../../examples/workload-exec/parallel.yaml): `mu workload exec ./examples/workload-exec/parallel.yaml --json`. It prepares two cache markers without downloading dependencies or models.
+
+## Compiled releases
+
+The compiled executable embeds its installation supervisor and starts it through a private internal entrypoint, before public CLI argument parsing. No external Bun installation is required for that helper; workload programs still need their own declared executables. Source mode continues to run the supervisor with the current Bun interpreter.
+
+The release workflow runs `bun scripts/smoke-compiled.ts ./dist/mu-cli-linux-x64` against the actual artifact before checksumming or publishing it. This CPU-only check removes Bun from the child PATH and verifies sequential/parallel preparation, cancellation and lock reuse. The Linux x64 regression test compiles with the same release target.

@@ -7,6 +7,7 @@ import { resourceKeys } from "../spec/preparation";
 
 interface Pending { resolve(value: ProcessResult): void; reject(error: unknown): void; cleanup(): void }
 interface Installer { process(argv: string[], env: Record<string, string>, cwd: string, signal: AbortSignal): Promise<ProcessResult> }
+export const installationSupervisorFlag = "--mu-internal-installation-supervisor";
 export const installationOwner = new AsyncLocalStorage<Installer>();
 
 export async function withInstallationLock<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>, warning: (message: string) => void, options?: { resources?: string[]; workload?: string }): Promise<T> {
@@ -16,7 +17,10 @@ export async function withInstallationLock<T>(cacheDir: string, signal: AbortSig
   const raw = process.env.MU_WORKLOAD_LOCK_WAIT_MS;
   const waitMs = raw === undefined ? undefined : Number(raw);
   if (waitMs !== undefined && (!raw?.trim() || !Number.isSafeInteger(waitMs) || waitMs <= 0)) throw new Error("MU_WORKLOAD_LOCK_WAIT_MS must be a positive integer");
-  const child = Bun.spawn([process.execPath, fileURLToPath(new URL("installation-supervisor.ts", import.meta.url))], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  const command = Bun.isStandaloneExecutable
+    ? [process.execPath, installationSupervisorFlag]
+    : [process.execPath, fileURLToPath(new URL("installation-supervisor.ts", import.meta.url))];
+  const child = Bun.spawn(command, { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   const pending = new Map<number, Pending>(); let next = 0, ready = false;
   let resolveReady!: () => void, rejectReady!: (error: unknown) => void;
   const acquired = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
