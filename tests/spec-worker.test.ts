@@ -115,16 +115,17 @@ test("worker executes a local module with real CPU processes after claiming and 
   expect(await Bun.file(join(configuration.workspace, "runs", runs[0]!, "module-result")).text()).toBe("ok");
 });
 
-test("malformed external modules fail before claiming without running installation", async () => {
-  const configuration = await config(); let claims = 0;
+test("malformed assigned external modules fail without running installation", async () => {
+  const configuration = await config(); let claims = 0, processes = 0;
   const source = JSON.stringify({workloads: {external: {source: "bad.yaml"}}, pipeline: {p: {nodes: []}}});
   const transport = (async (url: string | URL | Request) => {
     const path = new URL(String(url)).pathname;
-    if (path.startsWith("/api/specs/")) return new Response(source);
-    if (path.endsWith("claim")) claims++;
+    if (path.startsWith("/api/specs/")) throw new Error("Current Spec must not be read");
+    if (path.endsWith("claim")) {claims++; return Response.json([{...request, specYaml: source}]);}
     return Response.json({ok: true});
   }) as typeof fetch;
-  const executor = new SpecExecutor(configuration, new BunEffects(transport), async () => Buffer.from("workload: {units: 1}"));
-  await expect(new Worker(configuration, new DataCenterClient(configuration, transport), executor).run("once", new AbortController().signal)).rejects.toThrow("target");
-  expect(claims).toBe(0);
+  class Effects extends BunEffects {override async process(): Promise<never> {processes++; throw new Error("Installation must not run");}}
+  const executor = new SpecExecutor(configuration, new Effects(transport), async () => Buffer.from("workload: {units: 1}"));
+  expect(await new Worker(configuration, new DataCenterClient(configuration, transport), executor).run("once", new AbortController().signal)).toBe(6);
+  expect(claims).toBe(1); expect(processes).toBe(0);
 });

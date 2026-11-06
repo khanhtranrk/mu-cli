@@ -255,7 +255,8 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     });
     await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
     const specId = setup.ids.specId;
-    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Registry", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Registry", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Registry", makeDefault: true});
     const requestId = await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
     await owner.mutation(makeFunctionReference<"mutation">("workloads:saveDraft"), {id: workloadId, expectedRevision: 1, yaml: module("two")});
     const second = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "2.0.0", expectedRevision: 2, changelog: "", makeDefault: true});
@@ -263,7 +264,7 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     await owner.mutation(makeFunctionReference<"mutation">("specs:refreshWorkloads"), {id: specId, expectedYaml: spec, expectedLock: JSON.stringify(saved.workloadLock)});
     expect(await setup.run()).toBe(0);
     const request = await setup.backend.run(ctx => ctx.db.get(requestId));
-    expect(request.workloadLock.pins[0].versionId).toBe(first);
+    expect((await setup.backend.run(ctx => ctx.db.get(request.specVersionId))).workloadLock.pins[0].versionId).toBe(first);
     expect(request.resolvedOutputs.text).toBe("one\n");
     const issued = await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"), {name: "CLI", slugs: ["example"]});
     const registry = new RegistryClient(setup.config.server, issued.token);
@@ -290,7 +291,8 @@ integration("registry recovery validates pinned provenance and never reloads mod
     const spec = JSON.stringify({workloads: {w: "recovery"}, pipeline: {demo: {nodes: [{name: "n", run: [{type: "execute_workload", workload: "w"}]}]}}});
     await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
     const specId = setup.ids.specId;
-    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, name: "Recovery", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Recovery", description: "", yaml: spec});
+    await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Recovery", makeDefault: true});
     await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
     await setup.api.heartbeat("online"); const request = (await setup.api.claim("demo", 1))[0]!;
     const controller = new AbortController(); let interrupted = false, snapshot: ExecutionSnapshot | undefined;
