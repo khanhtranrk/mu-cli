@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { BunEffects } from "./effects";
 
-if (import.meta.main) {
+export async function runInstallationSupervisor(): Promise<void> {
   const controller = new AbortController();
   const active = new Set<Promise<void>>();
   const calls = new Map<number, AbortController>();
@@ -92,3 +92,5 @@ if (import.meta.main) {
     library?.close();
   }
 }
+
+if (import.meta.main) await runInstallationSupervisor();

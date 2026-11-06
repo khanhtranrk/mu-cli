@@ -34,10 +34,10 @@ jobs:
             ./src/index.ts \
             --outfile dist/mu-cli-linux-x64
 
-      - name: Smoke test
+      - name: Smoke test compiled workload preparation
         run: |
           chmod +x dist/mu-cli-linux-x64
-          dist/mu-cli-linux-x64 --help
+          bun scripts/smoke-compiled.ts ./dist/mu-cli-linux-x64
 
       - name: Generate checksum
         run: |

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { installationSupervisorFlag } from "./runtime/installation-lock";
 import { addWorkloadCommand } from "./workload-command";
 import { Command, CommanderError } from "commander";
 import { mkdir, open, unlink } from "node:fs/promises";
@@ -133,4 +134,10 @@ async function runWorker(command: "once" | "start" | "doctor" | "info" | "show",
   }
 }
 
-if (import.meta.main) process.exitCode = await main();
+if (import.meta.main) {
+  if (Bun.argv.length === 3 && Bun.argv[2] === installationSupervisorFlag) {
+    // Included in compiled releases, but loaded only by the private child mode.
+    const { runInstallationSupervisor } = await import("./runtime/installation-supervisor");
+    await runInstallationSupervisor();
+  } else process.exitCode = await main();
+}
