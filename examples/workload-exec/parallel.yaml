@@ -1,0 +1,30 @@
+# CPU-only example: two independent cache markers prepared concurrently.
+prepare:
+  - type: parallel
+    actions:
+      - type: installation_group
+        resources: [demo-runtime-v1]
+        actions:
+          - type: write_json
+            path: "${{ sys.cache_dir }}/preparation-demo/runtime.json"
+            content: { ready: true }
+            skip_if:
+              operator: file_exists
+              path: "${{ sys.cache_dir }}/preparation-demo/runtime.json"
+      - type: installation_group
+        resources: [demo-model-v1]
+        actions:
+          - type: write_json
+            path: "${{ sys.cache_dir }}/preparation-demo/model.json"
+            content: { ready: true }
+            skip_if:
+              operator: file_exists
+              path: "${{ sys.cache_dir }}/preparation-demo/model.json"
+workload:
+  target: bun
+  units: 0
+  argv: [-e, "console.log('Preparation joined')"]
+  outputs:
+    message:
+      type: string
+      value: "${{ result.stdout }}"

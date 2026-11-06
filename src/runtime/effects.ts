@@ -1,3 +1,4 @@
+import { installationOwner, withInstallationLock } from "./installation-lock";
 import { mkdir, open, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -10,31 +11,8 @@ const outputLimit = 16 * 1024 * 1024;
 export class BunEffects implements Effects {
   constructor(private transport: typeof fetch = fetch, private warn: (message: string) => void = console.warn) {}
 
-  async withWorkloadLock<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
-    // One per-user cache lock serializes arbitrary installation scripts, even across
-    // different module versions/aliases that may modify the same environment.
-    const parent = cacheDir, lock = join(parent, "workload-install.lock");
-    await this.mkdir(parent);
-    const deadline = Date.now() + 30_000;
-    while (true) {
-      signal.throwIfAborted();
-      try { await mkdir(lock); break; }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        if (Date.now() >= deadline) throw new Error(`Workload installation lock is busy: ${lock}. If its owner crashed, inspect and remove the stale lock before retrying.`);
-        await new Promise<void>((resolve, reject) => {
-          const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(signal.reason); };
-          const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 100);
-          signal.addEventListener("abort", abort, { once: true });
-          if (signal.aborted) abort();
-        });
-      }
-    }
-    try {
-      await Bun.write(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
-      signal.throwIfAborted();
-      return await run();
-    } finally { await rm(lock, { recursive: true, force: true }); }
+  async withWorkloadLock<T>(cacheDir: string, signal: AbortSignal, run: () => Promise<T>, options?: { resources?: string[]; workload?: string }): Promise<T> {
+    return withInstallationLock(cacheDir, signal, run, message => this.warning(message), options);
   }
 
   path(path: string, cwd: string): string {
@@ -53,6 +31,8 @@ export class BunEffects implements Effects {
 
   async process(argv: string[], env: Record<string, string>, cwd: string, signal: AbortSignal): Promise<ProcessResult> {
     signal.throwIfAborted();
+    const owner = installationOwner.getStore();
+    if (owner) return owner.process(argv, env, cwd, signal);
     const child = Bun.spawn(argv, { cwd, env: { ...process.env, ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe", detached: process.platform !== "win32" });
     const kill = () => {
       try { if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); }

@@ -1,0 +1,810 @@
+[
+  {
+    "name": "legacy sequential",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "execute_command",
+          "target": "echo",
+          "args": [
+            "ok"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "module resource shorthand",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "installation": {
+        "resources": [
+          "runtime-v1",
+          "models-v1"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "execute_command",
+          "target": "echo",
+          "args": [
+            "ok"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "independent parallel groups",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "runtime"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "installation_group",
+              "resources": [
+                "model"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "grouped routine body",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "install": {
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "runtime"
+          ],
+          "actions": [
+            {
+              "type": "execute_routine",
+              "routine": "install"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "routine expands to groups",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "groups": {
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "runtime"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "execute_routine",
+          "routine": "groups"
+        }
+      ]
+    }
+  },
+  {
+    "name": "parallel only with global fallback",
+    "valid": true,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            },
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested group",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "a"
+          ],
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "b"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested parallel via routine",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "nested": {
+          "actions": [
+            {
+              "type": "parallel",
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "execute_routine",
+              "routine": "nested"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested group via routine",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "nested": {
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "b"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "a"
+          ],
+          "actions": [
+            {
+              "type": "execute_routine",
+              "routine": "nested"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "routine cycle inside parallel",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "loop": {
+          "actions": [
+            {
+              "type": "parallel",
+              "actions": [
+                {
+                  "type": "execute_routine",
+                  "routine": "loop"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "execute_routine",
+          "routine": "loop"
+        }
+      ]
+    }
+  },
+  {
+    "name": "mixed scopes",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "installation": {
+        "resources": [
+          "a"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "b"
+          ],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unguarded effect",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "a"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unguarded routine effect",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "raw": {
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "a"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "execute_routine",
+              "routine": "raw"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unguarded condition",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "routines": {
+        "safe": {
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "a"
+              ],
+              "actions": [
+                {
+                  "type": "execute_command",
+                  "target": "echo",
+                  "args": [
+                    "ok"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "prepare": [
+        {
+          "type": "execute_routine",
+          "routine": "safe",
+          "skip_if": {
+            "operator": "exit_code",
+            "target": [
+              "echo",
+              "ok"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid resources empty",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid resources duplicate",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "a",
+            "a"
+          ],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid resources path",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "../bad"
+          ],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid resources dynamic",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "${{ sys.cache_dir }}"
+          ],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid resources null",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": null,
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unknown group property",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "installation_group",
+          "resources": [
+            "a"
+          ],
+          "actions": [
+            {
+              "type": "execute_command",
+              "target": "echo",
+              "args": [
+                "ok"
+              ]
+            }
+          ],
+          "unknown": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "empty parallel",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested ensure",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "prepare": [
+        {
+          "type": "parallel",
+          "actions": [
+            {
+              "type": "installation_group",
+              "resources": [
+                "a"
+              ],
+              "actions": [
+                {
+                  "type": "ensure_workload",
+                  "workload": "module"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unknown installation key",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "installation": {
+        "resources": [
+          "a"
+        ],
+        "x": true
+      },
+      "prepare": [
+        {
+          "type": "execute_command",
+          "target": "echo",
+          "args": [
+            "ok"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "null installation",
+    "valid": false,
+    "module": {
+      "workload": {
+        "target": "echo",
+        "argv": [
+          "ok"
+        ]
+      },
+      "installation": null,
+      "prepare": [
+        {
+          "type": "execute_command",
+          "target": "echo",
+          "args": [
+            "ok"
+          ]
+        }
+      ]
+    }
+  }
+]

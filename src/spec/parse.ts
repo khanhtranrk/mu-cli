@@ -1,3 +1,4 @@
+import { validatePreparation } from "./preparation";
 import { registryReference } from "./registry-reference";
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
 import { validateWorkloadSource } from "./workload-source";
@@ -63,7 +64,7 @@ export function parseYamlMapping(source: string): Record<string, unknown> {
   return root;
 }
 
-export function parseSpec(source: string, options: { allowExternal?: boolean } = {}): Spec {
+export function parseSpec(source: string, options: { allowExternal?: boolean; modulePreparation?: boolean } = {}): Spec {
   const root = parseYamlMapping(source);
   if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
   if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
@@ -94,10 +95,12 @@ export function parseSpec(source: string, options: { allowExternal?: boolean } =
       const type = item.type;
       if (has(item, "save_state")) throw new Error(`${path}.save_state was removed; use save_to`);
       if (has(item, "save_to")) {
-        if (!["execute_workload", "execute_command", "send_http_request", "send_notification", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
+        if (!["execute_workload", "execute_command", "send_http_request", "send_notification", "inspect_file", "execute_routine", "report_request", "report_node", "upload_artifact", "download_artifact", "parallel"].includes(String(type))) throw new Error(`${path}: save_to not supported`);
         text(item.save_to, path + ".save_to");
       }
-      if (type === "ensure_workload") {
+      if (type === "parallel" || type === "installation_group") {
+        actions(item.actions, path + ".actions");
+      } else if (type === "ensure_workload") {
         if (!allowEnsure) throw new Error(`${path}: ensure_workload only allowed in pipeline prepare`);
         const name = literalName(item.workload, path + ".workload");
         if (!has(workloads, name)) throw new Error(`${path}: undefined workload ${name}`);
@@ -161,6 +164,7 @@ export function parseSpec(source: string, options: { allowExternal?: boolean } =
       if (!options.allowExternal) throw new Error(`workloads.${name}: external workload requires resolution`);
       continue;
     }
+    if (has(item, "installation")) throw new Error("installation belongs to a workload module, not an inline declaration");
     if (has(item, "sha256")) throw new Error(`workloads.${name}.sha256 requires source`);
     inputs(item, `workloads.${name}`);
     if (has(item, "outputs")) validateFields(item.outputs, `workloads.${name}.outputs`);
@@ -209,6 +213,7 @@ export function parseSpec(source: string, options: { allowExternal?: boolean } =
     }
     checkCycles(edges, `pipeline.${name} dependency`);
   }
+  validatePreparation(root, options.modulePreparation);
   return { ...root, pipeline: pipelines } as unknown as Spec;
 }
 
