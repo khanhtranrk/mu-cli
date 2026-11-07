@@ -403,3 +403,13 @@ for publication, archival and authorization semantics.
 ### Installation lock waiting
 
 Workload preparation waits for installation locks without a default deadline. Set `MU_WORKLOAD_LOCK_WAIT_MS` to positive integer milliseconds to bound acquisition per lock scope. Installation duration is unaffected; cancellation remains supported. See [preparation and platform/upgrade requirements](../reference/workload-preparation.md).
+
+### Heartbeat recovery
+
+`--heartbeat-interval` continues to control regular online heartbeats (default
+30 seconds). A transient failure pauses new claims at the next boundary and
+allows three additional heartbeat attempts after 1, 2 and 4 seconds; a successful
+heartbeat clears the failure. HTTP 401/403 and invalid responses remain fatal.
+These recovery defaults and the 10-second per-call API timeout are currently
+fixed, not separate CLI flags. Claims and completed workloads are not replayed.
+See [recovery and cancellation](../architecture/worker.md#heartbeat-failures-and-recovery).

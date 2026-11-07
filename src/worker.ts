@@ -1,3 +1,4 @@
+import { HeartbeatMonitor } from "./heartbeat";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
 import {parseSpec} from "./spec/parse";
 import type { WorkerConfig } from "./config";
@@ -126,14 +127,8 @@ export class Worker {
     if (!this.config.specs.length) throw new Error("At least one --spec is required; the API cannot enumerate allowed specs");
     await this.api.health();
     await this.api.heartbeat("online");
-    let heartbeatError: unknown;
-    let heartbeatPending = Promise.resolve();
-    let heartbeatBusy = false;
-    const timer = setInterval(() => {
-      if (heartbeatBusy) return;
-      heartbeatBusy = true;
-      heartbeatPending = this.api.heartbeat("online").catch(error => { heartbeatError = error; }).finally(() => { heartbeatBusy = false; });
-    }, this.config.heartbeatInterval * 1000);
+    const heartbeat = new HeartbeatMonitor(signal => this.api.heartbeat("online", signal), this.config.heartbeatInterval * 1000, signal);
+    heartbeat.start();
     let failed = false;
     let completed = false;
     let primaryError: unknown;
@@ -144,7 +139,8 @@ export class Worker {
       do {
         const batch: ClaimedRequest[] = [];
         for (const spec of this.config.specs) {
-          if (signal.aborted || heartbeatError || batch.length >= this.config.maxClaim) break;
+          if (signal.aborted || batch.length >= this.config.maxClaim) break;
+          await heartbeat.ensureHealthy();
           const claimed = await this.api.claim(spec, this.config.maxClaim - batch.length);
           for (const request of claimed) {
             const assignment = request.requestId + ":" + request.assignmentVersion;
@@ -155,14 +151,14 @@ export class Worker {
           }
           batch.push(...claimed);
         }
-        if (heartbeatError) throw heartbeatError;
+        await heartbeat.ensureHealthy();
         if (this.executor.concurrent) {
           const results = await Promise.allSettled(batch.map(request => this.execute(request, signal)));
           const error = results.find(result => result.status === "rejected");
           if (error?.status === "rejected") throw error.reason;
           failed ||= results.some(result => result.status === "fulfilled" && !result.value);
         } else for (const request of batch) if (!await this.execute(request, signal)) failed = true;
-        if (heartbeatError) throw heartbeatError;
+        await heartbeat.ensureHealthy();
         if (mode === "once" || signal.aborted) break;
         await new Promise<void>(resolve => {
           const done = () => { clearTimeout(timeout); signal.removeEventListener("abort", done); resolve(); };
@@ -178,8 +174,7 @@ export class Worker {
       if (signal.aborted) return 130;
       throw error;
     } finally {
-      clearInterval(timer);
-      await heartbeatPending;
+      await heartbeat.stop();
       let cleanupError: unknown;
       try { await this.executor.finalize?.(!completed || failed || signal.aborted); }
       catch (error) { cleanupError = error; }

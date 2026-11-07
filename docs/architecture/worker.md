@@ -78,3 +78,38 @@ identity remains separate. Scope/name/path are persisted for recovery and a chan
 selection cannot silently redirect a node-boundary resume. No MasterFlow API change
 is required. See [run directory configuration](../guides/cli.md#run-directory-scope-and-shared-names)
 for defaults, naming, intentional sharing and stale-output/concurrency limits.
+
+## Heartbeat failures and recovery
+
+A transient periodic heartbeat failure no longer permanently poisons the worker.
+A later successful heartbeat clears that failure and logs recovery. Regular
+heartbeats continue while a Request is executing; an already-running Request is
+not replayed or cancelled merely because a heartbeat temporarily failed.
+
+Before claiming more work and at batch boundaries, the worker joins any pending
+heartbeat and checks its outcome. If the latest failure is transient, new claims
+pause while heartbeat recovery makes up to three additional online calls, with
+backoff delays of 1, 2 and 4 seconds. Periodic and recovery heartbeats never
+overlap. A successful recovery resumes intake; exhausted recovery exits through
+normal finalization/offline cleanup. Completed Requests remain completed.
+
+Recoverable failures are Data Center transport/timeouts and HTTP 408, 429 or 5xx.
+Other HTTP errors, including 401/403, and invalid heartbeat responses remain fatal
+at the next lifecycle boundary; they are not cleared or retried as transient
+failures. This policy does not grant permission to continue claiming after an
+authorization failure. Claim calls themselves are never automatically retried.
+
+Recovery delays and in-flight heartbeat calls respect worker cancellation.
+Normal shutdown drains an in-flight online heartbeat before sending offline;
+cancellation aborts and joins it. The existing
+10-second per-call API timeout remains unchanged, so the three recovery attempts
+can take approximately 37 seconds (7 seconds backoff plus up to 30 seconds for
+calls), in addition to joining a heartbeat already in flight. The initial startup
+heartbeat remains fail-fast; offline cleanup is still a single best-effort call.
+
+Diagnostics identify heartbeat failure/recovery and, for connection failures,
+the API method/path, elapsed milliseconds and a known safe network code (or
+NETWORK_ERROR). Tokens, arbitrary exception messages and response bodies are
+not logged. Diagnostics go to worker stderr; they do not require the failing
+request to have reached the backend. This fixes a confirmed lifecycle bug; it
+does not establish the original cause of any particular server connection fault.

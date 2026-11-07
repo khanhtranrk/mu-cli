@@ -43,3 +43,17 @@ Spec text and assignment-generation fencing; see [Phase 3](../tasks/completed/ph
 Agent-specific credentials/permissions, lease expiration, broader retry policies
 and distributed reconciliation remain design proposals. No available Mu Agent API
 is asserted by this document.
+
+## Heartbeat transport recovery
+
+Only periodic online heartbeats receive bounded orchestration recovery at worker
+boundaries: transient failures pause new claims and can recover with three
+additional calls after 1/2/4-second backoff. Successful heartbeats clear transient
+failure state; permanent authorization/response errors remain fatal. The server
+heartbeat contract is unchanged (the same token/unit updates status/lastSeen).
+See [worker heartbeat recovery](../architecture/worker.md#heartbeat-failures-and-recovery).
+
+The API adapter still makes each claim/report call once. Connection errors now
+include method/path, elapsed time and a safe underlying network code without
+credentials or response-body text. Heartbeat cancellation is combined with the
+existing 10-second call deadline, including while reading its response body.
