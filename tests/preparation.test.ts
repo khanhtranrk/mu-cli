@@ -14,7 +14,7 @@ async function until(predicate: () => Promise<boolean> | boolean, limit = 5000) 
   while (!await predicate()) { if (Date.now() > deadline) throw new Error("Timed out awaiting fixture"); await Bun.sleep(10); }
 }
 async function resolveModule(module: unknown) {
-  return (await resolveWorkloadModules(JSON.stringify({workloads: {test: {source: "/module.yaml"}}, pipeline: {}}), async () => Buffer.from(JSON.stringify(module)), signal())).spec;
+  return (await resolveWorkloadModules(JSON.stringify({workloads: {test: {source: "/module.yaml"}}, pipelines: {}}), async () => Buffer.from(JSON.stringify(module)), signal())).spec;
 }
 const workload = {target: "echo", argv: ["ok"]};
 
@@ -101,13 +101,13 @@ test("default lock wait survives a legitimate installation lasting more than 30 
 },35_000);
 
 test("parallel execution isolates branch results and publishes only its own result", async()=>{
- const effects=new BunEffects();const actions=new Actions({pipeline:{}},effects);const context={session:{working_dir:process.cwd()},actions:{}};
+ const effects=new BunEffects();const actions=new Actions({pipelines:{}},effects);const context={session:{working_dir:process.cwd()},actions:{}};
  await actions.run({type:"parallel",save_to:"join",actions:[{...command("console.log('a')"),save_to:"a"},{...command("console.log('b')"),save_to:"b"}]},context,{},signal());
  expect(Object.keys(context.actions)).toEqual(["join"]);
 });
 
 test("new preparation actions are rejected in ordinary Spec nodes",()=>{
- expect(()=>parseSpec(JSON.stringify({pipeline:{p:{nodes:[{name:"n",run:[{type:"parallel",actions:[command("0")]}]}]}}}))).toThrow("workload-module preparation");
+ expect(()=>parseSpec(JSON.stringify({pipelines:{p:{nodes:[{name:"n",run:[{type:"parallel",actions:[command("0")]}]}]}}}))).toThrow("workload-module preparation");
 });
 
 test("parallel under a single global module lock cancels sibling process requests independently",async()=>{
@@ -130,7 +130,7 @@ test("aliases sharing resources recheck routine readiness under the lock",async(
    const install={type:"execute_routine",routine:"install",skip_if:{operator:"file_exists",path:ready}};
    const module={workload,routines:{install:{actions:[command(`const f=Bun.file(${JSON.stringify(count)});await Bun.write(f,String((await f.exists()?Number(await f.text()):0)+1));await Bun.sleep(100);await Bun.write(${JSON.stringify(ready)},'done')`)]}},
     ...(grouped?{prepare:[group("shared",[install])]}:{installation:{resources:["shared"]},prepare:[install]})};
-   const {spec}=await resolveWorkloadModules(JSON.stringify({workloads:{first:{source:"/a.yaml"},second:{source:"/b.yaml"}},pipeline:{}}),async()=>Buffer.from(JSON.stringify(module)),signal());
+   const {spec}=await resolveWorkloadModules(JSON.stringify({workloads:{first:{source:"/a.yaml"},second:{source:"/b.yaml"}},pipelines:{}}),async()=>Buffer.from(JSON.stringify(module)),signal());
    const actions=new Actions(spec,new BunEffects(undefined,()=>{}));
    await Promise.all(["first","second"].map(workload=>actions.run({type:"ensure_workload",workload},{sys:{cache_dir:root},session:{working_dir:root}}, {},signal())));
    expect(await readFile(count,"utf8")).toBe("1");

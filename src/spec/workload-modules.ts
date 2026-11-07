@@ -63,11 +63,11 @@ export async function resolveWorkloadModules(source: string, load: ModuleLoader,
     if (Object.keys(module).some(key => !["routines", "prepare", "workload", "installation"].includes(key))) throw new Error(`Workload module ${name}: only routines, prepare, installation and workload are allowed; nested imports are unsupported`);
     const workload = mapping(module.workload, `module ${name}.workload`);
     if (Object.hasOwn(workload, "source")) throw new Error(`Workload module ${name}: nested imports are unsupported`);
-    const scoped = parseSpec(JSON.stringify({ routines: module.routines === undefined ? {} : module.routines, workloads: { module: workload }, pipeline: { module: { prepare: module.prepare === undefined ? [] : module.prepare } } }), { modulePreparation: true });
+    const scoped = parseSpec(JSON.stringify({ routines: module.routines === undefined ? {} : module.routines, workloads: { module: workload }, pipelines: { module: { prepare: module.prepare === undefined ? [] : module.prepare } } }), { modulePreparation: true });
     // Modules cannot recursively ensure other workloads, even in preparation.
-    if (scoped.pipeline.module!.prepare?.some(action => action.type === "ensure_workload")) throw new Error(`Workload module ${name}: nested ensure_workload is unsupported`);
+    if (scoped.pipelines.module!.prepare?.some(action => action.type === "ensure_workload")) throw new Error(`Workload module ${name}: nested ensure_workload is unsupported`);
     const installation = validatePreparation(scoped, true, module.installation);
-    scopes.set(name, { spec: scoped, prepare: scoped.pipeline.module!.prepare ?? [], sha256: hash, ...installation });
+    scopes.set(name, { spec: scoped, prepare: scoped.pipelines.module!.prepare ?? [], sha256: hash, ...installation });
     Object.defineProperty(declarations, name, { value: scoped.workloads!.module, enumerable: true, configurable: true, writable: true });
     modules.push({ name, source: location, sha256: hash, bytes: Buffer.from(bytes).toString("base64"), ...(provenance ? {registry: provenance} : {}) });
   }

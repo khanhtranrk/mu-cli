@@ -23,7 +23,7 @@ test("real CLI loads Spec, initializes after claiming, executes CPU workload and
   const source = JSON.stringify({
     entries: { master_flow: { initialization: [notice("initialized")], finalization: [notice("${{ entry.status }}")] } },
     workloads: { work: { target: "bun", units: 0, argv: ["-e", "await Bun.write('completed', 'ok');"] } },
-    pipeline: { p: { nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "work" }] }] } },
+    pipelines: { p: { nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "work" }] }] } },
   });
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(incoming) {
     const path = new URL(incoming.url).pathname; paths.push(path);
@@ -60,7 +60,7 @@ test("Spec without reporting hooks reports lifecycle automatically", async () =>
   const paths: string[] = [];
   const transport = (async (url: string | URL | Request) => {
     const path = new URL(String(url)).pathname; paths.push(path);
-    if (path.startsWith("/api/specs/")) return new Response("pipeline: {p: {nodes: []}}");
+    if (path.startsWith("/api/specs/")) return new Response("pipelines: {p: {nodes: []}}");
     if (path.endsWith("claim")) return Response.json([request]);
     return Response.json({ ok: true });
   }) as typeof fetch;
@@ -71,7 +71,7 @@ test("Spec without reporting hooks reports lifecycle automatically", async () =>
 
 test("invalid assigned Specs fail without startup preflight", async () => {
   const configuration = await config();
-  for (const source of ["pipeline: {p: {nodes: [{name: n, run: {workload: w}}]}}"] ) {
+  for (const source of ["pipelines: {p: {nodes: [{name: n, run: {workload: w}}]}}"] ) {
     let claims = 0;
     const transport = (async (url: string | URL | Request) => {
       const path = new URL(String(url)).pathname;
@@ -91,7 +91,7 @@ test("worker executes a local module with real CPU processes after claiming and 
   const paths: string[] = [];
   const source = JSON.stringify({
     workloads: { external: { source: "module.yaml" } },
-    pipeline: { p: { prepare: [{type: "ensure_workload", workload: "external"}], nodes: [{name: "n", run: [{type: "execute_workload", workload: "external"}]}] } },
+    pipelines: { p: { prepare: [{type: "ensure_workload", workload: "external"}], nodes: [{name: "n", run: [{type: "execute_workload", workload: "external"}]}] } },
   });
   await Bun.write(join(configuration.workspace, "module.yaml"), JSON.stringify({
     prepare: [{type: "execute_command", target: "bun", args: ["-e", "await Bun.write('installed', 'ready')"]}],
@@ -117,7 +117,7 @@ test("worker executes a local module with real CPU processes after claiming and 
 
 test("malformed assigned external modules fail without running installation", async () => {
   const configuration = await config(); let claims = 0, processes = 0;
-  const source = JSON.stringify({workloads: {external: {source: "bad.yaml"}}, pipeline: {p: {nodes: []}}});
+  const source = JSON.stringify({workloads: {external: {source: "bad.yaml"}}, pipelines: {p: {nodes: []}}});
   const transport = (async (url: string | URL | Request) => {
     const path = new URL(String(url)).pathname;
     if (path.startsWith("/api/specs/")) throw new Error("Current Spec must not be read");

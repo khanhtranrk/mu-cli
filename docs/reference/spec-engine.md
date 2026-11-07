@@ -1,5 +1,7 @@
 # 04 — Spec engine
 
+The root collection key is `pipelines` (a mapping of named pipelines). The old `pipeline` key is rejected, including when both keys are present. Rename the key in your source and publish a new Spec release; existing immutable releases are not rewritten and old-format releases cannot run with this version. Upgrade CLI and MasterFlow together. Request `pipelineName`, lifecycle event names, and the CEL runtime namespace `pipeline` remain unchanged.
+
 Current implementation is in `src/spec/` and `src/engine/`. The detailed semantics
 and Python comparisons are recorded in [Phase 2](../tasks/completed/phase-2.md#implemented-semantics),
 with later [scheduling/recovery](../tasks/completed/phase-3.md) and [artifact integration](../tasks/completed/phase-4.md).
@@ -130,7 +132,7 @@ workloads:
         value: "${{ with.upper ? with.message + '!' : with.message }}"
     target: bun
     argv: [-e, 'console.log(process.argv[1])', "${{ inputs.message }}"]
-pipeline:
+pipelines:
   demo:
     inputs:
       message: {type: string}
@@ -218,7 +220,7 @@ workloads:
   external:
     source: ./workloads/echo.yaml
     # sha256: "<64 hexadecimal characters>"  # optional
-pipeline:
+pipelines:
   demo:
     prepare:
       - type: ensure_workload
@@ -256,7 +258,7 @@ Module routines are private: they resolve only module-local routine references
 and cannot collide with or call global routines. Preparation runs in a copied,
 Request-independent context; local context/result changes do not leak to the
 caller. Installation files can be shared through explicit cache paths.
-`ensure_workload` is allowed only directly in `pipeline.<name>.prepare`. It runs
+`ensure_workload` is allowed only directly in `pipelines.<name>.prepare`. It runs
 module preparation under an installation lock; existing inline workloads have
 no module preparation and are a no-op. `execute_workload` never installs implicitly.
 Successful pipeline preparation is reused within that Flow/pipeline. Preparation

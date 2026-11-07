@@ -27,7 +27,7 @@ const module = {
 const spec = (declaration: unknown = { source: "module.yaml" }) => ({
   routines: { install: { actions: [{ type: "execute_command", target: "global-install" }] } },
   workloads: { external: declaration, inline: { target: "inline", units: 0 } },
-  pipeline: { p: { inputs: {message: {type: "string"}}, prepare: [{ type: "ensure_workload", workload: "external" }, { type: "ensure_workload", workload: "inline" }], nodes: [{ name: "n", run: [{ type: "execute_workload", workload: "external", with: { message: "${{ pipeline.inputs.message }}" }, save_to: "work" }], outputs: { text: { type: "string", value: "${{ node.actions.work.outputs.text }}" } } }] } },
+  pipelines: { p: { inputs: {message: {type: "string"}}, prepare: [{ type: "ensure_workload", workload: "external" }, { type: "ensure_workload", workload: "inline" }], nodes: [{ name: "n", run: [{ type: "execute_workload", workload: "external", with: { message: "${{ pipeline.inputs.message }}" }, save_to: "work" }], outputs: { text: { type: "string", value: "${{ node.actions.work.outputs.text }}" } } }] } },
 });
 
 for (const entry of cases) test(`structural contract: ${entry.name}`, () => {
@@ -57,7 +57,7 @@ test("resolve optional hashes, private routines, shared preparation, outputs and
 
 test("reject mismatches before parsing and malformed/nested modules", async () => {
   await expect(resolveWorkloadModules(JSON.stringify(spec({source: "x", sha256: "0".repeat(64)})), async () => Buffer.from("invalid: ["), signal())).rejects.toThrow("SHA-256 mismatch");
-  for (const value of [{}, {workload: {source: "nested.yaml"}}, {...module, pipeline: {}}, {...module, prepare: [{type: "ensure_workload", workload: "module"}]}, {...module, routines: {install: {actions: [{type: "execute_routine", routine: "missing"}]}}}]) {
+  for (const value of [{}, {workload: {source: "nested.yaml"}}, {...module, pipelines: {}}, {...module, prepare: [{type: "ensure_workload", workload: "module"}]}, {...module, routines: {install: {actions: [{type: "execute_routine", routine: "missing"}]}}}]) {
     await expect(resolveWorkloadModules(JSON.stringify(spec()), async () => bytes(value), signal())).rejects.toThrow();
   }
   await expect(resolveWorkloadModules(JSON.stringify(spec()), async () => new Uint8Array(moduleByteLimit + 1), signal())).rejects.toThrow("size limit");

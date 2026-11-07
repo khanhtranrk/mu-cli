@@ -12,7 +12,7 @@
           "units": 0
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -44,7 +44,7 @@
           "source": "./workload.yaml"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -76,7 +76,7 @@
           "source": "/opt/workload.yaml"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -108,7 +108,7 @@
           "source": "https://example.com/module.yaml"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -141,7 +141,7 @@
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -174,7 +174,7 @@
           "target": "python"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -207,7 +207,7 @@
           "inputs": {}
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -239,7 +239,7 @@
           "source": " "
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -271,7 +271,7 @@
           "source": "${{ request.url }}"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -303,7 +303,7 @@
           "source": "http://example.com/x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -335,7 +335,7 @@
           "source": "https://user:pass@example.com/x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -367,7 +367,7 @@
           "source": "file:///tmp/x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -399,7 +399,7 @@
           "source": "//example.com/x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -431,7 +431,7 @@
           "source": "https://example.com/x#x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -464,7 +464,7 @@
           "sha256": "bad"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -497,7 +497,7 @@
           "sha256": null
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -530,7 +530,7 @@
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -562,7 +562,7 @@
           "source": "x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -594,7 +594,7 @@
           "source": "x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -626,7 +626,7 @@
           "source": "x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {
@@ -659,7 +659,7 @@
           "source": "x"
         }
       },
-      "pipeline": {
+      "pipelines": {
         "p": {
           "prepare": [
             {

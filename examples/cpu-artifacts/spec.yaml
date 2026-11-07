@@ -34,7 +34,7 @@ events:
     do:
       - type: report_node
         events: [{level: info, message: Node finished}]
-pipeline:
+pipelines:
   demo:
     inputs:
       message: {type: string, value: '${{ request.inputs.message }}', default: Hello MU}

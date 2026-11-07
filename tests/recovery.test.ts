@@ -19,7 +19,7 @@ afterEach(async () => { for (const directory of directories.splice(0)) await rm(
 const request: ClaimedRequest = { requestId: "request", specSlug: "test", pipelineName: "p", assignmentVersion: 7, payload: {}, artifacts: [] };
 const source = JSON.stringify({
   entries: { master_flow: { initialization: [{ type: "execute_command", target: "init" }], finalization: [{ type: "execute_command", target: "finalize" }] } },
-  pipeline: { p: { prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
+  pipelines: { p: { prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
     { name: "first", run: [{ type: "execute_command", target: "first" }] },
     { name: "second", depends_on: ["first"], run: [{ type: "execute_command", target: "second" }] },
     { name: "third", depends_on: ["second"], run: [{ type: "execute_command", target: "third" }] },
@@ -134,7 +134,7 @@ test("checkpoint write failure aborts node admission, drains tasks and releases 
   class Effects extends BunEffects {
     override async process() { operations++; return { returncode: 0, stdout: "", stderr: "" }; }
   }
-  const flow = new Flow(parseSpec(JSON.stringify({ pipeline: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "fake" }] }] } } })), { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), "master_flow", scheduler);
+  const flow = new Flow(parseSpec(JSON.stringify({ pipelines: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "fake" }] }] } } })), { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), "master_flow", scheduler);
   const signal = new AbortController().signal;
   await flow.initialize(signal);
   await expect(flow.execute({ pipelineName: "p", payload: {}, metadata: {} }, signal, { async save(value) { if (value.states.n === "running") throw new Error("disk unavailable"); } })).rejects.toThrow("disk unavailable");
@@ -149,7 +149,7 @@ test("resume rechecks completed-node postconditions before continuing and refuse
     override async writeJson(path: string, value: unknown) { writes++; await super.writeJson(path, value); }
   }
   const effects = new Effects(setup.transport, () => {}), controller = new AbortController();
-  const spec = parseSpec(JSON.stringify({ pipeline: { p: { nodes: [
+  const spec = parseSpec(JSON.stringify({ pipelines: { p: { nodes: [
     { name: "a", run: [{ type: "write_json", path: "${{ session.working_dir }}/output.json", content: {} }], postcondition: { operator: "and", props: [{ operator: "file_exists", path: "output.json" }, { operator: "node_state", target: ["status"], expected: "running" }] } },
     { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake" }] },
   ] } } }));

@@ -18,7 +18,7 @@ test("a successful heartbeat after a transient failure permits the next claim wi
    claims++;if(claims>1){controller.abort();return Response.json([]);}
    return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);
   }
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch;
  try{
@@ -99,7 +99,7 @@ test("permanent errors arising during recovery stay fatal",async()=>{
 test("API connection diagnostics preserve safe method/path/time/code and never retry claim",async()=>{
  let calls=0;const token="PRIVATE_WORKER_TOKEN";
  const config={server:"http://localhost:3211",token,unitId:"cpu",specs:["demo"],workspace:"/tmp",maxClaim:1,pollInterval:1,heartbeatInterval:30,fake:true};
- const api=new DataCenterClient(config,(async()=>{calls++;throw new Error(`PRIVATE ${token}`,{cause:Object.assign(new Error("private upstream"),{code:"ECONNRESET"})});}) as typeof fetch);
+ const api=new DataCenterClient(config,(async()=>{calls++;throw new Error(`PRIVATE ${token}`,{cause:Object.assign(new Error("private upstream"),{code:"ECONNRESET"})});}) as unknown as typeof fetch);
  try{await api.claim("demo",1);throw new Error("Expected failure");}catch(error){
   expect(error).toBeInstanceOf(DataCenterConnectionError);
   const detail=error as DataCenterConnectionError;
@@ -119,7 +119,7 @@ test("API heartbeat cancellation reaches fetch and is not misclassified as netwo
 
 test("a heartbeat transport failure while reading the response body is recoverable",async()=>{
  const config={server:"http://localhost:3211",token:"secret",unitId:"cpu",specs:["demo"],workspace:"/tmp",maxClaim:1,pollInterval:1,heartbeatInterval:30,fake:true};
- const api=new DataCenterClient(config,(async()=>new Response(new ReadableStream({start(controller){controller.error(Object.assign(new Error("SECRET body failed"),{code:"ECONNRESET"}));}}))) as typeof fetch);
+ const api=new DataCenterClient(config,(async()=>new Response(new ReadableStream({start(controller){controller.error(Object.assign(new Error("SECRET body failed"),{code:"ECONNRESET"}));}}))) as unknown as typeof fetch);
  try{await api.heartbeat("online");throw new Error("Expected failure");}catch(error){expect(error).toBeInstanceOf(DataCenterConnectionError);expect(transientHeartbeatError(error)).toBe(true);expect((error as Error).message).not.toContain("SECRET");}
 });
 
@@ -139,7 +139,7 @@ test("worker recovers a pending heartbeat at the batch boundary before the next 
    if(++claims===2){nextClaimAt=Date.now();controller.abort();return Response.json([]);}
    return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);
   }
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch;
  try{
@@ -156,7 +156,7 @@ test("a permanent heartbeat error stops the worker before another claim and reta
   const path=new URL(String(url)).pathname,body=init.body?JSON.parse(init.body):{};
   if(path.endsWith("heartbeat")){if(body.status==="online"&&++online>1)return new Response(null,{status:403});if(body.status==="offline")offline++;}
   if(path.endsWith("claim")){claims++;return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);}
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch);
  try{

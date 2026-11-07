@@ -29,8 +29,8 @@ export class Flow {
 
   restore(snapshot: ExecutionSnapshot): void {
     if (snapshot.version !== 2 || snapshot.stage !== "nodes") throw new RecoveryError("Recovery requires a node-boundary checkpoint; lifecycle/prepare outcomes are unknown");
-    const definition = this.spec.pipeline[snapshot.pipelineName];
-    if (!Object.hasOwn(this.spec.pipeline, snapshot.pipelineName) || !definition || !snapshot.prepared) throw new RecoveryError("Invalid checkpoint pipeline/preparation");
+    const definition = this.spec.pipelines[snapshot.pipelineName];
+    if (!Object.hasOwn(this.spec.pipelines, snapshot.pipelineName) || !definition || !snapshot.prepared) throw new RecoveryError("Invalid checkpoint pipeline/preparation");
     for (const [name, status] of Object.entries(mapping(snapshot.states))) {
       const node = definition.nodes?.find(item => item.name === name);
       if (!node || !["running", "success", "failed"].includes(String(status))) throw new RecoveryError("Invalid checkpoint node state");
@@ -63,7 +63,7 @@ export class Flow {
   private async emit(name: string, pipelineName: string, context: Context, states: States, signal: AbortSignal, options: {
     node?: Node; status?: NodeStatus; error?: Context | null; skipped?: boolean; blocked?: boolean; ignoredError?: string | null;
   } = {}): Promise<void> {
-    const pipeline = this.spec.pipeline[pipelineName];
+    const pipeline = this.spec.pipelines[pipelineName];
     const status = options.status ?? "running";
     const event: Context = { name, pipeline: { name: pipelineName, ...(options.node ? {} : { status }) }, error: options.error ?? null };
     if (options.node) event.node = { ...mapping(context.node ?? {}), name: options.node.name, status, skipped: options.skipped ?? false, blocked: options.blocked ?? false, ignored_error: options.ignoredError ?? null };
@@ -160,8 +160,8 @@ export class Flow {
     let pipelineError: unknown;
     const running = new Set<Promise<void>>();
     try {
-      const definition = this.spec.pipeline[name];
-      if (!Object.hasOwn(this.spec.pipeline, name) || !definition) throw new Error("Unknown pipeline " + name);
+      const definition = this.spec.pipelines[name];
+      if (!Object.hasOwn(this.spec.pipelines, name) || !definition) throw new Error("Unknown pipeline " + name);
       const validate = (base: Context) => {
         const local = structuredClone(base);
         requestScopes(local, request.registryContext); local.request = {...structuredClone(request.metadata), pipelineName: name, inputs: structuredClone(request.payload)}; local.pipeline_name = name;
@@ -257,7 +257,7 @@ export class Flow {
       pipelineError = caught; this.failed = true;
     }
     if (pipelineError && mapping(context.session ?? {}).server) {
-      for (const node of this.spec.pipeline[name]?.nodes ?? []) if (states[node.name] === "running" || !states[node.name]) {
+      for (const node of this.spec.pipelines[name]?.nodes ?? []) if (states[node.name] === "running" || !states[node.name]) {
         await reportingAction("report_node", {status: "failed", blocked: !states[node.name], reason: "Execution interrupted or could not complete"}, {...context, node: {name: node.name}}, this.effects, AbortSignal.timeout(this.shutdownTimeout), true);
       }
     }

@@ -14,7 +14,7 @@ const yaml = 'workload: {target: bun, units: 0, argv: [--version]}\n';
 const result: RegistryModule = {registry: "https://mu.example", slug: "example", version: "1.0.0", versionId: "version-one", sha256: sha256(yaml), formatVersion: 1, yaml};
 const signal = () => new AbortController().signal;
 for (const item of references) test(`registry reference: ${item.name}`, () => {
-  const check = () => parseSpec(JSON.stringify({workloads: {w: item.value}, pipeline: {}}), {allowExternal: true});
+  const check = () => parseSpec(JSON.stringify({workloads: {w: item.value}, pipelines: {}}), {allowExternal: true});
   if (item.valid) expect(check).not.toThrow(); else expect(check).toThrow();
 });
 test("source grammar is deterministic; registry misses never fall back to files or HTTPS", async () => {
@@ -27,7 +27,7 @@ test("source grammar is deterministic; registry misses never fall back to files 
   expect(fallback).toBe(0);
 });
 test("registry digest/identity checks run before parsing and restore uses verified pinned provenance offline", async () => {
-  const source = JSON.stringify({workloads: {w: "example"}, pipeline: {}});
+  const source = JSON.stringify({workloads: {w: "example"}, pipelines: {}});
   const lock: RegistryLock = {yamlSha256: sha256(source), pins: [{alias: "w", reference: "example", slug: "example", version: "1.0.0", versionId: result.versionId, sha256: result.sha256, formatVersion: 1}]};
   const noFallback = async () => {throw new Error("unexpected source load");};
   const resolved = await resolveWorkloadModules(source, noFallback, signal(), undefined, {origin: result.registry, lock, read: async () => result});
@@ -76,7 +76,7 @@ test("worker execution refuses a registry Request missing its captured lock befo
   const client = new RegistryClient(result.registry, "worker-token", (async () => {reads++; throw new Error("must not read module");}) as unknown as typeof fetch);
   class Effects extends BunEffects {override async http() {return {status_code: 200, body: {ok: true}};}}
   const executor = new SpecExecutor({workspace: cwd, server: result.registry, token: "worker-token", unitId: "unit", specs: ["demo"], maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false}, new Effects(), undefined, client);
-  await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipeline: {p: {nodes: []}}}), {requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
+  await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipelines: {p: {nodes: []}}}), {requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
   expect(reads).toBe(0);
 });
 

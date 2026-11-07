@@ -31,14 +31,14 @@ test("Field presence, defaults and CEL conditionals preserve literal caller JSON
 
 test("Field declaration errors include paths and reject unknown or absent types", () => {
   for (const declaration of [{}, { type: "integer" }, { type: null }, null, { type: "string", nullable: true }]) {
-    expect(() => validateFields({ x: declaration }, "pipeline.p.inputs")).toThrow("pipeline.p.inputs.x");
+    expect(() => validateFields({ x: declaration }, "pipelines.p.inputs")).toThrow("pipelines.p.inputs.x");
   }
 });
 
 test("all input owners reject params with a migration path", () => {
   for (const [spec, path] of [
-    [{ pipeline: { p: { params: {} } } }, "pipeline.p.params"],
-    [{ pipeline: { p: { nodes: [{ name: "n", params: {} }] } } }, "pipeline.p.nodes.n.params"],
+    [{ pipelines: { p: { params: {} } } }, "pipelines.p.params"],
+    [{ pipelines: { p: { nodes: [{ name: "n", params: {} }] } } }, "pipelines.p.nodes.n.params"],
     [{ workloads: { w: { target: "bun", params: {} } } }, "workloads.w.params"],
     [{ routines: { r: { actions: [], params: {} } } }, "routines.r.params"],
   ] as const) expect(() => parseSpec(JSON.stringify(spec))).toThrow(path);

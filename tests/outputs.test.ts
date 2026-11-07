@@ -17,7 +17,7 @@ test("typed Workload/Routine/Node/Pipeline outputs publish only after validation
   const bodies: Context[] = [];
   const transport = (async (_url: unknown, options: RequestInit) => {bodies.push(JSON.parse(String(options.body))); return Response.json({ok: true});}) as typeof fetch;
   class Effects extends BunEffects {override async process() {return {returncode: 0, stdout: "value", stderr: ""};}}
-  const spec = parseSpec(JSON.stringify({workloads: {w: {target: "fake", outputs: {text: {type: "string", value: "${{ result.stdout }}"}}}}, routines: {r: {inputs: {x: {type: "string", value: "${{ with.x }}"}}, actions: [], outputs: {x: {type: "string", value: "${{ inputs.x }}"}}}}, pipeline: {p: {outputs: {result: {type: "string", value: "${{ pipeline.nodes.last.outputs.result }}"}}, nodes: [
+  const spec = parseSpec(JSON.stringify({workloads: {w: {target: "fake", outputs: {text: {type: "string", value: "${{ result.stdout }}"}}}}, routines: {r: {inputs: {x: {type: "string", value: "${{ with.x }}"}}, actions: [], outputs: {x: {type: "string", value: "${{ inputs.x }}"}}}}, pipelines: {p: {outputs: {result: {type: "string", value: "${{ pipeline.nodes.last.outputs.result }}"}}, nodes: [
     {name: "first", run: [{type: "execute_workload", workload: "w", save_to: "w"}, {type: "execute_routine", routine: "r", with: {x: "${{ node.actions.w.outputs.text }}"}, save_to: "r"}], outputs: {result: {type: "string", value: "${{ node.actions.r.outputs.x }}"}}},
     {name: "last", depends_on: ["first"], outputs: {result: {type: "string", value: "${{ pipeline.nodes.first.outputs.result + '!' }}"}}},
   ]}}}));
@@ -50,7 +50,7 @@ test("permanent terminal-output rejection fails the Request instead of replaying
     const reports: Context[] = [];
     const transport = (async (url: unknown, options?: RequestInit) => {
       const path = new URL(String(url)).pathname;
-      if (path.includes("/specs/")) return new Response('pipeline: {p: {outputs: {answer: {type: number, value: 3}}, nodes: []}}');
+      if (path.includes("/specs/")) return new Response('pipelines: {p: {outputs: {answer: {type: number, value: 3}}, nodes: []}}');
       if (path.endsWith("claim")) return Response.json([{requestId: "r", assignmentVersion: 1, specSlug: "s", pipelineName: "p", payload: {}, artifacts: []}]);
       if (path.endsWith("report")) {const body = JSON.parse(String(options?.body)); reports.push(body); if (body.pipelineState) return new Response(null, {status: 400});}
       return Response.json({ok: true});
@@ -70,7 +70,7 @@ test("concurrent Requests share one initialized captured Spec and do not execute
     class Effects extends BunEffects {override async process(argv: string[]) {if (argv[0] === "initialize") {initialized++; await new Promise(resolve => setTimeout(resolve, 10));} else ran++; return {returncode: 0, stdout: "", stderr: ""};}}
     const transport = (async () => Response.json({ok: true})) as unknown as typeof fetch;
     const executor = new SpecExecutor(config, new Effects(transport));
-    const source = JSON.stringify({entries: {master_flow: {initialization: [{type: "execute_command", target: "initialize"}]}}, pipeline: {p: {nodes: [{name: "n", run: [{type: "execute_command", target: "run"}]}]}}});
+    const source = JSON.stringify({entries: {master_flow: {initialization: [{type: "execute_command", target: "initialize"}]}}, pipelines: {p: {nodes: [{name: "n", run: [{type: "execute_command", target: "run"}]}]}}});
     await Promise.all(["a", "b"].map(requestId => executor.execute(source, {requestId, assignmentVersion: 1, specSlug: "s", pipelineName: "p", payload: {}, artifacts: []}, new AbortController().signal)));
     expect(initialized).toBe(1); expect(ran).toBe(2);
     await executor.finalize(false);
@@ -87,7 +87,7 @@ for (const outputs of [false, true]) test(`fake execution respects captured outp
   const workspace = await mkdtemp(join(tmpdir(), "mu-fake-outputs-"));
   try {
     const config: WorkerConfig = {server: "http://server", token: "token", unitId: "cpu", specs: ["s"], workspace, maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: true};
-    const specYaml = outputs ? 'pipeline: {p: {outputs: {result: {type: number, value: 3}}}}' : 'pipeline: {p: {nodes: []}}';
+    const specYaml = outputs ? 'pipelines: {p: {outputs: {result: {type: number, value: 3}}}}' : 'pipelines: {p: {nodes: []}}';
     const reports: Context[] = [];
     const transport = (async (url: unknown, options?: RequestInit) => {const path = new URL(String(url)).pathname; if (path.endsWith("claim")) return Response.json([{requestId: "r", assignmentVersion: 1, specSlug: "s", pipelineName: "p", payload: {}, artifacts: [], specYaml}]); if (path.endsWith("report")) reports.push(JSON.parse(String(options?.body))); return Response.json({ok: true});}) as typeof fetch;
     const worker = new Worker(config, new DataCenterClient(config, transport), {execute: async () => {}});

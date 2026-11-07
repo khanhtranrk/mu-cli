@@ -12,7 +12,7 @@ import { main } from "../src/index";
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
-const source = "pipeline:\n  cpu:\n    nodes:\n      - name: fake\n";
+const source = "pipelines:\n  cpu:\n    nodes:\n      - name: fake\n";
 const request: ClaimedRequest = { requestId: "r1", assignmentVersion: 3, specSlug: "test", pipelineName: "cpu", payload: {}, artifacts: [] };
 
 async function fixture(batch: ClaimedRequest[] = [request]) {
@@ -121,7 +121,7 @@ test("state store round trips assignment generation and inputs", async () => {
 
 test("Spec envelope accepts YAML/JSON and rejects unsupported engine, missing pipeline and duplicate nodes", () => {
   validateEnvelope(source, "cpu");
-  validateEnvelope(JSON.stringify({ pipeline: { cpu: { nodes: [{ name: "test" }] } } }), "cpu");
+  validateEnvelope(JSON.stringify({ pipelines: { cpu: { nodes: [{ name: "test" }] } } }), "cpu");
   expect(() => validateEnvelope("expression_engine: old\n" + source, "cpu")).toThrow("cel-v1");
   expect(() => validateEnvelope(source, "missing")).toThrow();
   expect(() => validateEnvelope(source + "      - name: fake\n", "cpu")).toThrow("unique");

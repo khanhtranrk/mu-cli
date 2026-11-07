@@ -1,12 +1,13 @@
 import { object } from "../config";
+import { parseSpec } from "../spec/parse";
 import type { ClaimedRequest } from "../api";
 import type { RequestExecutor } from "./types";
 export type { RequestExecutor } from "./types";
 
 export function validateEnvelope(source: string, pipelineName: string): void {
-  const spec = object(Bun.YAML.parse(source));
+  const spec = parseSpec(source);
   if (spec.expression_engine !== undefined && spec.expression_engine !== "cel-v1") throw new Error("Only cel-v1 Specs are supported");
-  const pipeline = object(object(spec.pipeline)[pipelineName]);
+  const pipeline = object(object(spec.pipelines)[pipelineName]);
   if (!Array.isArray(pipeline.nodes) || pipeline.nodes.length === 0) throw new Error("Pipeline requires nodes");
   const names = new Set<string>();
   for (const raw of pipeline.nodes) {

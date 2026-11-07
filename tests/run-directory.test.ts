@@ -21,7 +21,7 @@ async function fixture(): Promise<WorkerConfig> {
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
 test("default and explicit spec-version retain the exact existing hash/path", async () => {
-  const config = await fixture(), source = "pipeline: {p: {nodes: []}}";
+  const config = await fixture(), source = "pipelines: {p: {nodes: []}}";
   const expected = join(config.workspace, "runs", sha(config.server + "\n" + config.unitId + "\ns\n" + source));
   expect(resolveRunDirectory(config, "s", source)).toEqual({scope: "spec-version", path: expected});
   expect(resolveRunDirectory({...config, runDirectoryScope: "spec-version"}, "s", source).path).toBe(expected);
@@ -83,7 +83,7 @@ test("pre-existing symlinks cannot redirect run/cache/output directories outside
 
 test("stable scope reuses old files but initializes/prepares/executes each revised Spec", async () => {
   const config = {...await fixture(), runDirectoryScope: "spec" as const};
-  const sources = (version: string) => JSON.stringify({entries: {master_flow: {initialization: [{type: "execute_command", target: "init-" + version}]}}, pipeline: {p: {
+  const sources = (version: string) => JSON.stringify({entries: {master_flow: {initialization: [{type: "execute_command", target: "init-" + version}]}}, pipelines: {p: {
     prepare: [{type: "execute_command", target: "prepare-" + version}], nodes: [
       {name: "generate", skip_if: {operator: "file_exists", path: "${{ session.output_dir }}/cached.json"}, run: [{type: "write_json", path: "${{ session.output_dir }}/cached.json", content: {version}}]},
       {name: "current", run: [{type: "write_json", path: "${{ session.output_dir }}/current.json", content: {version, cache: "${{ session.cache_dir }}", models: "${{ sys.cache_dir }}"}}]},
@@ -113,7 +113,7 @@ test("stable scope reuses old files but initializes/prepares/executes each revis
 
 test("reclaimed Request uses a fresh assignment in the shared directory, not old completed-node state", async () => {
   const config = {...await fixture(), runDirectoryScope: "spec" as const, runDirectoryName: "reset-shared"};
-  const source = JSON.stringify({pipeline: {p: {nodes: [{name: "work", run: [{type: "execute_command", target: "work"}, {type: "write_json", path: "${{ session.output_dir }}/assignment.json", content: "${{ request.assignmentVersion }}"}]}]}}});
+  const source = JSON.stringify({pipelines: {p: {nodes: [{name: "work", run: [{type: "execute_command", target: "work"}, {type: "write_json", path: "${{ session.output_dir }}/assignment.json", content: "${{ request.assignmentVersion }}"}]}]}}});
   let assignmentVersion = 1, runs = 0;
   const transport = (async (url: unknown) => {
     const path = new URL(String(url)).pathname;
