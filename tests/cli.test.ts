@@ -51,7 +51,7 @@ test("init honors output and force; show/info preserve precedence, repeated opti
       "--spec", "one", "--spec=two", "--device", "nvidia,0,2", "--device", "rocm,1,3", "--workspace", "state",
       "--max-claim", "7", "--concurrency", "4", "--poll-interval", "2", "--heartbeat-interval", "3", "--shutdown-timeout", "5",
       "--resume", "--retry-incomplete", "--fake", "--json"], cwd,
-      { MU_SERVER_URL: "http://localhost:8888", MU_UNIT_ID: "env", MU_WORKER_TOKEN: "secret" });
+      { MU_SERVER_URL: "http://localhost:8888", MU_UNIT_ID: "env", WORKER_TOKEN: "secret" });
     expect(result.code).toBe(0);
     expect(JSON.parse(result.out)).toMatchObject({ server: "http://localhost:9999", unitId: "cli", specs: ["one", "two"],
       token: "[REDACTED]", maxClaim: 7, concurrency: 4, pollInterval: 2, heartbeatInterval: 3, shutdownTimeout: 5,

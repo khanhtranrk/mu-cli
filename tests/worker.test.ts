@@ -131,10 +131,10 @@ test("config precedence, bounded claim size and URL validation", async () => {
   const setup = await fixture();
   const path = join(setup.config.workspace, "config.yaml");
   await Bun.write(path, "server:\n  url: http://localhost:3211\nworker:\n  unitId: file\n  specs: [test]\n");
-  const config = await loadConfig({ config: path, "unit-id": "flag", fake: true }, { MU_UNIT_ID: "env", MU_WORKER_TOKEN: "secret" });
+  const config = await loadConfig({ config: path, "unit-id": "flag", fake: true }, { MU_UNIT_ID: "env", WORKER_TOKEN: "secret" });
   expect(config.unitId).toBe("flag"); expect(config.specs).toEqual(["test"]);
-  await expect(loadConfig({ config: path, "max-claim": "101" }, { MU_WORKER_TOKEN: "secret" })).rejects.toThrow("1 to 100");
-  await expect(loadConfig({ config: path, server: "https://user:secret@host" }, { MU_WORKER_TOKEN: "secret" })).rejects.toThrow("origin");
+  await expect(loadConfig({ config: path, "max-claim": "101" }, { WORKER_TOKEN: "secret" })).rejects.toThrow("1 to 100");
+  await expect(loadConfig({ config: path, server: "https://user:secret@host" }, { WORKER_TOKEN: "secret" })).rejects.toThrow("origin");
 });
 
 test("API errors redact response body and never retry mutating calls", async () => {
@@ -181,7 +181,7 @@ test("CLI subprocess completes worker flow over loopback HTTP and doctor never c
     await Bun.write(configPath, JSON.stringify({ runtime: { devices: [] } }));
     const options = ["--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "test", "--workspace", setup.config.workspace];
     const run = (command: string[]) => Bun.spawn(["bun", "src/index.ts", ...command, ...options], {
-      cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/..", env: { ...process.env, WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe",
     });
     const doctor = run(["worker", "doctor", "--json"]);
     expect(await doctor.exited).toBe(0);

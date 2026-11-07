@@ -66,7 +66,7 @@ export async function loadConfig(flags: Record<string, string | string[] | boole
   if (flags["retry-incomplete"] && !flags.resume) throw new Error("--retry-incomplete requires --resume; incomplete actions may repeat external effects");
   return {
     server: url.origin,
-    token: required(flags.token ?? env.MU_WORKER_TOKEN, "MU_WORKER_TOKEN"),
+    token: required(flags.token ?? env.WORKER_TOKEN, "WORKER_TOKEN"),
     unitId: required(flags["unit-id"] ?? env.MU_UNIT_ID ?? worker.unitId, "worker.unitId"),
     specs: specs as string[],
     workspace: resolve(required(flags.workspace ?? runtime.workspace ?? ".mu", "runtime.workspace")),

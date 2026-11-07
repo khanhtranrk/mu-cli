@@ -37,7 +37,7 @@ test("real CLI loads Spec, initializes after claiming, executes CPU workload and
   try {
     const configPath = join(configuration.workspace, "cli-config.json");
     await Bun.write(configPath, JSON.stringify({ runtime: { devices: [] } }));
-    const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
+    const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
     expect(await child.exited).toBe(0);
     expect(paths.indexOf("/api/notifications/send")).toBeGreaterThan(paths.indexOf("/api/requests/claim"));
     expect(reports.map((raw: any) => {const {events, node_states, ...report} = raw; return {...report, ...(node_states ? {node_states: Object.fromEntries(Object.entries(node_states).map(([key, value]: [string, any]) => {const {events, ...node} = value; return [key, node];}))} : {})};})).toEqual([

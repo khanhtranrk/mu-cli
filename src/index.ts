@@ -21,7 +21,7 @@ function options(command: Command): Command {
   return command
     .option("--config <path>", "Configuration YAML path")
     .option("--server <url>", "Data Center HTTP site origin")
-    .option("--token <token>", "Worker token (prefer MU_WORKER_TOKEN)")
+    .option("--token <token>", "Worker token (prefer WORKER_TOKEN)")
     .option("--unit-id <id>", "Worker unit identity")
     .option("--spec <slug>", "Authorized Spec slug (repeatable)", repeat)
     .option("--workspace <path>", "Worker state directory")

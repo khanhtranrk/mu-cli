@@ -16,9 +16,9 @@ in [the original roadmap](../superseded/migration-roadmap.md) is a target roadma
 
 ```sh
 bun install
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker doctor --config mu.yaml --json
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker start --config mu.yaml
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker doctor --config mu.yaml --json
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker start --config mu.yaml
 ```
 
 Without `--fake`, workers now execute the fetched Spec. `--fake` retains the
