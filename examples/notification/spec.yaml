@@ -1,5 +1,5 @@
 expression_engine: cel-v1
-pipeline:
+pipelines:
   notify:
     nodes:
       - name: notify

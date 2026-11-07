@@ -198,7 +198,7 @@ integration("report_request appends through MasterFlow without coupling events/s
     await setup.api.heartbeat("online");
     const [request] = await setup.api.claim("demo", 1);
     const context = {session: {working_dir: setup.config.workspace, server: setup.config.server, token: setup.config.token}, request};
-    const actions = new Actions({pipeline: {}}, new BunEffects());
+    const actions = new Actions({pipelines: {}}, new BunEffects());
     const signal = new AbortController().signal;
     const first = {level: "info" as const, message: "accepted", createdAt: 100};
     const second = {level: "warning" as const, message: "retry", details: {attempt: 2}, createdAt: 200};
@@ -222,7 +222,7 @@ integration("native notification delivers expression strings through real authen
   const setup = await fixture();
   try {
     const context = {session: {working_dir: setup.config.workspace, server: setup.config.server, token: setup.config.token}, inputs: {title: "Native title", message: "Native message", tags: "Example tag"}};
-    const actions = new Actions({pipeline: {}}, new BunEffects());
+    const actions = new Actions({pipelines: {}}, new BunEffects());
     for (const tags of [undefined, "${{ inputs.tags }}"]) await actions.run({type: "send_notification", title: "${{ inputs.title }}", message: "${{ inputs.message }}", ...(tags === undefined ? {} : {tags})}, context, {}, new AbortController().signal);
     const rows = await setup.backend.run(ctx => ctx.db.query("notifications").collect());
     expect(rows).toHaveLength(2);
@@ -248,7 +248,7 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     const first = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "1.0.0", expectedRevision: 1, changelog: "", makeDefault: true});
     const spec = JSON.stringify({
       workloads: {w: "example"},
-      pipeline: {demo: {
+      pipelines: {demo: {
         nodes: [{name: "n", run: [{type: "execute_workload", workload: "w", save_to: "result"}], outputs: {text: {type: "string", value: "${{ node.actions.result.outputs.text }}"}}}],
         outputs: {text: {type: "string", value: "${{ pipeline.nodes.n.outputs.text }}"}},
       }},
@@ -288,7 +288,7 @@ integration("registry recovery validates pinned provenance and never reloads mod
     const module = JSON.stringify({workload: {target: "bun", units: 0, argv: ["-e", "console.log('pinned')"]}});
     const workloadId = await owner.mutation(makeFunctionReference<"mutation">("workloads:create"), {slug: "recovery", name: "Recovery", description: "", yaml: module});
     await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "1.0.0", expectedRevision: 1, changelog: "", makeDefault: true});
-    const spec = JSON.stringify({workloads: {w: "recovery"}, pipeline: {demo: {nodes: [{name: "n", run: [{type: "execute_workload", workload: "w"}]}]}}});
+    const spec = JSON.stringify({workloads: {w: "recovery"}, pipelines: {demo: {nodes: [{name: "n", run: [{type: "execute_workload", workload: "w"}]}]}}});
     await setup.backend.run(ctx => ctx.db.delete(setup.ids.requestId));
     const specId = setup.ids.specId;
     await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Recovery", description: "", yaml: spec});
@@ -315,7 +315,7 @@ integration("registry parallel preparation survives publication, worker pins, st
     const yaml=JSON.stringify({prepare:[{type:"parallel",actions:[prepare("runtime"),prepare("model")]}],workload:{target:process.execPath,units:0,argv:["-e",`for(const f of ${JSON.stringify(['runtime','model'].map(name=>join(setup.config.workspace,name)))})if(!await Bun.file(f).exists())process.exit(9);console.log('prepared')`],outputs:{text:{type:"string",value:"${{ result.stdout }}"}}}});
     const id=await owner.mutation(makeFunctionReference<"mutation">("workloads:create"),{slug:"parallel-test",name:"Parallel",description:"",yaml});
     const version=await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"),{id,expectedRevision:1,version:"1.0.0",changelog:"",makeDefault:true});
-    const spec=JSON.stringify({workloads:{w:"parallel-test@1.0.0"},pipeline:{demo:{prepare:[{type:"ensure_workload",workload:"w"}],nodes:[{name:"n",run:[{type:"execute_workload",workload:"w",save_to:"result"}],outputs:{text:{type:"string",value:"${{ node.actions.result.outputs.text }}"}}}],outputs:{text:{type:"string",value:"${{ pipeline.nodes.n.outputs.text }}"}}}}});
+    const spec=JSON.stringify({workloads:{w:"parallel-test@1.0.0"},pipelines:{demo:{prepare:[{type:"ensure_workload",workload:"w"}],nodes:[{name:"n",run:[{type:"execute_workload",workload:"w",save_to:"result"}],outputs:{text:{type:"string",value:"${{ node.actions.result.outputs.text }}"}}}],outputs:{text:{type:"string",value:"${{ pipeline.nodes.n.outputs.text }}"}}}}});
     await setup.backend.run(ctx=>ctx.db.delete(setup.ids.requestId));
     await owner.mutation(makeFunctionReference<"mutation">("specs:update"),{id:setup.ids.specId,expectedRevision:0,name:"Parallel",description:"",yaml:spec});
     await owner.mutation(makeFunctionReference<"mutation">("specs:publish"),{id:setup.ids.specId,expectedRevision:1,version:"1.1.0",changelog:"",makeDefault:true});

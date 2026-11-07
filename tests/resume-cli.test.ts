@@ -11,7 +11,7 @@ for (const runDirectoryScope of ["spec-version", "spec"] as RunDirectoryScope[])
   const count = (name: string) => command(`const file=Bun.file('${name}');await Bun.write(file,String(Number(await file.exists()?await file.text():0)+1));`);
   const source = JSON.stringify({
     entries: { master_flow: { initialization: [count("init-count")], finalization: [count("final-count")] } },
-    pipeline: { p: { prepare: [count("prepare-count")], nodes: [
+    pipelines: { p: { prepare: [count("prepare-count")], nodes: [
       { name: "first", run: [count("first-count")] },
       { name: "second", depends_on: ["first"], run: [command("await Bun.write('ready','yes');if(!await Bun.file('continue').exists())await Bun.sleep(60000);await Bun.write('second-output','ok');")] },
     ] } },

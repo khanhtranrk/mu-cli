@@ -38,7 +38,7 @@ routines:
       value:
         type: object
         value: ${{ actions.inspected.outputs.value }}
-pipeline:
+pipelines:
   demo:
     inputs: {}
     nodes:

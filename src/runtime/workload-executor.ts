@@ -27,7 +27,7 @@ export async function executeStandaloneWorkload(options: StandaloneOptions, effe
   const declaration = ref ? {registry: ref.slug, ...(ref.version ? {version: ref.version} : {})} : { source: options.source, ...(options.sha256 === undefined ? {} : { sha256: options.sha256 }) };
   if (ref && options.sha256 !== undefined && !/^[a-f0-9]{64}$/i.test(options.sha256)) throw new Error("Invalid registry SHA-256");
   const registry = options.registry ? {...options.registry, read: async (...args: Parameters<RegistryResolution["read"]>) => {const result = await options.registry!.read(...args); if (options.sha256 !== undefined && result.sha256 !== options.sha256.toLowerCase()) throw new Error("Registry workload SHA-256 mismatch"); return result;}} : undefined;
-  const { spec } = await resolveWorkloadModules(JSON.stringify({ workloads: { standalone: declaration }, pipeline: {} }), load, signal, undefined, registry);
+  const { spec } = await resolveWorkloadModules(JSON.stringify({ workloads: { standalone: declaration }, pipelines: {} }), load, signal, undefined, registry);
   const workload = spec.workloads!.standalone!;
   if (!await effects.exists(options.cwd, "folder")) throw new Error("--cwd must name an existing directory");
   const cache = muCacheDirectory();

@@ -28,7 +28,7 @@ test("claim validates and preserves copied/shared artifact inputs without fetchi
 test("CPU artifact example uses existing Spec syntax and only zero-unit workloads", async () => {
   const spec = parseSpec(await Bun.file(join(import.meta.dir, "../examples/cpu-artifacts/spec.yaml")).text());
   expect(Object.values(spec.workloads ?? {}).every(workload => workload.units === 0)).toBe(true);
-  expect(spec.pipeline.demo?.nodes?.map(node => node.name)).toEqual(["publish", "verify"]);
+  expect(spec.pipelines.demo?.nodes?.map(node => node.name)).toEqual(["publish", "verify"]);
 });
 
 test("body_file binds the opened file, detects replacement and does not report upload success", async () => {
@@ -53,7 +53,7 @@ test("unresolved redirect is a failed action and cannot overwrite an existing do
   try {
     await Bun.write(destination, "keep");
     const transport = (async () => new Response("redirect missing Location", { status: 302 })) as unknown as typeof fetch;
-    const actions = new Actions({ pipeline: {} }, new BunEffects(transport));
+    const actions = new Actions({ pipelines: {} }, new BunEffects(transport));
     const context: Context = { session: { working_dir: directory } };
     await expect(actions.run({ type: "send_http_request", url: "http://storage/", response_file: destination, save_to: "download" }, context, {}, new AbortController().signal)).rejects.toThrow("HTTP 302");
     expect(await Bun.file(destination).text()).toBe("keep");

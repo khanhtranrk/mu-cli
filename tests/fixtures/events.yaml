@@ -34,7 +34,7 @@ events:
     routine: record_event
     with:
       path: ${{ session.working_dir }}/pipeline-finished.json
-pipeline:
+pipelines:
   demo:
     nodes:
     - name: hello

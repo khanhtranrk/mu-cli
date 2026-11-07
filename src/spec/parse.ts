@@ -67,11 +67,12 @@ export function parseYamlMapping(source: string): Record<string, unknown> {
 export function parseSpec(source: string, options: { allowExternal?: boolean; modulePreparation?: boolean } = {}): Spec {
   const root = parseYamlMapping(source);
   if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
+  if (has(root, "pipeline")) throw new Error("pipeline: removed; rename the root collection to pipelines");
   if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
   validateTemplates(root);
   const workloads = mapping(defaultValue(root.workloads, {}), "workloads");
   const routines = mapping(defaultValue(root.routines, {}), "routines");
-  const pipelines = mapping(defaultValue(root.pipeline, {}), "pipeline");
+  const pipelines = mapping(defaultValue(root.pipelines, {}), "pipelines");
 
   function common(item: Record<string, unknown>, label: string, nodeScope = false): void {
     if (has(item, "ignore_error") && typeof item.ignore_error !== "boolean") throw new Error(`${label}.ignore_error must be boolean`);
@@ -193,28 +194,28 @@ export function parseSpec(source: string, options: { allowExternal?: boolean; mo
   }
   events(root.events, "events");
   for (const [name, raw] of Object.entries(pipelines)) {
-    const item = mapping(raw, `pipeline.${name}`);
-    inputs(item, `pipeline.${name}`);
-    if (has(item, "outputs")) validateFields(item.outputs, `pipeline.${name}.outputs`);
-    if (item.context !== undefined) common({ context: item.context }, `pipeline.${name}`);
-    actions(item.prepare, `pipeline.${name}.prepare`, false, true); events(item.events, `pipeline.${name}.events`);
+    const item = mapping(raw, `pipelines.${name}`);
+    inputs(item, `pipelines.${name}`);
+    if (has(item, "outputs")) validateFields(item.outputs, `pipelines.${name}.outputs`);
+    if (item.context !== undefined) common({ context: item.context }, `pipelines.${name}`);
+    actions(item.prepare, `pipelines.${name}.prepare`, false, true); events(item.events, `pipelines.${name}.events`);
     const edges = new Map<string, string[]>();
-    for (const rawNode of list(defaultValue(item.nodes, []), `pipeline.${name}.nodes`)) {
+    for (const rawNode of list(defaultValue(item.nodes, []), `pipelines.${name}.nodes`)) {
       const node = mapping(rawNode, "node");
       const nodeName = literalName(node.name, "node.name");
       if (edges.has(nodeName)) throw new Error("Node names must be unique");
       const dependencies = list(defaultValue(node.depends_on, []), "depends_on").map(dependency => literalName(dependency, "depends_on"));
       edges.set(nodeName, dependencies);
       common(node, `node.${nodeName}`, true);
-      inputs(node, `pipeline.${name}.nodes.${nodeName}`);
+      inputs(node, `pipelines.${name}.nodes.${nodeName}`);
       if (has(node, "outputs")) validateFields(node.outputs, `node.${nodeName}.outputs`);
       for (const phase of ["before_run", "run", "after_run", "finally"]) actions(node[phase], `node.${nodeName}.${phase}`, phase !== "finally");
       events(node.events, `node.${nodeName}.events`, true);
     }
-    checkCycles(edges, `pipeline.${name} dependency`);
+    checkCycles(edges, `pipelines.${name} dependency`);
   }
   validatePreparation(root, options.modulePreparation);
-  return { ...root, pipeline: pipelines } as unknown as Spec;
+  return { ...root, pipelines } as unknown as Spec;
 }
 
 function checkCycles(edges: Map<string, string[]>, label: string): void {

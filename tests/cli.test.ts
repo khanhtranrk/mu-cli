@@ -63,7 +63,7 @@ test("init honors output and force; show/info preserve precedence, repeated opti
 
 test("worker/doctor route API errors correctly and release owned locks on success and failure", async () => {
   const cwd = await fixture(); let status = 200; let malformed = false; let claims = 0;
-  const source = "pipeline:\n  p:\n    nodes:\n      - name: fake\n";
+  const source = "pipelines:\n  p:\n    nodes:\n      - name: fake\n";
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(request) {
     if (status !== 200) return new Response("error", { status });
     const path = new URL(request.url).pathname;
@@ -115,8 +115,8 @@ test("fake once claims and reports without executing Spec actions, retaining bat
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/api/specs/")) return new Response(valid
-      ? JSON.stringify({ pipeline: { p: { nodes: [{ name: "action", run: [{ type: "execute_command", target: "bun", args: ["-e", "await Bun.write('should-not-exist','executed')"] }] }] } } })
-      : "pipeline: {}");
+      ? JSON.stringify({ pipelines: { p: { nodes: [{ name: "action", run: [{ type: "execute_command", target: "bun", args: ["-e", "await Bun.write('should-not-exist','executed')"] }] }] } } })
+      : "pipelines: {}");
     if (path.endsWith("claim")) return Response.json([{ requestId: valid ? "success" : "failure", assignmentVersion: 1, specSlug: "test", pipelineName: "p", payload: {}, artifacts: [] }]);
     if (path.endsWith("report")) reports.push((await request.json() as { status: string }).status);
     return Response.json({ ok: true });
@@ -148,7 +148,7 @@ test("run directory flags appear in help and resolved config; invalid settings f
   let calls = 0;
   const server = Bun.serve({port: 0, hostname: "127.0.0.1", fetch(request) {
     calls++;
-    if (new URL(request.url).pathname.startsWith("/api/specs/")) return new Response("pipeline: {p: {nodes: []}}");
+    if (new URL(request.url).pathname.startsWith("/api/specs/")) return new Response("pipelines: {p: {nodes: []}}");
     return Response.json({ok: true});
   }});
   try {

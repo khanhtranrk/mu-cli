@@ -108,7 +108,7 @@ test("Flow holds peak GPU reservation through finally and terminal hooks while C
       cpu: { target: "cpu", units: 0, device_args: ["${{ missing.schedule }}"] },
     },
     events: [{ on: "node_finished", do: [{ type: "execute_command", target: "hook", args: ["${{ node.name }}"] }] }],
-    pipeline: { p: { nodes: [
+    pipelines: { p: { nodes: [
       { name: "first", before_run: [{ type: "execute_workload", workload: "small" }], run: [{ type: "execute_workload", workload: "gpu" }, { type: "execute_workload", workload: "cpu" }], finally: [{ type: "execute_command", target: "cleanup" }] },
       { name: "second", run: [{ type: "execute_workload", workload: "gpu" }] },
       { name: "cpu", run: [{ type: "execute_workload", workload: "cpu" }] },
@@ -140,7 +140,7 @@ test("concurrent Requests share scheduler capacity, prepare once and isolate dep
       return { returncode: 0, stdout: "", stderr: "" };
     }
   }
-  const spec = parseSpec(JSON.stringify({ pipeline: { p: { inputs: { label: { type: "string" } }, prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
+  const spec = parseSpec(JSON.stringify({ pipelines: { p: { inputs: { label: { type: "string" } }, prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
     { name: "a", run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "a"] }] },
     { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "b"] }] },
   ] } } }));

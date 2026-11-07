@@ -27,8 +27,18 @@ async function fixture(spec: unknown) {
 const write = (path: string, content: unknown) => ({ type: "write_json", path: "${{ session.working_dir }}/" + path, content });
 const command = (code: string, extra: Context = {}) => ({ type: "execute_command", target: "bun", args: ["-e", code], ...extra });
 
+test("plural collection selects one pipeline and preserves the singular runtime namespace", async () => {
+  const setup = await fixture({pipelines: {
+    first: {nodes: [{name: "unused", run: [write("unused.json", true)]}]},
+    second: {nodes: [{name: "selected", run: [write("selected.json", "${{ pipeline.name }}")]}]},
+  }});
+  await setup.flow.execute({pipelineName: "second", payload: {}, metadata: {}}, setup.signal);
+  expect(await setup.json("selected.json")).toBe("second");
+  expect(await Bun.file(join(setup.cwd, "unused.json")).exists()).toBe(false);
+});
+
 test("CPU workload resolves argv/env exactly once without a shell, then saves command state", async () => {
-  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, inputs: { message: { type: "string", value: "${{ with.message }}" } }, env: { MU_TEST: "${{ inputs.message }}" }, argv: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ inputs.message }}"] } }, pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", with: { message: "${{ inputs.message }}" } }, command("process.stdout.write(' hi\\n');", { save_to: "cmd" }), write("state.json", "${{ node.actions.cmd }}")] }] } } });
+  const setup = await fixture({ workloads: { echo: { target: "bun", units: 0, inputs: { message: { type: "string", value: "${{ with.message }}" } }, env: { MU_TEST: "${{ inputs.message }}" }, argv: ["-e", "await Bun.write('workload.json',JSON.stringify({argv:process.argv[1],env:process.env.MU_TEST}));", "${{ inputs.message }}"] } }, pipelines: { p: { inputs: { message: { type: "string" } }, nodes: [{ name: "work", run: [{ type: "execute_workload", workload: "echo", with: { message: "${{ inputs.message }}" } }, command("process.stdout.write(' hi\\n');", { save_to: "cmd" }), write("state.json", "${{ node.actions.cmd }}")] }] } } });
   await setup.execute({ message: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("workload.json")).toEqual({ argv: "${{ 1 + 1 }}; $(touch forbidden)", env: "${{ 1 + 1 }}; $(touch forbidden)" });
   expect(await setup.json("state.json")).toEqual({ success: true, error: null, returncode: 0, stdout: " hi\n", stderr: "" });
@@ -36,7 +46,7 @@ test("CPU workload resolves argv/env exactly once without a shell, then saves co
 });
 
 test("whole-value templates retain typed command argv/env/context", async () => {
-  const setup = await fixture({ pipeline: { p: { inputs: { argv: { type: "array" }, env: { type: "object" }, local: { type: "object" } }, nodes: [{ name: "n", run: [
+  const setup = await fixture({ pipelines: { p: { inputs: { argv: { type: "array" }, env: { type: "object" }, local: { type: "object" } }, nodes: [{ name: "n", run: [
     { type: "execute_command", target: "bun", args: "${{ inputs.argv }}", env: "${{ inputs.env }}", context: "${{ inputs.local }}", save_to: "cmd" },
     write("typed.json", { stdout: "${{ node.actions.cmd.stdout }}", value: "${{ custom.value }}" }),
   ] }] } } });
@@ -45,7 +55,7 @@ test("whole-value templates retain typed command argv/env/context", async () => 
 });
 
 test("dependency readiness respects reverse YAML order and blocks failed dependents without finally", async () => {
-  const setup = await fixture({ pipeline: { p: { nodes: [
+  const setup = await fixture({ pipelines: { p: { nodes: [
     { name: "blocked", depends_on: ["failure"], run: [write("blocked.json", true)], finally: [write("blocked-final.json", true)] },
     { name: "last", depends_on: ["first"], run: [write("last.json", true)] },
     { name: "failure", run: [command("process.exit(7)")], after_run: [write("after.json", true)], finally: [write("failed.json", "${{ node.status }}")] },
@@ -58,7 +68,7 @@ test("dependency readiness respects reverse YAML order and blocks failed depende
 });
 
 test("successful skip checks postcondition, action precondition skips, node precondition fails, finally keeps updating status", async () => {
-  const setup = await fixture({ pipeline: { p: { nodes: [
+  const setup = await fixture({ pipelines: { p: { nodes: [
     { name: "skipped", skip_if: { operator: "and", props: [] }, postcondition: { operator: "cel", expression: "${{ true }}" }, run: [write("not-run.json", true)], finally: [write("skip-final.json", "${{ node.status }}")] },
     { name: "pre", precondition: { operator: "or", props: [] }, finally: [write("pre-final.json", "${{ node.status }}")] },
     { name: "cleanup", run: [write("action-skip.json", true), { ...write("action-not-run.json", true), precondition: { operator: "or", props: [] } }], finally: [command("process.exit(1)"), write("cleanup-final.json", "${{ node.status }}")] },
@@ -71,7 +81,7 @@ test("successful skip checks postcondition, action precondition skips, node prec
 });
 
 test("ignored action failures retain failed save_to and ignored node failure allows dependents", async () => {
-  const setup = await fixture({ pipeline: { p: { nodes: [
+  const setup = await fixture({ pipelines: { p: { nodes: [
     { name: "ignored-action", run: [command("process.exit(3)", { save_to: "failure", ignore_error: true }), write("saved.json", "${{ node.actions.failure }}")] },
     { name: "ignored-node", ignore_error: true, run: [command("process.exit(2)")], finally: [write("actual.json", "${{ node.status }}")] },
     { name: "dependent", depends_on: ["ignored-node"], run: [write("dependent.json", true)] },
@@ -82,7 +92,7 @@ test("ignored action failures retain failed save_to and ignored node failure all
 });
 
 test("prepare runs once only after valid intake; Registry, request and node actions remain isolated", async () => {
-  const setup = await fixture({ pipeline: { p: {
+  const setup = await fixture({ pipelines: { p: {
     inputs: { name: { type: "string" }, count: { type: "number", default: "${{ Request.Registry.Count }}" } },
     context: { captured: "${{ Request.Registry.Count }}" }, prepare: [command("const f=Bun.file('prepare-count'); await Bun.write(f,String(Number(await f.exists()?await f.text():0)+1));", { save_to: "prepared" })],
     nodes: [{ name: "first", run: [{ ...command("process.stdout.write('private')"), save_to: "private" }] }, { name: "second", run: [write("${{ inputs.name }}.json", { count: "${{ inputs.count }}", captured: "${{ captured }}", prepared: "${{ actions.prepared.success }}", private: "${{ has(actions.private) }}" })] }],
@@ -97,7 +107,7 @@ test("prepare runs once only after valid intake; Registry, request and node acti
 });
 
 test("routine context is private; inspect_file hashes bytes and returns typed output", async () => {
-  const setup = await fixture({ routines: { inspect: { inputs: { path: { type: "string", value: "${{ with.path }}" } }, actions: [{ type: "inspect_file", target: "${{ inputs.path }}", save_to: "info", context: { custom: { secret: true } } }], outputs: {file: {type: "object", value: "${{ actions.info }}"}} } }, pipeline: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", with: { path: "source.json" }, save_to: "routine" }, write("result.json", { result: "${{ node.actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
+  const setup = await fixture({ routines: { inspect: { inputs: { path: { type: "string", value: "${{ with.path }}" } }, actions: [{ type: "inspect_file", target: "${{ inputs.path }}", save_to: "info", context: { custom: { secret: true } } }], outputs: {file: {type: "object", value: "${{ actions.info }}"}} } }, pipelines: { p: { nodes: [{ name: "file", run: [write("source.json", { hello: "world" }), { type: "execute_routine", routine: "inspect", with: { path: "source.json" }, save_to: "routine" }, write("result.json", { result: "${{ node.actions.routine }}", leaked: "${{ has(custom.secret) }}" })] }] } } });
   await setup.execute();
   const output = await setup.json("result.json");
   expect(output.leaked).toBe(false); expect(output.result.success).toBe(true);
@@ -112,7 +122,7 @@ test("event hooks accumulate root/pipeline/node in order, have isolated state, a
       { on: "node_finished", do: [command("process.exit(1)")] },
       { on: "node_finished", do: [write("finished.json", "${{ event }}")] },
     ],
-    pipeline: { p: { events: [{ on: "node_started", do: [command("await Bun.write('order', (await Bun.file('order').text())+'pipeline,')")] }], nodes: [{ name: "n", events: [{ on: "node_started", do: [command("await Bun.write('order', (await Bun.file('order').text())+'node')")] }], run: [write("leaked.json", "${{ has(custom.leaked) }}")] }] } },
+    pipelines: { p: { events: [{ on: "node_started", do: [command("await Bun.write('order', (await Bun.file('order').text())+'pipeline,')")] }], nodes: [{ name: "n", events: [{ on: "node_started", do: [command("await Bun.write('order', (await Bun.file('order').text())+'node')")] }], run: [write("leaked.json", "${{ has(custom.leaked) }}")] }] } },
   });
   expect(await setup.execute()).toEqual({ n: "success" });
   expect(await readFile(join(setup.cwd, "order"), "utf8")).toBe("root,pipeline,node");
@@ -142,7 +152,7 @@ test("conditions distinguish missing from null, filesystem types and CPU node pl
 
 test("command failure state is available to postcondition/finally and postcondition failure retains output", async () => {
   const setup = await fixture({});
-  const actions = new Actions({ pipeline: {} } as Spec, setup.effects);
+  const actions = new Actions({ pipelines: {} } as Spec, setup.effects);
   const context = { ...setup.base };
   await expect(actions.run({ type: "execute_command", target: "bun", args: ["-e", "process.stdout.write('ok')"], save_to: "cmd", postcondition: { operator: "or", props: [] } }, context, {}, setup.signal)).rejects.toThrow("postcondition");
   const state = mapping(mapping(context.actions).cmd);
@@ -160,13 +170,13 @@ test("legacy offline events fixture produces canonical lifecycle snapshots", asy
 });
 
 test("explicit null JSON content remains null", async () => {
-  const setup = await fixture({ pipeline: { p: { nodes: [{ name: "n", run: [write("null.json", null)] }] } } });
+  const setup = await fixture({ pipelines: { p: { nodes: [{ name: "n", run: [write("null.json", null)] }] } } });
   await setup.execute();
   expect(await setup.json("null.json")).toBeNull();
 });
 
 test("interrupted node attempts finally with a separate bounded cleanup signal", async () => {
-  const setup = await fixture({ pipeline: { p: { nodes: [{ name: "n", run: [command("await Bun.sleep(60000)")], finally: [write("interrupted.json", "${{ node.status }}")] }] } } });
+  const setup = await fixture({ pipelines: { p: { nodes: [{ name: "n", run: [command("await Bun.sleep(60000)")], finally: [write("interrupted.json", "${{ node.status }}")] }] } } });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 80);
   try {
@@ -195,7 +205,7 @@ test("Workload with selects explicit Fields, isolates siblings and renders argv 
       },
       target: "bun", argv: ["-e", "await Bun.write(process.argv[1], process.argv[2]);", "${{ node.inputs.path }}", "${{ string(inputs.selected.message) + ':' + inputs.selected.id + ':' + string(inputs.fixed) + ':' + string(has(inputs.extra)) + ':' + string(has(inputs.message)) + ':' + string(inputs.fallback) }}"],
     } },
-    pipeline: { p: { inputs: { message: { type: "string" } }, nodes: [
+    pipelines: { p: { inputs: { message: { type: "string" } }, nodes: [
       { name: "one", inputs: { path: { type: "string", value: "one.txt" } }, run: [
         { type: "execute_workload", workload: "echo", with: { use: true, nested: { message: "${{ inputs.message }}" }, extra: 100, message: "implicit" } },
         write("caller.json", { inputs: "${{ inputs }}", node: "${{ node.inputs }}" }),
@@ -230,7 +240,7 @@ test("Workload with cannot implicitly supply a required Field, and with is unava
 test("Pipeline, Node and Routine Fields resolve explicit values in their owner scope", async () => {
   const setup = await fixture({
     routines: { r: { inputs: { n: { type: "number", value: "${{ node.inputs.n + 1 }}" }, text: { type: "string", value: "unused" } }, actions: [], outputs: {values: {type: "object", value: "${{ inputs }}"}} } },
-    pipeline: { p: { inputs: { n: { type: "number", value: 2 }, label: { type: "string", value: "unused" } }, nodes: [
+    pipelines: { p: { inputs: { n: { type: "number", value: 2 }, label: { type: "string", value: "unused" } }, nodes: [
       { name: "n", inputs: { n: { type: "number", value: "${{ pipeline.inputs.n * 3 }}" } }, run: [
         { type: "execute_routine", routine: "r", with: { text: "${{ inputs.label }}" }, save_to: "r" },
         write("scopes.json", { pipeline: "${{ inputs }}", node: "${{ node.inputs }}", routine: "${{ node.actions.r.outputs.values }}" }),
@@ -242,7 +252,7 @@ test("Pipeline, Node and Routine Fields resolve explicit values in their owner s
 });
 
 test("Node context resolves parent namespaces under node only, before Node inputs and conditions", async () => {
-  const setup = await fixture({pipeline: {p: {
+  const setup = await fixture({pipelines: {p: {
     inputs: {message: {type: "string"}},
     nodes: [{name: "publish", context: {
       result_path: "${{ session.working_dir }}/node-context.json",
@@ -262,7 +272,7 @@ test("Node context resolves parent namespaces under node only, before Node input
 });
 
 test("Node context does not create bare root variables or replace parent values", async () => {
-  const setup = await fixture({pipeline: {p: {
+  const setup = await fixture({pipelines: {p: {
     context: {shared: "parent"}, nodes: [{name: "n", context: {result_path: "private", shared: "node"}, run: [
       write("node-shadow.json", {root: "${{ shared }}", local: "${{ node.shared }}"}),
       write("bare-must-fail.json", "${{ result_path }}"),
@@ -274,7 +284,7 @@ test("Node context does not create bare root variables or replace parent values"
 });
 
 test("Node context remains private across sibling Nodes, Pipeline hooks and repeated Requests", async () => {
-  const setup = await fixture({pipeline: {p: {
+  const setup = await fixture({pipelines: {p: {
     inputs: {private: {type: "boolean"}},
     events: [{on: "pipeline_finished", do: [{...write("pipeline-context.json", "${{ private_key }}"), ignore_error: true}]}],
     nodes: [
@@ -293,8 +303,8 @@ test("Node context remains private across sibling Nodes, Pipeline hooks and repe
 
 test("literal and dynamic Node context collisions reject reserved fields without modifying Node metadata", async () => {
   const reserved = ["name", "status", "inputs", "outputs", "actions", "state", "total_units", "device", "skipped", "blocked", "ignored_error"];
-  for (const key of reserved) expect(() => parseSpec(JSON.stringify({pipeline: {p: {nodes: [{name: "n", context: {[key]: "forged"}}]}}}))).toThrow(`node.n.context.${key}: reserved Node field`);
-  const setup = await fixture({pipeline: {p: {
+  for (const key of reserved) expect(() => parseSpec(JSON.stringify({pipelines: {p: {nodes: [{name: "n", context: {[key]: "forged"}}]}}}))).toThrow(`node.n.context.${key}: reserved Node field`);
+  const setup = await fixture({pipelines: {p: {
     inputs: {context: {type: "object"}}, nodes: [{name: "n", context: "${{ inputs.context }}",
       run: [write("collision-ran.json", true)],
       finally: [write("collision-metadata.json", "${{ node }}")],

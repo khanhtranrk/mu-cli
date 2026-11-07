@@ -140,7 +140,7 @@ workloads:
       - ${{ inputs.output }}
       - --output_format
       - all
-pipeline:
+pipelines:
   song-with-cover:
     prepare:
       - type: execute_command

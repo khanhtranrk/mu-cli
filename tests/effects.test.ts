@@ -24,7 +24,7 @@ test("HTTP action saves typed success/failure results and adds assignment only t
   } });
   try {
     const context: Context = { session: { working_dir: setup.cwd, server: server.url.origin }, request: { assignmentVersion: 9 }, node: { name: "render" } };
-    const actions = new Actions({ pipeline: {} }, setup.effects);
+    const actions = new Actions({ pipelines: {} }, setup.effects);
     await actions.run({ type: "send_http_request", url: server.url + "ok", method: "post", body: { "${{ node.name }}": { status: "running" } }, save_to: "http", postcondition: { operator: "action_state", target: ["http", "status_code"], expected: 201 } }, context, {}, setup.signal);
     expect(mapping(mapping(mapping(context.node).actions).http)).toMatchObject({ success: true, status_code: 201, body: { id: "job" } });
     expect(received[0]).toEqual({ path: "/ok", assignment: "9", body: { render: { status: "running" } } });

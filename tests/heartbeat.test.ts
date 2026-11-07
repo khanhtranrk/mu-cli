@@ -18,7 +18,7 @@ test("a successful heartbeat after a transient failure permits the next claim wi
    claims++;if(claims>1){controller.abort();return Response.json([]);}
    return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);
   }
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch;
  try{
@@ -139,7 +139,7 @@ test("worker recovers a pending heartbeat at the batch boundary before the next 
    if(++claims===2){nextClaimAt=Date.now();controller.abort();return Response.json([]);}
    return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);
   }
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch;
  try{
@@ -156,7 +156,7 @@ test("a permanent heartbeat error stops the worker before another claim and reta
   const path=new URL(String(url)).pathname,body=init.body?JSON.parse(init.body):{};
   if(path.endsWith("heartbeat")){if(body.status==="online"&&++online>1)return new Response(null,{status:403});if(body.status==="offline")offline++;}
   if(path.endsWith("claim")){claims++;return Response.json([{requestId:"r1",assignmentVersion:1,specSlug:"demo",pipelineName:"cpu",payload:{},artifacts:[]}]);}
-  if(path.startsWith("/api/specs/"))return new Response("pipeline: {cpu: {nodes: []}}");
+  if(path.startsWith("/api/specs/"))return new Response("pipelines: {cpu: {nodes: []}}");
   return Response.json({ok:true});
  }) as typeof fetch);
  try{

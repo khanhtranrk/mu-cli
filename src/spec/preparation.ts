@@ -43,7 +43,7 @@ export function validatePreparation(spec: Mapping, module = false, installation?
     return grouped;
   }
   let grouped = false;
-  for (const pipeline of Object.values(spec.pipeline ?? {}) as Mapping[]) {
+  for (const pipeline of Object.values(spec.pipelines ?? {}) as Mapping[]) {
     grouped = walk(pipeline.prepare, true, false, false, []) || grouped;
     for (const node of pipeline.nodes ?? []) {
       for (const phase of ["before_run", "run", "after_run", "finally"]) walk(node[phase], false, false, false, []);
@@ -55,6 +55,6 @@ export function validatePreparation(spec: Mapping, module = false, installation?
   for (const hook of spec.events ?? []) walk(hook.do, false, false, false, []);
   // Validate otherwise-unused routines too, including indirect cycles and nested scopes.
   for (const name of Object.keys(routines)) walk(routines[name].actions, module, false, false, [name]);
-  if (grouped) for (const pipeline of Object.values(spec.pipeline ?? {}) as Mapping[]) walk(pipeline.prepare, true, false, false, [], true);
+  if (grouped) for (const pipeline of Object.values(spec.pipelines ?? {}) as Mapping[]) walk(pipeline.prepare, true, false, false, [], true);
   return { resources, grouped };
 }

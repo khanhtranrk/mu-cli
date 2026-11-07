@@ -41,40 +41,50 @@ test("argv conversion preserves legacy JSON boolean/null/collection text", () =>
 });
 
 test("Spec validation accepts JSON/YAML and empty pipelines", () => {
-  expect(parseSpec("pipeline: {p: {nodes: []}}").pipeline.p?.nodes).toEqual([]);
-  expect(parseSpec('{"pipeline":{"p":{"nodes":[]}}}').pipeline.p?.nodes).toEqual([]);
-  expect(() => parseSpec("pipeline: {}\npipeline: {}\n")).toThrow();
-  expect(() => parseSpec("expression_engine: python-format-v1\npipeline: {}")).toThrow("cel-v1");
+  expect(parseSpec("pipelines: {p: {nodes: []}}").pipelines.p?.nodes).toEqual([]);
+  expect(parseSpec('{"pipelines":{"p":{"nodes":[]}}}').pipelines.p?.nodes).toEqual([]);
+  expect(() => parseSpec("pipelines: {}\npipelines: {}\n")).toThrow();
+  expect(() => parseSpec("expression_engine: python-format-v1\npipelines: {}")).toThrow("cel-v1");
   expect(() => parseSpec("prepare: []")).toThrow("removed");
 });
 
+test("only the plural root collection is supported", () => {
+  for (const value of [{pipeline: {}}, {pipeline: null}, {pipeline: {}, pipelines: {p: {nodes: []}}}]) {
+    expect(() => parseSpec(JSON.stringify(value))).toThrow("rename the root collection to pipelines");
+  }
+  for (const pipelines of [null, [], "invalid", 42]) {
+    expect(() => parseSpec(JSON.stringify({pipelines}))).toThrow("pipelines must be a mapping");
+  }
+  expect(Object.keys(parseSpec("pipelines: {first: {nodes: []}, second: {nodes: []}}").pipelines)).toEqual(["first", "second"]);
+});
+
 test("YAML preserves legacy scalar resolution, merge keys and literal lifecycle on keys", () => {
-  const spec = parseSpec("defaults: &defaults\n  inputs: {enabled: {type: boolean, default: yes}}\nevents:\n  - on: pipeline_started\n    do: []\npipeline:\n  p:\n    <<: *defaults\n    nodes: []\n");
+  const spec = parseSpec("defaults: &defaults\n  inputs: {enabled: {type: boolean, default: yes}}\nevents:\n  - on: pipeline_started\n    do: []\npipelines:\n  p:\n    <<: *defaults\n    nodes: []\n");
   expect(spec.events?.[0]?.on).toBe("pipeline_started");
-  expect(spec.pipeline.p?.inputs?.enabled?.default).toBe(true);
+  expect(spec.pipelines.p?.inputs?.enabled?.default).toBe(true);
 });
 
 test("declarations reject graph cycles, routine cycles, invalid hooks and workload placement before side effects", () => {
   const parse = (spec: unknown) => parseSpec(JSON.stringify(spec));
-  expect(() => parse({ pipeline: { p: { nodes: [{ name: "a", depends_on: ["b"] }, { name: "b", depends_on: ["a"] }] } } })).toThrow("cycle");
-  expect(() => parse({ pipeline: { p: { nodes: [{ name: "a", depends_on: ["missing"] }] } } })).toThrow("unknown");
+  expect(() => parse({ pipelines: { p: { nodes: [{ name: "a", depends_on: ["b"] }, { name: "b", depends_on: ["a"] }] } } })).toThrow("cycle");
+  expect(() => parse({ pipelines: { p: { nodes: [{ name: "a", depends_on: ["missing"] }] } } })).toThrow("unknown");
   expect(() => parse({ routines: { r: { actions: [{ type: "execute_routine", routine: "r" }] } } })).toThrow("cycle");
   expect(() => parse({ workloads: { w: { target: "bun" } }, routines: { r: { actions: [{ type: "execute_workload", workload: "w" }] } } })).toThrow("only allowed");
   expect(() => parse({ events: [{ on: "action", do: [] }] })).toThrow("event");
-  expect(() => parse({ pipeline: { p: { nodes: [{ name: "a", events: [{ on: "pipeline_started", do: [] }] }] } } })).toThrow("event");
-  expect(() => parse({ pipeline: { p: { nodes: [{ name: "a", run: { workload: "w" } }] } } })).toThrow("list");
-  expect(() => parse({ pipeline: { p: { context: { Request: {} } } } })).toThrow("Registry");
-  expect(() => parse({ pipeline: { p: { nodes: [{ name: "a", precondition: { operator: "not" } }] } } })).toThrow("operator");
+  expect(() => parse({ pipelines: { p: { nodes: [{ name: "a", events: [{ on: "pipeline_started", do: [] }] }] } } })).toThrow("event");
+  expect(() => parse({ pipelines: { p: { nodes: [{ name: "a", run: { workload: "w" } }] } } })).toThrow("list");
+  expect(() => parse({ pipelines: { p: { context: { Request: {} } } } })).toThrow("Registry");
+  expect(() => parse({ pipelines: { p: { nodes: [{ name: "a", precondition: { operator: "not" } }] } } })).toThrow("operator");
 });
 
 test("HTTP header and timeout whole-value templates validate without runtime inputs", () => {
-  expect(() => parseSpec(JSON.stringify({ pipeline: { p: { nodes: [{ name: "n", run: [{ type: "send_http_request", url: "${{ inputs.url }}", header: "${{ inputs.headers }}", timeout: "${{ inputs.timeout }}" }] }] } } }))).not.toThrow();
+  expect(() => parseSpec(JSON.stringify({ pipelines: { p: { nodes: [{ name: "n", run: [{ type: "send_http_request", url: "${{ inputs.url }}", header: "${{ inputs.headers }}", timeout: "${{ inputs.timeout }}" }] }] } } }))).not.toThrow();
 });
 
 test("explicit null action lists, args and schemas do not silently become defaults", () => {
   for (const value of [
-    { pipeline: null }, { events: null }, { pipeline: { p: { inputs: null } } },
-    { pipeline: { p: { nodes: [{ name: "n", run: null }] } } },
-    { pipeline: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "bun", args: null }] }] } } },
+    { pipelines: null }, { events: null }, { pipelines: { p: { inputs: null } } },
+    { pipelines: { p: { nodes: [{ name: "n", run: null }] } } },
+    { pipelines: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "bun", args: null }] }] } } },
   ]) expect(() => parseSpec(JSON.stringify(value))).toThrow();
 });
