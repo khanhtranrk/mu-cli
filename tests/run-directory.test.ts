@@ -46,7 +46,7 @@ test("stable auto names isolate arbitrary slugs; explicit names share only withi
 test("config resolves field-by-field CLI precedence and validates the effective scope/name", async () => {
   const config = await fixture(), path = join(config.workspace, "config.yaml");
   const write = (runtime: object) => Bun.write(path, JSON.stringify({server: {url: config.server}, worker: {unitId: config.unitId}, runtime}));
-  const env = {MU_WORKER_TOKEN: config.token};
+  const env = {WORKER_TOKEN: config.token};
   await write({}); expect((await loadConfig({config: path}, env)).runDirectoryScope).toBe("spec-version");
   await write({runDirectoryScope: "spec", runDirectoryName: "from-config"});
   expect(await loadConfig({config: path}, env)).toMatchObject({runDirectoryScope: "spec", runDirectoryName: "from-config"});

@@ -40,7 +40,7 @@ runtime:
 ```
 
 ```sh
-MU_WORKER_TOKEN='YOUR_SCOPED_TOKEN' bun src/index.ts worker once --config mu.yaml
+WORKER_TOKEN='YOUR_SCOPED_TOKEN' bun src/index.ts worker once --config mu.yaml
 ```
 
 Explicit `devices: []` disables GPU discovery. This example requires Bun on PATH,

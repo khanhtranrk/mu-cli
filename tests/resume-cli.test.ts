@@ -28,7 +28,7 @@ for (const runDirectoryScope of ["spec-version", "spec"] as RunDirectoryScope[])
     const config = join(workspace, "config.json");
     await Bun.write(config, JSON.stringify({ server: { url: server.url.origin }, worker: { unitId: "unit", specs: ["test"] }, runtime: { workspace, runDirectoryScope, ...(runDirectoryScope === "spec" ? {runDirectoryName: "resume-shared"} : {}), devices: [], concurrency: 1, shutdownTimeout: 1 } }));
     const spawn = (extra: string[] = []) => {
-      const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", config, ...extra], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "private-token" }, stdout: "pipe", stderr: "pipe" });
+      const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", config, ...extra], { cwd: import.meta.dir + "/..", env: { ...process.env, WORKER_TOKEN: "private-token" }, stdout: "pipe", stderr: "pipe" });
       children.push(child); return child;
     };
     const first = spawn();

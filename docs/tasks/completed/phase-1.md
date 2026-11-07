@@ -19,9 +19,9 @@ Requires Bun 1.4+ (built-in YAML parser). Install with `bun install`.
 
 ```sh
 bun src/index.ts config init
-MU_WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker doctor --config mu.yaml --json
-MU_WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker once --config mu.yaml --fake
-MU_WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker start --config mu.yaml --fake
+WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker doctor --config mu.yaml --json
+WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker once --config mu.yaml --fake
+WORKER_TOKEN='YOUR_DISPOSABLE_TOKEN' bun src/index.ts worker start --config mu.yaml --fake
 ```
 
 Create the token, unit binding, allowed Spec and disposable waiting Requests in
@@ -38,7 +38,7 @@ current API in this explicitly selected harness mode; CEL evaluation is unavaila
 ## Behavior at Phase 1 delivery (fake mode)
 
 - CLI flags override environment, then YAML, then defaults. Tokens come from
-  `MU_WORKER_TOKEN` or `--token`; show/info redact them. Configuration initialization
+  `WORKER_TOKEN` or `--token`; show/info redact them. Configuration initialization
   refuses overwrite without `--force`. Unknown options fail.
 - `once` claims at most one global batch across the explicit Spec list, with a
   total `maxClaim` of 1–100. Requests execute serially (capacity one), isolated by

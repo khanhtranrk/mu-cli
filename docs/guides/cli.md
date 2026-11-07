@@ -22,7 +22,7 @@ explicitly selected. Fake mode claims real Requests and reports simulated result
 Real execution leaves reporting to Spec actions/hooks.
 
 ```sh
-MU_WORKER_TOKEN='YOUR_TOKEN' mu worker once --config ./mu.yaml --spec your-spec
+WORKER_TOKEN='YOUR_TOKEN' mu worker once --config ./mu.yaml --spec your-spec
 ```
 
 ## Configuration
@@ -33,11 +33,20 @@ Use `--help` on any command or command group.
 CLI flags override supported environment variables, then YAML, then defaults.
 Configuration uses `--config`, then `MU_CONFIG`, then `./mu.yaml`. An explicitly
 selected missing file fails; an absent implicit `mu.yaml` is allowed. Tokens come
-from `MU_WORKER_TOKEN` or `--token`, never YAML. Prefer the environment to avoid
+from `WORKER_TOKEN` or `--token`, never YAML. Prefer the environment to avoid
 putting tokens in process arguments.
+
+`WORKER_TOKEN` is the only supported worker-token environment variable.
+`MU_WORKER_TOKEN` and `UNIT_TOKEN` are not aliases. When upgrading an existing
+worker, rename the credential variable in its shell, service or secret-manager
+configuration to `WORKER_TOKEN`, keep the same token value, then restart the
+worker with the updated CLI. Token regeneration on the server is not required.
+An explicit `--token` takes precedence; an empty/whitespace-only explicit value
+or `WORKER_TOKEN` is an error, with no fallback to old names.
 
 | Flag | YAML / environment | Default or constraint |
 | --- | --- | --- |
+| `--token` | `WORKER_TOKEN` (no YAML credential) | Required; CLI flag overrides environment |
 | `--server` | `server.url` / `MU_SERVER_URL` | Required HTTP site origin, no path/query/credentials |
 | `--unit-id` | `worker.unitId` / `MU_UNIT_ID` | Required; server token binding must match |
 | `--spec` (repeatable) | `worker.specs` | Explicit list needed to claim; doctor requires a Spec |

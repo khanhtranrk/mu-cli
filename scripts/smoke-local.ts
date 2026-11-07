@@ -40,7 +40,7 @@ async function smoke(): Promise<void> {
     requestId = await client.mutation(mutation("requests:create"), { specSlug: slug, pipelineName: "demo", payload: { message: "MU CLI v2 Phase 4 CPU smoke" } }) as string;
     const configPath = join(workspace, "config.json");
     await Bun.write(configPath, JSON.stringify({ server: { url: site.origin }, worker: { unitId, specs: [slug], maxClaim: 1 }, runtime: { workspace, devices: [], concurrency: 2 } }));
-    const child = Bun.spawn(["bun", join(import.meta.dir, "../src/index.ts"), "worker", "once", "--config", configPath], { env: { ...process.env, MU_WORKER_TOKEN: token }, stdout: "pipe", stderr: "pipe" });
+    const child = Bun.spawn(["bun", join(import.meta.dir, "../src/index.ts"), "worker", "once", "--config", configPath], { env: { ...process.env, WORKER_TOKEN: token }, stdout: "pipe", stderr: "pipe" });
     const output = Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     const exit = await child.exited; await output;
     if (exit !== 0) throw new Error(`CPU worker exited ${exit}; inspect the disposable Request`);

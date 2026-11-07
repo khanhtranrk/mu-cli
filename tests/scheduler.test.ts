@@ -159,7 +159,7 @@ test("GPU probes map memory to legacy four-GiB units without running actual GPU 
 });
 
 test("CLI scheduler config validates capacity and explicit retry opt-in", async () => {
-  const env = { MU_SERVER_URL: "http://localhost:3211", MU_WORKER_TOKEN: "secret", MU_UNIT_ID: "cpu" };
+  const env = { MU_SERVER_URL: "http://localhost:3211", WORKER_TOKEN: "secret", MU_UNIT_ID: "cpu" };
   expect((await loadConfig({ device: ["cuda,1,4", "rocm,1,8"], concurrency: "3", "shutdown-timeout": "2", resume: true }, env)).devices).toEqual([{ family: "cuda", index: 1, maxUnits: 4 }, { family: "rocm", index: 1, maxUnits: 8 }]);
   await expect(loadConfig({ "retry-incomplete": true }, env)).rejects.toThrow("--resume");
   await expect(loadConfig({ concurrency: "33" }, env)).rejects.toThrow();

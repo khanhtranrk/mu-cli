@@ -32,6 +32,12 @@ protocols and append Request/Node events through the existing report endpoint.
 Downloads require size and SHA-256 and verify before destination replacement.
 Artifact-specific request statuses are no longer accepted by the companion server.
 
+Worker credentials are loaded from `WORKER_TOKEN` (or an explicit `--token`
+override) and sent as `Authorization: Bearer <token>`. This environment-variable
+rename does not change server token hashes, HTTP routes, Unit identity or
+assignment fencing. See [credential configuration and upgrade notes](../guides/cli.md)
+for the deliberate removal of old environment names.
+
 ## Authorization and recovery limits
 
 Worker tokens do not grant owner administration, arbitrary Request inspection,

@@ -29,8 +29,8 @@ runtime:
 ```
 
 ```sh
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker start --config mu.yaml
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker start --config mu.yaml
 bun src/index.ts worker info --config mu.yaml --json
 ```
 
@@ -93,11 +93,11 @@ Spec-produced saved results may still contain sensitive data. Protect the worksp
 
 ```sh
 # Resume only work already recorded locally; once does not claim a new batch.
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml --resume
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml --resume
 
 # Explicitly allow rerunning failed/in-flight nodes in an unfinished pipeline.
 # Their commands, HTTP actions, hooks or other external effects may repeat.
-MU_WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml --resume --retry-incomplete
+WORKER_TOKEN='YOUR_TOKEN' bun src/index.ts worker once --config mu.yaml --resume --retry-incomplete
 ```
 
 `start --resume` drains recovered work, then returns to normal claiming. A normal

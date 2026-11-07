@@ -99,7 +99,7 @@ test("permanent errors arising during recovery stay fatal",async()=>{
 test("API connection diagnostics preserve safe method/path/time/code and never retry claim",async()=>{
  let calls=0;const token="PRIVATE_WORKER_TOKEN";
  const config={server:"http://localhost:3211",token,unitId:"cpu",specs:["demo"],workspace:"/tmp",maxClaim:1,pollInterval:1,heartbeatInterval:30,fake:true};
- const api=new DataCenterClient(config,(async()=>{calls++;throw new Error(`PRIVATE ${token}`,{cause:Object.assign(new Error("private upstream"),{code:"ECONNRESET"})});}) as typeof fetch);
+ const api=new DataCenterClient(config,(async()=>{calls++;throw new Error(`PRIVATE ${token}`,{cause:Object.assign(new Error("private upstream"),{code:"ECONNRESET"})});}) as unknown as typeof fetch);
  try{await api.claim("demo",1);throw new Error("Expected failure");}catch(error){
   expect(error).toBeInstanceOf(DataCenterConnectionError);
   const detail=error as DataCenterConnectionError;
@@ -119,7 +119,7 @@ test("API heartbeat cancellation reaches fetch and is not misclassified as netwo
 
 test("a heartbeat transport failure while reading the response body is recoverable",async()=>{
  const config={server:"http://localhost:3211",token:"secret",unitId:"cpu",specs:["demo"],workspace:"/tmp",maxClaim:1,pollInterval:1,heartbeatInterval:30,fake:true};
- const api=new DataCenterClient(config,(async()=>new Response(new ReadableStream({start(controller){controller.error(Object.assign(new Error("SECRET body failed"),{code:"ECONNRESET"}));}}))) as typeof fetch);
+ const api=new DataCenterClient(config,(async()=>new Response(new ReadableStream({start(controller){controller.error(Object.assign(new Error("SECRET body failed"),{code:"ECONNRESET"}));}}))) as unknown as typeof fetch);
  try{await api.heartbeat("online");throw new Error("Expected failure");}catch(error){expect(error).toBeInstanceOf(DataCenterConnectionError);expect(transientHeartbeatError(error)).toBe(true);expect((error as Error).message).not.toContain("SECRET");}
 });
 

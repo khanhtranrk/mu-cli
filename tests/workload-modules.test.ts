@@ -73,7 +73,7 @@ test("local paths use the supplied Spec base; server-relative paths need explici
   expect(await workloadLoader()(join(dir, "module.yaml"), signal())).toEqual(bytes(module));
   await expect(workloadLoader()(dir, signal())).rejects.toThrow("regular file");
   await Bun.write(join(dir, "config.yaml"), "runtime:\n  workloadBaseDir: ./modules\n");
-  const config = await loadConfig({ config: join(dir, "config.yaml") }, { MU_WORKER_TOKEN: "test", MU_SERVER_URL: "http://localhost:3211", MU_UNIT_ID: "test" });
+  const config = await loadConfig({ config: join(dir, "config.yaml") }, { WORKER_TOKEN: "test", MU_SERVER_URL: "http://localhost:3211", MU_UNIT_ID: "test" });
   expect(config.workloadBaseDir).toBe(join(dir, "modules"));
 });
 
