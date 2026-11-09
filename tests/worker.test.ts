@@ -206,3 +206,22 @@ test("pinned assignments execute without loading the mutable/default Spec at sta
   expect(executed).toEqual([source]);
   expect(setup.calls.some(call => call.path.startsWith("/api/specs/"))).toBe(false);
 });
+
+test("worker claims token scope or an explicit list in one batch and advertises per-device capacity", async () => {
+  const setup = await fixture([]);
+  setup.config.devices = [{family: "cuda", index: 1, maxUnits: 6}];
+  setup.config.specs = [];
+  await new Worker(setup.config, setup.api, new FakeExecutor()).run("once", new AbortController().signal);
+  expect(setup.calls.find(call => call.path.endsWith("heartbeat"))?.body.devices).toEqual([
+    {family: "cpu", index: 0, maxUnits: 0}, {family: "cuda", index: 1, maxUnits: 6},
+  ]);
+  expect(setup.calls.filter(call => call.path.endsWith("claim")).map(call => call.body)).toEqual([
+    {unitId: "cpu", maxCount: 2, expressionEngine: "cel-v1"},
+  ]);
+  setup.config.specs = ["first", "second"];
+  setup.calls.length = 0;
+  await new Worker(setup.config, setup.api, new FakeExecutor()).run("once", new AbortController().signal);
+  expect(setup.calls.filter(call => call.path.endsWith("claim")).map(call => call.body)).toEqual([
+    {unitId: "cpu", specSlugs: ["first", "second"], maxCount: 2, expressionEngine: "cel-v1"},
+  ]);
+});
