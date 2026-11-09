@@ -23,7 +23,7 @@ export interface Report {
   node_states?: Record<string, { status?: "queue" | "running" | "failed" | "succeeded"; reason?: string; device?: { family: string; index: number }; artifacts?: ArtifactMetadata[]; events?: ReportEvent[]; logs?: string[] }>;
 }
 export class ApiError extends Error {
-  constructor(public readonly status: number) { super(`Data Center HTTP ${status}`); }
+  constructor(public readonly status: number, detail?: string) { super(detail ?? `Data Center HTTP ${status}`); }
 }
 
 const networkCodes = new Set([
@@ -77,7 +77,19 @@ export class DataCenterClient {
       if (signal?.aborted) throw signal.reason;
       throw new DataCenterConnectionError(method, path, Date.now() - started, error);
     }
-    if (!response.ok) throw new ApiError(response.status);
+    if (!response.ok) {
+      let detail: string | undefined;
+      if (response.status === 400 && ["/api/requests/claim", "/api/worker/scope"].includes(path)) {
+        // Display only known server messages. Other response text may contain secrets.
+        const body = await response.json().catch(() => null) as {error?: unknown} | null;
+        const message = body?.error;
+        if (typeof message === "string") {
+          detail = ["Worker token has no active Specs to claim", "Worker token does not allow this spec", "Requested Spec is unavailable"]
+            .find(candidate => message.includes(candidate));
+        }
+      }
+      throw new ApiError(response.status, detail);
+    }
     return response;
   }
 
@@ -87,7 +99,7 @@ export class DataCenterClient {
     try {
       const result = object(await (await this.call("/api/units/heartbeat", {
         unitId: this.config.unitId, unitType: this.config.fake ? "bun-cpu-fake" : this.config.devices?.length ? "bun-gpu" : "bun-cpu", workingDir: this.config.workspace,
-        devices: [{ family: "cpu", index: 0 }, ...(this.config.devices ?? []).map(({ family, index }) => ({ family, index }))], status,
+        devices: [{ family: "cpu", index: 0, maxUnits: 0 }, ...(this.config.devices ?? [])], status,
       }, undefined, signal)).json());
       if (result.ok !== true) throw new Error("Invalid heartbeat response");
     } catch (error) {
@@ -100,14 +112,19 @@ export class DataCenterClient {
     }
   }
   async spec(slug: string): Promise<string> { return (await this.call(`/api/specs/${encodeURIComponent(slug)}`)).text(); }
-  async claim(specSlug: string, maxCount: number): Promise<ClaimedRequest[]> {
+  async scope(): Promise<string[]> {
+    const result: unknown = await (await this.call("/api/worker/scope", {})).json();
+    if (!Array.isArray(result) || !result.length || !result.every(slug => typeof slug === "string" && slug)) throw new Error("Invalid worker scope response");
+    return result;
+  }
+  async claim(scope: string | string[] | undefined, maxCount: number): Promise<ClaimedRequest[]> {
     const raw: unknown = await (await this.call("/api/requests/claim", {
-      unitId: this.config.unitId, specSlug, maxCount, expressionEngine: "cel-v1",
+      unitId: this.config.unitId, ...(Array.isArray(scope) ? { specSlugs: scope } : { specSlug: scope }), maxCount, expressionEngine: "cel-v1",
     })).json();
     if (!Array.isArray(raw) || raw.length > maxCount) throw new Error("Invalid claim response");
     return raw.map(value => {
       const item = object(value);
-      if (typeof item.requestId !== "string" || !item.requestId || item.specSlug !== specSlug ||
+      if (typeof item.requestId !== "string" || !item.requestId || typeof item.specSlug !== "string" || !item.specSlug || (typeof scope === "string" && item.specSlug !== scope) || (Array.isArray(scope) && !scope.includes(item.specSlug)) ||
           typeof item.pipelineName !== "string" || !item.pipelineName ||
           !Number.isSafeInteger(item.assignmentVersion) || Number(item.assignmentVersion) < 1 || !Object.hasOwn(item, "payload")) throw new Error("Invalid claimed assignment");
       return { ...item, artifacts: parseArtifacts(item.artifacts) } as unknown as ClaimedRequest;

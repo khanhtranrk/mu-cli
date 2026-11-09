@@ -19,6 +19,12 @@ mu worker once --help   Show worker options
 There is no public local `mu run` command. `once` drains one batch (possibly several
 Requests); `start` repeats claim cycles. Both execute Specs unless `--fake` is
 explicitly selected. Fake mode claims real Requests and reports simulated results.
+
+The Worker sends each device's maximum units with heartbeat. MasterFlow uses
+this information to select compatible Requests across the effective Spec scope.
+`--max-claim` applies to the combined batch. Update MasterFlow and backfill
+Request capacity before upgrading Workers. Explicit single-Spec claims retain
+the existing wire format.
 Real execution leaves reporting to Spec actions/hooks.
 
 ```sh
@@ -40,7 +46,7 @@ putting tokens in process arguments.
 | --- | --- | --- |
 | `--server` | `server.url` / `MU_SERVER_URL` | Required HTTP site origin, no path/query/credentials |
 | `--unit-id` | `worker.unitId` / `MU_UNIT_ID` | Required; server token binding must match |
-| `--spec` (repeatable) | `worker.specs` | Explicit list needed to claim; doctor requires a Spec |
+| `--spec` (repeatable) | `worker.specs` | CLI list overrides configuration. If neither is configured, use all active Specs authorized by the token. |
 | `--workspace` | `runtime.workspace` | `.mu` |
 | `--run-directory-scope` | `runtime.runDirectoryScope` | `spec-version` (default) or `spec` |
 | `--run-directory-name` | `runtime.runDirectoryName` | Optional shared directory name; requires `spec` scope |

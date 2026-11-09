@@ -124,7 +124,6 @@ export class Worker {
   async run(mode: "once" | "start", signal: AbortSignal): Promise<number> {
     runDirectoryOptions(this.config.runDirectoryScope, this.config.runDirectoryName);
     if (!this.config.fake && this.executor.reporting !== "spec") throw new Error("Fake execution requires --fake");
-    if (!this.config.specs.length) throw new Error("At least one --spec is required; the API cannot enumerate allowed specs");
     await this.api.health();
     await this.api.heartbeat("online");
     const heartbeat = new HeartbeatMonitor(signal => this.api.heartbeat("online", signal), this.config.heartbeatInterval * 1000, signal);
@@ -138,10 +137,11 @@ export class Worker {
       if (mode === "once" && this.config.resume) { completed = true; return signal.aborted ? 130 : failed ? 6 : 0; }
       do {
         const batch: ClaimedRequest[] = [];
-        for (const spec of this.config.specs) {
-          if (signal.aborted || batch.length >= this.config.maxClaim) break;
+        const specs = this.config.specs;
+        const scope = specs.length > 1 ? specs : specs[0];
+        if (!signal.aborted) {
           await heartbeat.ensureHealthy();
-          const claimed = await this.api.claim(spec, this.config.maxClaim - batch.length);
+          const claimed = await this.api.claim(scope, this.config.maxClaim - batch.length);
           for (const request of claimed) {
             const assignment = request.requestId + ":" + request.assignmentVersion;
             if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
