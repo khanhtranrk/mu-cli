@@ -61,3 +61,35 @@ test("unresolved redirect is a failed action and cannot overwrite an existing do
     expect(await Bun.file(destination).text()).toBe("keep");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test("artifact transfer failures identify the stage in worker logs without leaking response details", async () => {
+  const { reportingAction } = await import("../src/engine/reporting-actions");
+  const context = {
+    session: { server: "https://masterflow.example", token: "private-token", working_dir: "/tmp" },
+    request: { requestId: "request-a", assignmentVersion: 1 },
+  };
+  const signal = new AbortController().signal;
+  const publicReason = "Artifact operation refused. Check assignment, upload session and storage configuration.";
+  for (const stage of ["upload-url", "complete", "storage GET"]) {
+    const logs: string[] = [];
+    const effects = new BunEffects((async () => { throw new Error("Unexpected fetch"); }) as unknown as typeof fetch, log => logs.push(log));
+    effects.inspect = async () => ({ name: "source.json", size: 3, sha256: "a".repeat(64) });
+    effects.http = async ({ url }) => {
+      const endpoint = new URL(url).pathname;
+      if (endpoint.endsWith(stage)) return { status_code: 400, body: { error: stage === "complete" ? publicReason : "https://example.invalid/?ticket=private-ticket" } };
+      if (endpoint.endsWith("upload-url")) return { status_code: 200, body: { method: "PUT", uploadUrl: "https://storage.example/upload", headers: {}, uploadId: "receipt" } };
+      if (endpoint.endsWith("download-url")) return { status_code: 200, body: { url: "https://storage.example/download?ticket=private-ticket", size: 3, sha256: "a".repeat(64) } };
+      return { status_code: endpoint === "/download" ? 502 : 200 };
+    };
+    const download = stage === "storage GET";
+    await expect(reportingAction(download ? "download_artifact" : "upload_artifact", {
+      target: "file.json", artifact_id: "file", artifact: { artifactId: "file-id" },
+    }, context, effects, signal)).rejects.toThrow(stage);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('request="request-a"');
+    expect(logs[0]).toContain(download ? "Storage HTTP 502" : "Data Center HTTP 400");
+    if (stage === "complete") expect(logs[0]).toContain(publicReason);
+    expect(logs[0]).not.toContain("private-");
+    expect(logs[0]).not.toContain("https://");
+  }
+});
