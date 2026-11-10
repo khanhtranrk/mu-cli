@@ -14,6 +14,8 @@ const artifact: ArtifactMetadata = { id: "input-key", name: "input.json", handle
 
 test("artifact metadata preserves output keys and rejects removed legacy shapes and duplicate keys", () => {
   expect(parseArtifacts([artifact])).toEqual([artifact]);
+  const drive: ArtifactMetadata = { ...artifact, handler: "google-drive", objectKey: "drive-file-id" };
+  expect(parseArtifacts([drive])).toEqual([drive]);
   for (const value of [[{ ...artifact, handler: "convex" }], [{ ...artifact, storageId: "old" }], [artifact, artifact], [{ ...artifact, artifactId: 17 }], [{ ...artifact, size: -1 }], [{ ...artifact, objectKey: undefined }], { input: "path" }]) expect(() => parseArtifacts(value)).toThrow();
 });
 

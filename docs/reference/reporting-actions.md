@@ -99,3 +99,7 @@ automatically, avoiding duplicate notifications after uncertain delivery.
 See the runnable [notification Spec](../../examples/notification/spec.yaml).
 Uploads now complete with filename and optional label only. Deploy the companion
 Data Center contract and follow its receipt cleanup runbook before schema removal.
+
+Storage connections can use R2, Supabase Storage, or Google Drive. The actions
+use MasterFlow-issued transfer URLs for every provider. Google Drive credentials
+and download routing are managed by MasterFlow.
