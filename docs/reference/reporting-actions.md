@@ -103,3 +103,9 @@ Data Center contract and follow its receipt cleanup runbook before schema remova
 Storage connections can use R2, Supabase Storage, or Google Drive. The actions
 use MasterFlow-issued transfer URLs for every provider. Google Drive credentials
 and download routing are managed by MasterFlow.
+
+When an artifact HTTP transfer fails, the worker writes a diagnostic to stderr
+with the Request ID, action, and failing stage. The node error also includes
+the stage. `upload-url` and `complete` refer to MasterFlow API calls, while
+`storage PUT` and `storage GET` refer to the file transfer itself. Logs omit
+signed URLs, credentials, and arbitrary upstream error text.

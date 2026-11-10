@@ -28,14 +28,42 @@ export async function reportingAction(type: string, values: Context, context: Co
   const headers = { Authorization: `Bearer ${text(session.token, "session.token")}`, "Content-Type": "application/json", "X-Mu-Assignment-Version": String(request.assignmentVersion) };
   const timeout = values.timeout ?? 120;
   if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) throw new Error("Invalid timeout");
+  const artifactAction = type === "upload_artifact" || type === "download_artifact";
+  const transferFailure = (stage: string, message: string, status?: number, response?: Context) => {
+    const body = response?.body;
+    const reason = body && typeof body === "object" && "error" in body ? body.error : undefined;
+    // Only emit fixed server messages. Provider and proxy responses may contain signed URLs.
+    const detail = reason === "Artifact operation refused. Check assignment, upload session and storage configuration."
+      || reason === "Unauthorized" ? ` — ${reason}` : "";
+    const error = `${type} ${stage}: ${message}${detail}`;
+    effects.warning(`[mu worker] request=${JSON.stringify(requestId)} ${error}`);
+    return Object.assign(new Error(error), { status });
+  };
+  const transfer = async (stage: string, options: HttpOptions) => {
+    let response: Context;
+    try { response = await effects.http(options, signal); }
+    catch (error) {
+      if (signal.aborted) throw error;
+      const reason = error instanceof Error && ["Incomplete HTTP download", "Artifact size mismatch", "Artifact SHA-256 mismatch"].includes(error.message)
+        ? error.message : "Storage transfer failed before completion";
+      throw transferFailure(stage, reason);
+    }
+    const status = Number(response.status_code);
+    if (!(status >= 200 && status < 300)) throw transferFailure(stage, `Storage HTTP ${status}`, status);
+  };
   const call = async (path: string, body?: unknown, retry = lifecycle): Promise<Context> => {
     for (let attempt = 0; ; attempt++) {
       let response: Context;
       try { response = await effects.http({ url: new URL(path, server).href, method: body === undefined ? "GET" : "POST", headers, body, timeout }, signal); }
-      catch (error) { if (retry && attempt === 0 && !signal.aborted) continue; throw error; }
+      catch (error) {
+        if (retry && attempt === 0 && !signal.aborted) continue;
+        if (artifactAction && !signal.aborted) throw transferFailure(path, "Data Center request failed before completion");
+        throw error;
+      }
       const status = Number(response.status_code);
       if (status >= 200 && status < 300) return mapping(response.body);
       if (retry && attempt === 0 && [500, 502, 503, 504].includes(status)) continue;
+      if (artifactAction) throw transferFailure(path, `Data Center HTTP ${status}`, status, response);
       throw Object.assign(new Error(`Data Center HTTP ${status}`), {status});
     }
   };
@@ -79,8 +107,7 @@ export async function reportingAction(type: string, values: Context, context: Co
     const url = storageUrl(upload.uploadUrl);
     const uploadHeaders = mapping(upload.headers);
     if (Object.entries(uploadHeaders).some(([key, value]) => typeof value !== "string" || ["authorization", "cookie", "x-mu-assignment-version"].includes(key.toLowerCase()))) throw new Error("Invalid storage headers");
-    const response = await effects.http({ url, method: "PUT", headers: uploadHeaders as Record<string, string>, bodyFile: target, timeout }, signal);
-    if (Number(response.status_code) < 200 || Number(response.status_code) >= 300) throw new Error(`Storage HTTP ${response.status_code}`);
+    await transfer("storage PUT", { url, method: "PUT", headers: uploadHeaders as Record<string, string>, bodyFile: target, timeout });
     const after = await effects.inspect(target);
     if (after.size !== source.size || after.sha256 !== source.sha256) throw new Error("Upload source changed during transfer");
     const completed = await call("/api/requests/artifacts/complete", { requestId, uploadId: text(upload.uploadId, "uploadId"), name: source.name, ...(values.label === undefined ? {} : { label: text(values.label, "label") }) }, true);
@@ -93,8 +120,7 @@ export async function reportingAction(type: string, values: Context, context: Co
   if (values.sha256 !== undefined && download.sha256 !== undefined && values.sha256 !== download.sha256) throw new Error("Artifact SHA-256 metadata mismatch");
   if (!Number.isSafeInteger(download.size) || Number(download.size) < 0) throw new Error("Invalid artifact size");
   const options: HttpOptions = { url: storageUrl(download.url), method: "GET", headers: {}, responseFile: target, timeout, expectedSize: Number(download.size), expectedSha256: sha256 };
-  const response = await effects.http(options, signal);
-  if (Number(response.status_code) < 200 || Number(response.status_code) >= 300) throw new Error(`Storage HTTP ${response.status_code}`);
+  await transfer("storage GET", options);
   const file = await effects.inspect(target);
   if (file.size !== download.size || file.sha256 !== sha256) throw new Error("Artifact integrity mismatch");
   return file;
