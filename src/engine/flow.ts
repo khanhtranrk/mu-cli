@@ -18,13 +18,10 @@ export class Flow {
   private prepared = new Map<string, Context>();
   private preparationErrors = new Map<string, unknown>();
   private preparing = new Map<string, Promise<Context>>();
-  private initialized = false;
-  private failed = false;
 
-  constructor(private spec: Spec, base: Context, private effects: Effects, private entry: "direct_flow" | "master_flow" = "master_flow", private scheduler = new Scheduler([], 32, message => effects.warning(message)), private shutdownTimeout = 30_000) {
+  constructor(private spec: Spec, base: Context, private effects: Effects, private scheduler = new Scheduler([], 32, message => effects.warning(message)), private shutdownTimeout = 30_000) {
     this.base = structuredClone(base);
     requestScopes(this.base);
-    this.base.entry = { name: entry, status: "running" };
     this.actions = new Actions(spec, effects);
   }
 
@@ -37,28 +34,8 @@ export class Flow {
       if (!node || !["running", "success", "failed"].includes(String(status))) throw new RecoveryError("Invalid checkpoint node state");
       if (status !== "failed" && (node.depends_on ?? []).some(dependency => snapshot.states[dependency] !== "success") && !(status === "success" && node.ignore_error)) throw new RecoveryError("Invalid checkpoint dependency state");
     }
-    if (!this.initialized) { this.base = structuredClone(snapshot.base); this.initialized = true; }
+    this.base = structuredClone(snapshot.base);
     if (snapshot.prepared && !this.prepared.has(snapshot.pipelineName)) this.prepared.set(snapshot.pipelineName, structuredClone(snapshot.prepared));
-  }
-
-  async initialize(signal: AbortSignal): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
-    try { await this.actions.runAll(this.spec.entries?.[this.entry]?.initialization, this.base, {}, signal); }
-    catch (error) { this.failed = true; throw error; }
-  }
-
-  async finalize(failed: boolean, signal: AbortSignal): Promise<void> {
-    if (!this.initialized) return;
-    this.initialized = false;
-    const entry = mapping(this.base.entry);
-    entry.status = failed || this.failed ? "failed" : "success";
-    let error: unknown;
-    for (const action of this.spec.entries?.[this.entry]?.finalization ?? []) {
-      try { await this.actions.run(action, this.base, {}, signal); }
-      catch (caught) { error ??= caught; entry.status = "failed"; }
-    }
-    if (error) throw error;
   }
 
   private async emit(name: string, pipelineName: string, context: Context, states: States, signal: AbortSignal, options: {
@@ -142,7 +119,6 @@ export class Flow {
   }
 
   async execute(request: PipelineRequest, signal: AbortSignal, persistence?: ExecutionPersistence, workerSignal = signal): Promise<States> {
-    if (!this.initialized) throw new Error("Flow must initialize before execution");
     const name = request.pipelineName;
     let context = structuredClone(this.base);
     context.request = {...structuredClone(request.metadata), pipelineName: name, inputs: structuredClone(request.payload)}; context.pipeline_name = name;
@@ -209,7 +185,7 @@ export class Flow {
         context = structuredClone(restored.context);
         if (mapping(context.session).server) await reportingAction("report_request", {status: "processing"}, context, this.effects, executionSignal, true);
         const metadata = mapping(context.request);
-        if (metadata.requestId !== request.metadata.requestId || metadata.assignmentVersion !== request.metadata.assignmentVersion || metadata.specSlug !== request.metadata.specSlug) throw new RecoveryError("Checkpoint assignment does not match request");
+        if (metadata.requestId !== request.metadata.requestId || metadata.assignmentVersion !== request.metadata.assignmentVersion || metadata.pipelineSlug !== request.metadata.pipelineSlug) throw new RecoveryError("Checkpoint assignment does not match request");
         for (const [node, status] of Object.entries(states)) if (!(definition.nodes ?? []).some(item => item.name === node) || !["success", "failed", "running"].includes(status)) throw new RecoveryError("Invalid checkpoint node state");
         for (const node of definition.nodes ?? []) if (states[node.name] === "success" && node.postcondition && !node.ignore_error) {
           const completedContext = nodeContexts[node.name];
@@ -269,7 +245,7 @@ export class Flow {
       if (running.size) { scope.abort(caught); await Promise.allSettled(running); }
       if (caught instanceof RecoveryError || caught instanceof AssignmentLostError) throw caught;
       if (signal.reason instanceof AssignmentLostError) throw signal.reason;
-      pipelineError = caught; this.failed = true;
+      pipelineError = caught;
     }
     if (pipelineError && mapping(context.session ?? {}).server) {
       for (const node of this.spec.pipelines[name]?.nodes ?? []) if (states[node.name] === "running" || !states[node.name]) {

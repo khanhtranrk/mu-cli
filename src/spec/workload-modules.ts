@@ -1,7 +1,7 @@
 import { validatePreparation } from "./preparation";
 import { registryReference, referenceKey, workloadVersion, type RegistryLock, type RegistryModule, type RegistryReference, type RegistryPin } from "./registry-reference";
 import { createHash } from "node:crypto";
-import { parsePipeline, parseSpec, parseYamlMapping } from "./parse";
+import { parsePipeline, parseYamlMapping } from "./parse";
 import { mapping, type Spec, type Action } from "./types";
 import { validateWorkloadSource } from "./workload-source";
 
@@ -21,9 +21,7 @@ export interface RegistryResolution {
 export function hasRegistryReferences(source: string): boolean {return Object.values(mapping(parseYamlMapping(source).workloads ?? {})).some(value => registryReference(value) !== null);}
 export async function resolveWorkloadModules(source: string, load: ModuleLoader, signal: AbortSignal, pinned?: ModuleSnapshot[], registry?: RegistryResolution, pipelineName?: string): Promise<{ spec: Spec; modules: ModuleSnapshot[] }> {
   const root = parseYamlMapping(source);
-  const validate = (yaml: string, allowExternal = false) => root.kind === "pipeline"
-    ? parsePipeline(yaml, pipelineName ?? "pipeline", {allowExternal})
-    : parseSpec(yaml, {allowExternal});
+  const validate = (yaml: string, allowExternal = false) => parsePipeline(yaml, pipelineName ?? "pipeline", {allowExternal});
   // Structural checks happen before any source is fetched. No process effects here.
   const structural = validate(source, true);
   const declarations = mapping(root.workloads ?? {}, "workloads");
@@ -66,7 +64,7 @@ export async function resolveWorkloadModules(source: string, load: ModuleLoader,
     if (Object.keys(module).some(key => !["routines", "prepare", "workload", "installation"].includes(key))) throw new Error(`Workload module ${name}: only routines, prepare, installation and workload are allowed; nested imports are unsupported`);
     const workload = mapping(module.workload, `module ${name}.workload`);
     if (Object.hasOwn(workload, "source")) throw new Error(`Workload module ${name}: nested imports are unsupported`);
-    const scoped = parseSpec(JSON.stringify({ routines: module.routines === undefined ? {} : module.routines, workloads: { module: workload }, pipelines: { module: { prepare: module.prepare === undefined ? [] : module.prepare } } }), { modulePreparation: true });
+    const scoped = parsePipeline(JSON.stringify({ kind: "pipeline", schema_version: 1, routines: module.routines ?? {}, workloads: { module: workload }, prepare: module.prepare ?? [] }), "module", { modulePreparation: true });
     // Modules cannot recursively ensure other workloads, even in preparation.
     if (scoped.pipelines.module!.prepare?.some(action => action.type === "ensure_workload")) throw new Error(`Workload module ${name}: nested ensure_workload is unsupported`);
     const installation = validatePreparation(scoped, true, module.installation);

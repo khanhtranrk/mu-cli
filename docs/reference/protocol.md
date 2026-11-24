@@ -10,9 +10,9 @@ for payloads, limits and authorization. CLI adapters live in `src/api.ts`,
 ## Implemented worker integration
 
 - Connect to the HTTP site origin, not the Convex client/API origin.
-- Claim using the supported CEL engine and explicit Spec slug after token-bound
-  heartbeat. Execute the assigned published Spec YAML; startup does not preflight
-  the mutable/current Spec. Explicit inspection/doctor can fetch the default.
+- Claim using the supported CEL engine and explicit Pipeline slug after token-bound
+  heartbeat. Each claim supplies the exact published Pipeline YAML in `pipelineYaml`.
+  Explicit inspection with doctor can fetch the default at `/api/pipelines/<slug>`.
 - Send the returned assignment version and key on Request-context reports,
   artifact calls and locked workload reads. The key is stored in the private
   local checkpoint and omitted from Spec expressions and storage requests.
@@ -43,8 +43,8 @@ Artifact-specific request statuses are no longer accepted by the companion serve
 Worker tokens do not grant owner administration, arbitrary Request inspection,
 Request creation or artifact deletion. The server controls assignment atomically.
 There is no assignment lease or node-state download. MasterFlow pins immutable
-Spec versions and returns their YAML/lock on claim. Recovery uses local captured
-Spec text and assignment-generation fencing; see [Phase 3](../tasks/completed/phase-3.md#protocol-limits-and-decisions).
+Pipeline versions and returns their YAML/lock on claim. Recovery uses locally captured
+Pipeline YAML and assignment-generation fencing; see [Phase 3](../tasks/completed/phase-3.md#protocol-limits-and-decisions).
 
 Agent-specific credentials/permissions, lease expiration, broader retry policies
 and distributed reconciliation remain design proposals. No available Mu Agent API

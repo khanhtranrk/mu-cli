@@ -74,12 +74,12 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
   const ids = await backend.run(async ctx => {
     await ctx.db.insert("appSettings", { key: "app", defaultStorageConnectionId: "local" });
     await ctx.db.insert("storageConnections", { connectionId: "local", name: "Test storage", provider: "r2", endpoint: storage.url.origin, region: "auto", bucket: "private", prefix: "mu", encryptedCredentials: s3Module.encrypt({ accessKeyId: "test-key", secretAccessKey: "test-secret" }, "local"), enabled: true, createdAt: 1 });
-    const tokenId = await ctx.db.insert("workerTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", specSlugs: ["demo"], createdAt: 1 });
+    const tokenId = await ctx.db.insert("workerTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", pipelineSlugs: ["demo"], createdAt: 1 });
     const specId = await ctx.db.insert("specs", { draftRevision: 0, slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
-    const specVersionId = await ctx.db.insert("specVersions", {specId, version: "1.0.0", yaml: spec, yamlSha256: createHash("sha256").update(spec).digest("hex"), executionSha256: "fixture", changelog: "fixture", publishedBy: "test", publishedAt: 1});
-    await ctx.db.patch(specId, {defaultVersionId: specVersionId});
-    const requestId = await ctx.db.insert("requests", { specVersionId, specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, requiredUnits: 0, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, status: "waiting" });
-    return { tokenId, requestId, specId, specVersionId };
+    const pipelineVersionId = await ctx.db.insert("specVersions", {specId, version: "1.0.0", yaml: spec, yamlSha256: createHash("sha256").update(spec).digest("hex"), executionSha256: "fixture", changelog: "fixture", publishedBy: "test", publishedAt: 1});
+    await ctx.db.patch(specId, {defaultVersionId: pipelineVersionId});
+    const requestId = await ctx.db.insert("requests", { pipelineVersionId, pipelineSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, requiredUnits: 0, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, status: "waiting" });
+    return { tokenId, requestId, specId, pipelineVersionId };
   });
   const apiCalls: { path: string; method: string; body?: Record<string, unknown> }[] = [];
   let lostResponse = false;
@@ -119,7 +119,7 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
 integration("real MasterFlow HTTP handlers: claim, CPU generation, signed upload, completion, verified download and reports", async () => {
   const setup = await fixture();
   try {
-    await setup.backend.run(async ctx => {const version = await ctx.db.get(setup.ids.specVersionId); await ctx.db.patch(version.specId, {yaml: "invalid: ["});});
+    await setup.backend.run(async ctx => {const version = await ctx.db.get(setup.ids.pipelineVersionId); await ctx.db.patch(version.specId, {yaml: "invalid: ["});});
     expect(await setup.run()).toBe(0);
     const state = await setup.backend.run(async ctx => ({ request: await ctx.db.get(setup.ids.requestId), artifacts: await ctx.db.query("artifacts").collect(), files: await ctx.db.query("physicalFiles").collect(), uploads: await ctx.db.query("storageUploads").collect() }));
     expect(state.request?.status).toBe("succeeded");
@@ -188,10 +188,10 @@ integration("real worker authorization rejects foreign/stale/revoked assignments
     const report = { id: request!.requestId, status: "processing" };
     const assignmentHeaders = { "X-Mu-Assignment-Key": request!.assignmentKey };
     expect((await setup.call("/api/requests/create", {})).status).toBe(403);
-    expect((await setup.call("/api/requests?specSlug=demo")).status).toBe(403);
+    expect((await setup.call("/api/requests?pipelineSlug=demo")).status).toBe(403);
     expect((await setup.call("/api/requests/report", report, { ...assignmentHeaders, "X-Mu-Assignment-Version": "0" })).status).toBe(409);
     expect((await setup.call("/api/requests/artifacts/upload-url", { requestId: request!.requestId, artifactId: "result", size: 1, sha256: "a".repeat(64) }, { ...assignmentHeaders, "X-Mu-Assignment-Version": "0" })).status).toBe(409);
-    const foreign = await setup.backend.run(ctx => ctx.db.insert("requests", { specVersionId: setup.ids.specVersionId, specSlug: "demo", pipelineName: "demo", payload: {}, status: "waiting" }));
+    const foreign = await setup.backend.run(ctx => ctx.db.insert("requests", { pipelineVersionId: setup.ids.pipelineVersionId, pipelineSlug: "demo", pipelineName: "demo", payload: {}, status: "waiting" }));
     expect((await setup.call("/api/requests/report", { id: foreign, status: "succeeded" }, assignmentHeaders)).status).toBe(409);
     await setup.backend.withIdentity({ issuer: "https://test.clerk.accounts.dev", subject: "user_owner" }).mutation(
       makeFunctionReference<"mutation">("requests:revokeAssignment"),
@@ -270,14 +270,14 @@ integration("registry publish/default/Spec lock/Request claim and standalone exe
     const specId = setup.ids.specId;
     await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Registry", description: "", yaml: spec});
     await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Registry", makeDefault: true});
-    const requestId = await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
+    const requestId = await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {pipelineSlug: "demo", pipelineName: "demo", inputs: {}});
     await owner.mutation(makeFunctionReference<"mutation">("workloads:saveDraft"), {id: workloadId, expectedRevision: 1, yaml: module("two")});
     const second = await owner.mutation(makeFunctionReference<"mutation">("workloads:publish"), {id: workloadId, version: "2.0.0", expectedRevision: 2, changelog: "", makeDefault: true});
     const saved = await owner.query(makeFunctionReference<"query">("specs:get"), {slug: "demo"});
     await owner.mutation(makeFunctionReference<"mutation">("specs:refreshWorkloads"), {id: specId, expectedYaml: spec, expectedLock: JSON.stringify(saved.workloadLock)});
     expect(await setup.run()).toBe(0);
     const request = await setup.backend.run(ctx => ctx.db.get(requestId));
-    expect((await setup.backend.run(ctx => ctx.db.get(request.specVersionId))).workloadLock.pins[0].versionId).toBe(first);
+    expect((await setup.backend.run(ctx => ctx.db.get(request.pipelineVersionId))).workloadLock.pins[0].versionId).toBe(first);
     expect(request.resolvedOutputs.text).toBe("one\n");
     const issued = await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"), {name: "CLI", slugs: ["example"]});
     const registry = new RegistryClient(setup.config.server, issued.token);
@@ -306,7 +306,7 @@ integration("registry recovery validates pinned provenance and never reloads mod
     const specId = setup.ids.specId;
     await owner.mutation(makeFunctionReference<"mutation">("specs:update"), {id: specId, expectedRevision: 0, name: "Recovery", description: "", yaml: spec});
     await owner.mutation(makeFunctionReference<"mutation">("specs:publish"), {id: specId, expectedRevision: 1, version: "1.1.0", changelog: "Recovery", makeDefault: true});
-    await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {specSlug: "demo", pipelineName: "demo", inputs: {}});
+    await owner.mutation(makeFunctionReference<"mutation">("requests:create"), {pipelineSlug: "demo", pipelineName: "demo", inputs: {}});
     await setup.api.heartbeat("online"); const request = (await setup.api.claim("demo", 1))[0]!;
     const controller = new AbortController(); let interrupted = false, snapshot: ExecutionSnapshot | undefined;
     class Effects extends BunEffects {override async process() {if (!interrupted) {interrupted = true; controller.abort(new Error("interrupted")); throw new Error("interrupted");} return {returncode: 0, stdout: "pinned\n", stderr: ""};}}
@@ -332,7 +332,7 @@ integration("registry parallel preparation survives publication, worker pins, st
     await setup.backend.run(ctx=>ctx.db.delete(setup.ids.requestId));
     await owner.mutation(makeFunctionReference<"mutation">("specs:update"),{id:setup.ids.specId,expectedRevision:0,name:"Parallel",description:"",yaml:spec});
     await owner.mutation(makeFunctionReference<"mutation">("specs:publish"),{id:setup.ids.specId,expectedRevision:1,version:"1.1.0",changelog:"",makeDefault:true});
-    const requestId=await owner.mutation(makeFunctionReference<"mutation">("requests:create"),{specSlug:"demo",pipelineName:"demo",inputs:{}});
+    const requestId=await owner.mutation(makeFunctionReference<"mutation">("requests:create"),{pipelineSlug:"demo",pipelineName:"demo",inputs:{}});
     expect(await setup.run()).toBe(0);
     expect((await setup.backend.run(ctx=>ctx.db.get(requestId))).resolvedOutputs).toEqual({text:"prepared\n"});
     const issued=await owner.action(makeFunctionReference<"action">("workloadCredentials:issue"),{name:"parallel",slugs:["parallel-test"]});
@@ -347,7 +347,7 @@ integration("registry parallel preparation survives publication, worker pins, st
     expect(restored.modules).toEqual(loaded.modules);
     // Worker execution uses the published dependency pin.
     await setup.backend.run(async ctx=>{
-      const request=await ctx.db.get(requestId);expect((await ctx.db.get(request.specVersionId)).workloadLock.pins[0].versionId).toBe(version);
+      const request=await ctx.db.get(requestId);expect((await ctx.db.get(request.pipelineVersionId)).workloadLock.pins[0].versionId).toBe(version);
     });
   } finally {await setup.close();}
 });

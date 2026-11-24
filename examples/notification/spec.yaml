@@ -1,13 +1,13 @@
+kind: pipeline
+schema_version: 1
 expression_engine: cel-v1
-pipelines:
-  notify:
-    nodes:
-      - name: notify
-        run:
-          - type: send_notification
-            title: "Example title"
-            message: "Example message"
-            tags: "Example tag"
-          - type: send_notification
-            title: "Example title"
-            message: "Example message"
+nodes:
+  - name: notify
+    run:
+      - type: send_notification
+        title: "Example title"
+        message: "Example message"
+        tags: "Example tag"
+      - type: send_notification
+        title: "Example title"
+        message: "Example message"

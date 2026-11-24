@@ -6,11 +6,11 @@ export interface ClaimedRequest {
   requestId: string;
   assignmentVersion: number;
   assignmentKey: string;
-  specSlug: string;
+  pipelineSlug: string;
   pipelineName: string;
   payload: unknown;
   inputs?: unknown;
-  specYaml?: string;
+  pipelineYaml?: string;
   yamlSha256?: string;
   executionSha256?: string;
   artifacts: ArtifactMetadata[];
@@ -122,7 +122,7 @@ export class DataCenterClient {
       throw error;
     }
   }
-  async spec(slug: string): Promise<string> { return (await this.call(`/api/specs/${encodeURIComponent(slug)}`)).text(); }
+  async pipeline(slug: string): Promise<string> { return (await this.call(`/api/pipelines/${encodeURIComponent(slug)}`)).text(); }
   async scope(): Promise<string[]> {
     const result: unknown = await (await this.call("/api/worker/scope", {})).json();
     if (!Array.isArray(result) || !result.length || !result.every(slug => typeof slug === "string" && slug)) throw new Error("Invalid worker scope response");
@@ -130,13 +130,13 @@ export class DataCenterClient {
   }
   async claim(scope: string | string[] | undefined, maxCount: number): Promise<ClaimedRequest[]> {
     const raw: unknown = await (await this.call("/api/requests/claim", {
-      unitId: this.config.unitId, ...(Array.isArray(scope) ? { specSlugs: scope } : { specSlug: scope }), maxCount, expressionEngine: "cel-v1",
+      unitId: this.config.unitId, ...(Array.isArray(scope) ? { pipelineSlugs: scope } : { pipelineSlug: scope }), maxCount, expressionEngine: "cel-v1",
     })).json();
     if (!Array.isArray(raw) || raw.length > maxCount) throw new Error("Invalid claim response");
     return raw.map(value => {
       const item = object(value);
-      if (typeof item.requestId !== "string" || !item.requestId || typeof item.specSlug !== "string" || !item.specSlug || (typeof scope === "string" && item.specSlug !== scope) || (Array.isArray(scope) && !scope.includes(item.specSlug)) ||
-          typeof item.pipelineName !== "string" || !item.pipelineName ||
+      if (typeof item.requestId !== "string" || !item.requestId || typeof item.pipelineSlug !== "string" || !item.pipelineSlug || (typeof scope === "string" && item.pipelineSlug !== scope) || (Array.isArray(scope) && !scope.includes(item.pipelineSlug)) ||
+          item.pipelineName !== item.pipelineSlug || typeof item.pipelineYaml !== "string" || !item.pipelineYaml.trim() ||
           typeof item.assignmentKey !== "string" || !/^[a-f0-9]{64}$/.test(item.assignmentKey) ||
           !Number.isSafeInteger(item.assignmentVersion) || Number(item.assignmentVersion) < 1 || !Object.hasOwn(item, "payload")) throw new Error("Invalid claimed assignment");
       return { ...item, artifacts: parseArtifacts(item.artifacts) } as unknown as ClaimedRequest;

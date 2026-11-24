@@ -1,3 +1,5 @@
+kind: pipeline
+schema_version: 1
 expression_engine: cel-v1
 workloads:
   generate:
@@ -34,49 +36,47 @@ events:
     do:
       - type: report_node
         events: [{level: info, message: Node finished}]
-pipelines:
-  demo:
-    inputs:
-      message: {type: string, value: '${{ request.inputs.message }}', default: Hello MU}
+inputs:
+  message: {type: string, value: '${{ request.inputs.message }}', default: Hello MU}
+outputs:
+  published: {type: artifact, value: '${{ pipeline.nodes.publish.outputs.published }}'}
+  size: {type: number, value: '${{ pipeline.nodes.publish.outputs.size }}'}
+  sha256: {type: string, value: '${{ pipeline.nodes.publish.outputs.sha256 }}'}
+nodes:
+  - name: publish
+    context:
+      result_path: '${{ session.output_dir }}/requests/${{ request.requestId }}/result.json'
+    before_run:
+      - type: create_dir
+        path: '${{ session.output_dir }}/requests/${{ request.requestId }}'
+    run:
+      - type: execute_workload
+        workload: generate
+        with:
+          path: '${{ node.result_path }}'
+          message: '${{ pipeline.inputs.message }}'
+          request_id: '${{ request.requestId }}'
+      - type: execute_routine
+        routine: inspect_result
+        with: {path: '${{ node.result_path }}'}
+        save_to: inspection
+    after_run:
+      - type: upload_artifact
+        artifact_id: result
+        target: '${{ node.result_path }}'
+        content_type: application/json
+        label: CPU smoke output
+        save_to: uploaded
     outputs:
-      published: {type: artifact, value: '${{ pipeline.nodes.publish.outputs.published }}'}
-      size: {type: number, value: '${{ pipeline.nodes.publish.outputs.size }}'}
-      sha256: {type: string, value: '${{ pipeline.nodes.publish.outputs.sha256 }}'}
-    nodes:
-      - name: publish
-        context:
-          result_path: '${{ session.output_dir }}/requests/${{ request.requestId }}/result.json'
-        before_run:
-          - type: create_dir
-            path: '${{ session.output_dir }}/requests/${{ request.requestId }}'
-        run:
-          - type: execute_workload
-            workload: generate
-            with:
-              path: '${{ node.result_path }}'
-              message: '${{ pipeline.inputs.message }}'
-              request_id: '${{ request.requestId }}'
-          - type: execute_routine
-            routine: inspect_result
-            with: {path: '${{ node.result_path }}'}
-            save_to: inspection
-        after_run:
-          - type: upload_artifact
-            artifact_id: result
-            target: '${{ node.result_path }}'
-            content_type: application/json
-            label: CPU smoke output
-            save_to: uploaded
-        outputs:
-          published: {type: artifact, value: '${{ node.actions.uploaded.artifact }}'}
-          size: {type: number, value: '${{ node.actions.inspection.outputs.size }}'}
-          sha256: {type: string, value: '${{ node.actions.inspection.outputs.sha256 }}'}
-      - name: verify
-        depends_on: [publish]
-        run:
-          - type: download_artifact
-            artifact: '${{ pipeline.nodes.publish.outputs.published }}'
-            target: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
-        postcondition:
-          operator: file_exists
-          path: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
+      published: {type: artifact, value: '${{ node.actions.uploaded.artifact }}'}
+      size: {type: number, value: '${{ node.actions.inspection.outputs.size }}'}
+      sha256: {type: string, value: '${{ node.actions.inspection.outputs.sha256 }}'}
+  - name: verify
+    depends_on: [publish]
+    run:
+      - type: download_artifact
+        artifact: '${{ pipeline.nodes.publish.outputs.published }}'
+        target: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
+    postcondition:
+      operator: file_exists
+      path: '${{ session.output_dir }}/requests/${{ request.requestId }}/downloaded.json'
