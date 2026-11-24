@@ -1,3 +1,4 @@
+import { parsePipelineDocument } from "@mu/spec";
 import { validatePreparation } from "./preparation";
 import { registryReference, referenceKey, workloadVersion, type RegistryLock, type RegistryModule, type RegistryReference, type RegistryPin } from "./registry-reference";
 import { createHash } from "node:crypto";
@@ -18,9 +19,9 @@ export interface RegistryResolution {
   lock?: RegistryLock;
   read(ref: RegistryReference, signal: AbortSignal, pin?: RegistryPin): Promise<RegistryModule>;
 }
-export function hasRegistryReferences(source: string): boolean {return Object.values(mapping(parseYamlMapping(source).workloads ?? {})).some(value => registryReference(value) !== null);}
+export function hasRegistryReferences(source: string): boolean {return Object.values(mapping(parsePipelineDocument(source).workloads ?? {})).some(value => registryReference(value) !== null);}
 export async function resolveWorkloadModules(source: string, load: ModuleLoader, signal: AbortSignal, pinned?: ModuleSnapshot[], registry?: RegistryResolution, pipelineName?: string): Promise<{ spec: Spec; modules: ModuleSnapshot[] }> {
-  const root = parseYamlMapping(source);
+  const root = parsePipelineDocument(source);
   const validate = (yaml: string, allowExternal = false) => parsePipeline(yaml, pipelineName ?? "pipeline", {allowExternal});
   // Structural checks happen before any source is fetched. No process effects here.
   const structural = validate(source, true);

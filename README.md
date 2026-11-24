@@ -58,7 +58,7 @@ There is no public local `mu run <spec>` mode for complete pipelines. `worker on
 | `src/scheduler/` | Local capacity admission and scheduling |
 | `src/state.ts`, `src/artifacts.ts` | Recovery state and artifact transfer helpers |
 
-MasterFlow owns authoritative server-side records, authentication, Request assignment and signed artifact URLs. This repository owns worker-side execution. Shared `@mu/spec` / `@mu/engine` packages are **proposals**, not installed dependencies.
+MasterFlow owns authoritative server-side records, authentication, Request assignment and signed artifact URLs. This repository owns worker-side execution. Published Pipeline YAML is read by the pinned `@mu/spec` package from MU Convex. The vendored tarball lets public CLI builds install it without private repository access.
 
 ## Documentation
 

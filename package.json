@@ -19,6 +19,7 @@
   "dependencies": {
     "@marcbachmann/cel-js": "8.0.0",
     "commander": "^15.0.0",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "@mu/spec": "file:vendor/mu-spec-0.2.0.tgz"
   }
 }

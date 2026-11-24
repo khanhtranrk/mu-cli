@@ -1,3 +1,4 @@
+import { parsePipelineDocument, pipelineFields } from "@mu/spec";
 import { validatePreparation } from "./preparation";
 import { registryReference } from "./registry-reference";
 import { isScalar, parseDocument, Scalar, visit } from "yaml";
@@ -64,22 +65,11 @@ export function parseYamlMapping(source: string): Record<string, unknown> {
   return root;
 }
 
-const pipelineFields = ["inputs", "outputs", "context", "prepare", "nodes", "events"] as const;
-const pipelineRootFields = new Set<string>([
-  "kind", "schema_version", "expression_engine", "workloads", "routines", ...pipelineFields,
-]);
-
 export function parsePipeline(source: string, name: string, options: { allowExternal?: boolean; modulePreparation?: boolean } = {}): Spec {
-  return validateSpec(normalizePipeline(parseYamlMapping(source), name), options);
+  return validateSpec(normalizePipeline(parsePipelineDocument(source), name), options);
 }
 
 function normalizePipeline(root: Record<string, unknown>, name: string): Record<string, unknown> {
-  if (root.kind !== "pipeline" || root.schema_version !== 1) {
-    throw new Error("Expected kind: pipeline and schema_version: 1");
-  }
-  for (const key of Object.keys(root)) {
-    if (!pipelineRootFields.has(key)) throw new Error(`Unknown Pipeline field: ${key}`);
-  }
   literalName(name, "Pipeline name");
   const definition = Object.fromEntries(pipelineFields.filter(key => has(root, key)).map(key => [key, root[key]]));
   return {
