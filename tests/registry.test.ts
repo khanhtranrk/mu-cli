@@ -76,7 +76,7 @@ test("worker execution refuses a registry Request missing its captured lock befo
   const client = new RegistryClient(result.registry, "worker-token", (async () => {reads++; throw new Error("must not read module");}) as unknown as typeof fetch);
   class Effects extends BunEffects {override async http() {return {status_code: 200, body: {ok: true}};}}
   const executor = new SpecExecutor({workspace: cwd, server: result.registry, token: "worker-token", unitId: "unit", specs: ["demo"], maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false}, new Effects(), undefined, client);
-  await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipelines: {p: {nodes: []}}}), {requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, assignmentKey: "a".repeat(64), payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
+  await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipelines: {p: {nodes: []}}}), {requestId: "r", pipelineSlug: "demo", pipelineName: "p", assignmentVersion: 1, assignmentKey: "a".repeat(64), payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
   expect(reads).toBe(0);
 });
 

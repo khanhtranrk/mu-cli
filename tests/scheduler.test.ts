@@ -114,8 +114,8 @@ test("Flow holds peak GPU reservation through finally and terminal hooks while C
       { name: "cpu", run: [{ type: "execute_workload", workload: "cpu" }] },
     ] } },
   }));
-  const flow = new Flow(spec, { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, effects, "master_flow", scheduler);
-  await flow.initialize(signal());
+  const flow = new Flow(spec, { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, effects, scheduler);
+
   const executing = flow.execute({ pipelineName: "p", payload: {}, metadata: {} }, signal());
   await entered.promise;
   expect(seen.filter(item => item.target === "gpu")).toHaveLength(1);
@@ -144,8 +144,8 @@ test("concurrent Requests share scheduler capacity, prepare once and isolate dep
     { name: "a", run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "a"] }] },
     { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake", args: ["${{ inputs.label }}", "b"] }] },
   ] } } }));
-  const flow = new Flow(spec, { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), "master_flow", scheduler);
-  await flow.initialize(signal());
+  const flow = new Flow(spec, { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), scheduler);
+
   await Promise.all(["one", "two", "three"].map(label => flow.execute({ pipelineName: "p", payload: { label }, metadata: { requestId: label } }, signal())));
   expect(preparations).toBe(1); expect(maximum).toBe(2);
   for (const label of ["one", "two", "three"]) expect(seen.indexOf(label + ":a")).toBeLessThan(seen.indexOf(label + ":b"));

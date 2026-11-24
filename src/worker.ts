@@ -1,7 +1,7 @@
 import { AssignmentLostError } from "./api";
 import { HeartbeatMonitor } from "./heartbeat";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
-import {parsePipeline, parseSpec, parseYamlMapping} from "./spec/parse";
+import {parsePipeline} from "./spec/parse";
 import type { WorkerConfig } from "./config";
 import type { DataCenterClient, ClaimedRequest, Report } from "./api";
 import type { RequestExecutor } from "./runtime/types";
@@ -12,7 +12,6 @@ import { RecoveryError } from "./engine/checkpoint";
 
 export class Worker {
   private store: StateStore;
-  private sources = new Map<string, string>();
   private seen = new Set<string>();
   constructor(private config: WorkerConfig, private api: DataCenterClient, private executor: RequestExecutor) {
     const scope = createHash("sha256").update(config.server + "\n" + config.unitId).digest("hex");
@@ -66,13 +65,12 @@ export class Worker {
           if (!this.config.resume) throw new RecoveryError("Unfinished Spec assignment found; use --resume to continue persisted nodes");
           if (this.executor.reporting !== "spec" || !state.source || state.execution?.version !== 2 || state.execution.stage !== "nodes") throw new RecoveryError("Unknown intake/prepare/lifecycle outcome; inspect/reset the request in MasterFlow");
           if (Object.values(state.execution.states).includes("running") && !this.config.retryIncomplete) throw new RecoveryError("Incomplete nodes require --resume --retry-incomplete; their external effects may repeat");
-          if (!this.config.specs.includes(state.request.specSlug)) throw new RecoveryError("Recovered assignment requires its --spec filter");
-          const source = state.request.specYaml ?? this.sources.get(state.request.specSlug) ?? await this.api.spec(state.request.specSlug);
+          if (!this.config.specs.includes(state.request.pipelineSlug)) throw new RecoveryError("Recovered assignment requires its --spec filter");
+          const source = state.request.pipelineYaml;
           if (source !== state.source) throw new RecoveryError("Remote Spec changed since checkpoint; inspect/reset the request");
-          const currentDirectory = resolveRunDirectory(this.config, state.request.specSlug, source);
-          const savedDirectory = state.runDirectory ?? resolveRunDirectory({...this.config, runDirectoryScope: "spec-version", runDirectoryName: undefined}, state.request.specSlug, state.source);
+          const currentDirectory = resolveRunDirectory(this.config, state.request.pipelineSlug, source);
+          const savedDirectory = state.runDirectory ?? resolveRunDirectory({...this.config, runDirectoryScope: "spec-version", runDirectoryName: undefined}, state.request.pipelineSlug, state.source);
           verifyRunDirectory(currentDirectory, savedDirectory);
-          this.sources.set(state.request.specSlug, source);
           resumable.push(state);
           continue;
         }
@@ -124,7 +122,6 @@ export class Worker {
 
   private async executeAssignment(request: ClaimedRequest, signal: AbortSignal, workerSignal: AbortSignal, recovered?: Checkpoint): Promise<boolean> {
     const state: Checkpoint = { ...recovered, request, phase: "executing", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) };
-    state.source ??= this.sources.get(request.specSlug);
     await this.store.save(state);
     if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request);
     let failed = false;
@@ -132,7 +129,8 @@ export class Worker {
     let writes = Promise.resolve();
     try {
       signal.throwIfAborted();
-      const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      const source = request.pipelineYaml;
+      if (typeof source !== "string" || !source.trim()) throw new Error("Claim must include published Pipeline YAML");
       if (request.yamlSha256 !== undefined && request.yamlSha256 !== createHash("sha256").update(source).digest("hex")) {
         throw new Error("Claimed YAML SHA-256 mismatch");
       }
@@ -147,13 +145,11 @@ export class Worker {
       }
       if (this.executor.reporting === "spec") {
         state.source = source;
-        state.runDirectory = resolveRunDirectory(this.config, request.specSlug, source);
+        state.runDirectory = resolveRunDirectory(this.config, request.pipelineSlug, source);
         await this.store.save(state);
       }
-      if (this.executor.reporting !== "spec" && request.specYaml) {
-        const definition = parseYamlMapping(source).kind === "pipeline"
-          ? parsePipeline(source, request.specSlug)
-          : parseSpec(source);
+      if (this.executor.reporting !== "spec" && request.pipelineYaml) {
+        const definition = parsePipeline(source, request.pipelineSlug);
         if (Object.keys(definition.pipelines[request.pipelineName]?.outputs ?? {}).length) {
           throw new Error("Fake execution cannot publish declared Outputs");
         }
@@ -181,7 +177,7 @@ export class Worker {
       await this.store.save(terminal); await this.deliver(terminal);
       return succeeded;
     }
-    const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded", ...(!failed && request.specYaml && this.executor.reporting !== "spec" ? {pipelineState: {status: "success", outputs: {}}} : {}) };
+    const report: Report = { id: request.requestId, status: failed ? "process_failed" : "succeeded", ...(!failed && request.pipelineYaml && this.executor.reporting !== "spec" ? {pipelineState: {status: "success", outputs: {}}} : {}) };
     const terminal: Checkpoint = this.executor.reporting === "spec" ? { ...state, phase: "reported", report } : { ...state, phase: "terminal", report };
     await this.store.save(terminal);
     if (this.executor.reporting !== "spec") await this.deliver(terminal);
@@ -213,8 +209,8 @@ export class Worker {
             const assignment = request.requestId + ":" + request.assignmentVersion;
             if (this.seen.has(assignment)) throw new Error("Data Center returned a duplicate assignment; refusing repeated execution");
             this.seen.add(assignment);
-            const source = request.specYaml ?? this.sources.get(request.specSlug);
-            await this.store.save({ request, phase: "claimed", source, ...(this.executor.reporting === "spec" && source !== undefined ? {runDirectory: resolveRunDirectory(this.config, request.specSlug, source)} : {}), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
+            const source = request.pipelineYaml;
+            await this.store.save({ request, phase: "claimed", source, ...(this.executor.reporting === "spec" && source !== undefined ? {runDirectory: resolveRunDirectory(this.config, request.pipelineSlug, source)} : {}), ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) });
           }
           batch.push(...claimed);
         }

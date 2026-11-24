@@ -1,11 +1,11 @@
 import { object } from "../config";
-import { parseSpec } from "../spec/parse";
+import { parsePipeline } from "../spec/parse";
 import type { ClaimedRequest } from "../api";
 import type { RequestExecutor } from "./types";
 export type { RequestExecutor } from "./types";
 
 export function validateEnvelope(source: string, pipelineName: string): void {
-  const spec = parseSpec(source);
+  const spec = parsePipeline(source, pipelineName);
   if (spec.expression_engine !== undefined && spec.expression_engine !== "cel-v1") throw new Error("Only cel-v1 Specs are supported");
   const pipeline = object(object(spec.pipelines)[pipelineName]);
   if (!Array.isArray(pipeline.nodes) || pipeline.nodes.length === 0) throw new Error("Pipeline requires nodes");

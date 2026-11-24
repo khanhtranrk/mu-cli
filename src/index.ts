@@ -103,7 +103,7 @@ async function runWorker(command: "once" | "start" | "doctor" | "info" | "show",
       const specs = config.specs.length ? config.specs : await api.scope();
       const runDirectories: Record<string, ReturnType<typeof resolveRunDirectory>> = {};
       for (const slug of specs) {
-        const source = await api.spec(slug);
+        const source = await api.pipeline(slug);
         await new SpecExecutor(config, new BunEffects()).validate(source, slug, AbortSignal.timeout(30_000));
         runDirectories[slug] = resolveRunDirectory(config, slug, source);
       }

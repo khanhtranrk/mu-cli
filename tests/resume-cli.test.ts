@@ -18,8 +18,8 @@ for (const runDirectoryScope of ["spec-version", "spec"] as RunDirectoryScope[])
   });
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(incoming) {
     const path = new URL(incoming.url).pathname;
-    if (path.startsWith("/api/specs/")) return new Response(source);
-    if (path.endsWith("claim")) { claims++; return Response.json([{ requestId: "r", assignmentVersion: 2, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "p", payload: {}, artifacts: [] }]); }
+    if (path.startsWith("/api/pipelines/")) return new Response(source);
+    if (path.endsWith("claim")) { claims++; return Response.json([{ requestId: "r", assignmentVersion: 2, assignmentKey: "a".repeat(64), pipelineSlug: "test", pipelineName: "p", payload: {}, artifacts: [] }]); }
     if (path.endsWith("report")) { expect(incoming.headers.get("x-mu-assignment-version")).toBe("2"); statuses.push(await incoming.json()); }
     return Response.json({ ok: true });
   } });

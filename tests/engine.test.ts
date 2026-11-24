@@ -18,7 +18,7 @@ async function fixture(spec: unknown) {
   const parsed = typeof spec === "string" ? parseSpec(spec) : parseSpec(JSON.stringify(spec));
   const flow = new Flow(parsed, base, effects);
   const signal = new AbortController().signal;
-  await flow.initialize(signal);
+
   return { cwd, effects, base, parsed, flow, signal,
     execute: (payload: unknown = {}, registryContext?: unknown) => flow.execute({ pipelineName: "p", payload, metadata: { requestId: "r" }, registryContext }, signal),
     json: async (name: string) => JSON.parse(await readFile(join(cwd, name), "utf8")),
@@ -130,14 +130,6 @@ test("event hooks accumulate root/pipeline/node in order, have isolated state, a
   const event = await setup.json("finished.json"); expect(event.node.status).toBe("success"); expect(event.error).toBeNull();
 });
 
-test("entry finalization attempts all actions after initialization failure", async () => {
-  const setup = await fixture({});
-  const spec = parseSpec(JSON.stringify({ entries: { master_flow: { initialization: [command("process.exit(1)")], finalization: [command("process.exit(1)"), write("final.json", "${{ entry.status }}")] } } }));
-  const flow = new Flow(spec, setup.base, setup.effects);
-  await expect(flow.initialize(setup.signal)).rejects.toThrow();
-  await expect(flow.finalize(true, setup.signal)).rejects.toThrow();
-  expect(await setup.json("final.json")).toBe("failed");
-});
 
 test("conditions distinguish missing from null, filesystem types and CPU node placement", async () => {
   const setup = await fixture({});

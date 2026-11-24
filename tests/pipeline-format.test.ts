@@ -7,7 +7,6 @@ test("validates one root pipeline using its catalog name", () => {
   const parsed = parsePipeline(header + "nodes:\n  - name: first\n", "render");
   expect(Object.keys(parsed.pipelines)).toEqual(["render"]);
   expect(parsed.pipelines.render?.nodes).toEqual([{name: "first"}]);
-  expect(parsed.entries).toBeUndefined();
 });
 
 test("rejects ambiguous formats and invalid pipeline dependencies", () => {

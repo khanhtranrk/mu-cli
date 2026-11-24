@@ -69,7 +69,7 @@ const pipelineRootFields = new Set<string>([
   "kind", "schema_version", "expression_engine", "workloads", "routines", ...pipelineFields,
 ]);
 
-export function parsePipeline(source: string, name: string, options: { allowExternal?: boolean } = {}): Spec {
+export function parsePipeline(source: string, name: string, options: { allowExternal?: boolean; modulePreparation?: boolean } = {}): Spec {
   return validateSpec(normalizePipeline(parseYamlMapping(source), name), options);
 }
 
@@ -97,7 +97,7 @@ export function parseSpec(source: string, options: { allowExternal?: boolean; mo
 function validateSpec(root: Record<string, unknown>, options: { allowExternal?: boolean; modulePreparation?: boolean }): Spec {
   if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
   if (has(root, "pipeline")) throw new Error("pipeline: removed; rename the root collection to pipelines");
-  if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
+  if (has(root, "prepare") || has(root, "master-flow") || has(root, "entries")) throw new Error("Invalid pipeline graph fields");
   validateTemplates(root);
   const workloads = mapping(defaultValue(root.workloads, {}), "workloads");
   const routines = mapping(defaultValue(root.routines, {}), "routines");
@@ -216,11 +216,6 @@ function validateSpec(root: Record<string, unknown>, options: { allowExternal?: 
     routineEdges.set(name, children.map(child => mapping(child)).filter(child => child.type === "execute_routine").map(child => String(child.routine)));
   }
   checkCycles(routineEdges, "routine");
-  for (const [name, raw] of Object.entries(mapping(defaultValue(root.entries, {}), "entries"))) {
-    if (!["direct_flow", "master_flow"].includes(name)) throw new Error("Unknown entry name");
-    const entry = mapping(raw, `entries.${name}`);
-    for (const phase of ["initialization", "finalization"]) actions(entry[phase], `entries.${name}.${phase}`);
-  }
   events(root.events, "events");
   for (const [name, raw] of Object.entries(pipelines)) {
     const item = mapping(raw, `pipelines.${name}`);

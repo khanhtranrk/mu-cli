@@ -34,7 +34,7 @@ export class SpecExecutor implements RequestExecutor {
     if (cached) return cached;
     const resolution = resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined, hasRegistryReferences(source) ? {
       origin: this.registry.origin, lock: lock ?? (() => {throw new Error("Registry Spec requires its matching dependency lock");})(),
-      read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion, assignmentKey: request.assignmentKey} : {specSlug: slug, yamlSha256: sha256(source)}),
+      read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion, assignmentKey: request.assignmentKey} : {pipelineSlug: slug, yamlSha256: sha256(source)}),
     } : undefined, slug);
     if (!request) {
       this.resolutions.set(key, resolution);
@@ -74,10 +74,9 @@ export class SpecExecutor implements RequestExecutor {
         server: this.config.server, token: this.config.token,
       },
     };
-    const flow = new Flow(spec, base, this.effects, "master_flow", this.scheduler, (this.config.shutdownTimeout ?? 30) * 1000);
+    const flow = new Flow(spec, base, this.effects, this.scheduler, (this.config.shutdownTimeout ?? 30) * 1000);
     this.flows.set(flowKey, { source, flow, modules });
     if (restored) flow.restore(restored);
-    else await flow.initialize(signal);
   }
 
   async execute(source: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence, workerSignal = signal): Promise<void> {
@@ -89,15 +88,15 @@ export class SpecExecutor implements RequestExecutor {
     const snapshot = persistence?.snapshot ? this.hydrate(persistence.snapshot) : undefined;
     if (snapshot && (snapshot.version !== 2 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
     if (snapshot) {
-      if (mapping(snapshot.base.session).working_dir !== resolveRunDirectory(this.config, request.specSlug, source).path) throw new RecoveryError("Run directory changed since checkpoint; restore the original configuration before --resume");
+      if (mapping(snapshot.base.session).working_dir !== resolveRunDirectory(this.config, request.pipelineSlug, source).path) throw new RecoveryError("Run directory changed since checkpoint; restore the original configuration before --resume");
       const metadata = mapping(snapshot.context.request);
-      if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
+      if (metadata.requestId !== request.requestId || metadata.pipelineSlug !== request.pipelineSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
     }
     const reportContext = {session: {server: this.config.server, token: this.config.token, working_dir: this.config.workspace}, request: {...request}};
     try {
-      if (hasRegistryReferences(source)) await this.resolve(source, request.specSlug, signal, snapshot, request.workloadLock, request);
+      if (hasRegistryReferences(source)) await this.resolve(source, request.pipelineSlug, signal, snapshot, request.workloadLock, request);
       signal.throwIfAborted();
-      await this.prepare(source, request.specSlug, workerSignal, snapshot, request.workloadLock);
+      await this.prepare(source, request.pipelineSlug, workerSignal, snapshot, request.workloadLock);
       signal.throwIfAborted();
     }
     catch (error) {
@@ -105,12 +104,12 @@ export class SpecExecutor implements RequestExecutor {
       await reportingAction("report_request", {status: "process_failed", events: [{level: "error", message: "Request initialization failed", details: {message: error instanceof Error ? error.message : "Initialization failed"}, createdAt: Date.now()}]}, reportContext, this.effects, AbortSignal.timeout(10000), true);
       throw error;
     }
-    const prepared = this.flows.get(this.key(source, request.specSlug, snapshot, request.workloadLock))!;
+    const prepared = this.flows.get(this.key(source, request.pipelineSlug, snapshot, request.workloadLock))!;
     if (source !== prepared.source) throw new Error("Spec changed within the current worker invocation");
     if (snapshot) prepared.flow.restore(snapshot);
     await prepared.flow.execute({
       pipelineName: request.pipelineName, payload: request.inputs ?? request.payload,
-      metadata: { requestId: request.requestId, specSlug: request.specSlug, assignmentVersion: request.assignmentVersion, artifacts: request.artifacts, registryContext: request.registryContext ?? {} },
+      metadata: { requestId: request.requestId, pipelineSlug: request.pipelineSlug, assignmentVersion: request.assignmentVersion, artifacts: request.artifacts, registryContext: request.registryContext ?? {} },
       registryContext: request.registryContext,
     }, signal, persistence ? {
       snapshot, retryIncomplete: persistence.retryIncomplete,
@@ -136,16 +135,9 @@ export class SpecExecutor implements RequestExecutor {
     return result;
   }
 
-  async finalize(failed: boolean): Promise<void> {
-    let error: unknown;
-    const cleanup = AbortSignal.timeout((this.config.shutdownTimeout ?? 30) * 1000);
-    for (const { flow } of this.flows.values()) {
-      try { await flow.finalize(failed, cleanup); }
-      catch (caught) { error ??= caught; }
-    }
+  async finalize(_failed: boolean): Promise<void> {
     this.flows.clear();
     this.preparations.clear();
     this.resolutions.clear();
-    if (error) throw error;
   }
 }
