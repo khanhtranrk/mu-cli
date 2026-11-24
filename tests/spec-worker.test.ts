@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { SpecExecutor } from "../src/runtime/spec-executor";
 import { BunEffects } from "../src/runtime/effects";
@@ -147,7 +148,9 @@ test("worker executes the claimed single-pipeline YAML without fetching the curr
     const path = new URL(String(url)).pathname;
     paths.push(path);
     if (path.endsWith("claim")) {
-      return Response.json([{...request, pipelineName: request.specSlug, specYaml: source}]);
+      return Response.json([{...request, pipelineName: request.specSlug, specYaml: source,
+        yamlSha256: createHash("sha256").update(source).digest("hex"),
+        executionSha256: createHash("sha256").update(JSON.stringify([1, source, null, []])).digest("hex")}]);
     }
     return Response.json({ok: true});
   }) as typeof fetch;

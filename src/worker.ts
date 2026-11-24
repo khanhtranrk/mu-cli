@@ -133,6 +133,18 @@ export class Worker {
     try {
       signal.throwIfAborted();
       const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      if (request.yamlSha256 !== undefined && request.yamlSha256 !== createHash("sha256").update(source).digest("hex")) {
+        throw new Error("Claimed YAML SHA-256 mismatch");
+      }
+      if (request.executionSha256 !== undefined) {
+        const lock = request.workloadLock;
+        const pins = lock?.pins.slice().sort((left, right) => left.alias < right.alias ? -1 : left.alias > right.alias ? 1 : 0)
+          .map(pin => [pin.alias, pin.reference, pin.slug, pin.version, pin.versionId, pin.sha256, pin.formatVersion]) ?? [];
+        const identity = JSON.stringify([1, source, lock?.yamlSha256 ?? null, pins]);
+        if (request.executionSha256 !== createHash("sha256").update(identity).digest("hex")) {
+          throw new Error("Claimed execution SHA-256 mismatch");
+        }
+      }
       if (this.executor.reporting === "spec") {
         state.source = source;
         state.runDirectory = resolveRunDirectory(this.config, request.specSlug, source);
