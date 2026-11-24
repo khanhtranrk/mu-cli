@@ -1,7 +1,7 @@
 import { AssignmentLostError } from "./api";
 import { HeartbeatMonitor } from "./heartbeat";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
-import {parseSpec} from "./spec/parse";
+import {parsePipeline, parseSpec, parseYamlMapping} from "./spec/parse";
 import type { WorkerConfig } from "./config";
 import type { DataCenterClient, ClaimedRequest, Report } from "./api";
 import type { RequestExecutor } from "./runtime/types";
@@ -138,7 +138,14 @@ export class Worker {
         state.runDirectory = resolveRunDirectory(this.config, request.specSlug, source);
         await this.store.save(state);
       }
-      if (this.executor.reporting !== "spec" && request.specYaml && Object.keys(parseSpec(request.specYaml).pipelines[request.pipelineName]?.outputs ?? {}).length) throw new Error("Fake execution cannot publish declared Outputs");
+      if (this.executor.reporting !== "spec" && request.specYaml) {
+        const definition = parseYamlMapping(source).kind === "pipeline"
+          ? parsePipeline(source, request.specSlug)
+          : parseSpec(source);
+        if (Object.keys(definition.pipelines[request.pipelineName]?.outputs ?? {}).length) {
+          throw new Error("Fake execution cannot publish declared Outputs");
+        }
+      }
       await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
         snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
         save: snapshot => {

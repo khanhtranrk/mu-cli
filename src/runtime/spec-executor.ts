@@ -35,7 +35,7 @@ export class SpecExecutor implements RequestExecutor {
     const resolution = resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined, hasRegistryReferences(source) ? {
       origin: this.registry.origin, lock: lock ?? (() => {throw new Error("Registry Spec requires its matching dependency lock");})(),
       read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion, assignmentKey: request.assignmentKey} : {specSlug: slug, yamlSha256: sha256(source)}),
-    } : undefined);
+    } : undefined, slug);
     if (!request) {
       this.resolutions.set(key, resolution);
       return resolution;

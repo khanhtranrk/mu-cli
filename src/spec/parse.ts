@@ -64,8 +64,37 @@ export function parseYamlMapping(source: string): Record<string, unknown> {
   return root;
 }
 
+const pipelineFields = ["inputs", "outputs", "context", "prepare", "nodes", "events"] as const;
+const pipelineRootFields = new Set<string>([
+  "kind", "schema_version", "expression_engine", "workloads", "routines", ...pipelineFields,
+]);
+
+export function parsePipeline(source: string, name: string, options: { allowExternal?: boolean } = {}): Spec {
+  return validateSpec(normalizePipeline(parseYamlMapping(source), name), options);
+}
+
+function normalizePipeline(root: Record<string, unknown>, name: string): Record<string, unknown> {
+  if (root.kind !== "pipeline" || root.schema_version !== 1) {
+    throw new Error("Expected kind: pipeline and schema_version: 1");
+  }
+  for (const key of Object.keys(root)) {
+    if (!pipelineRootFields.has(key)) throw new Error(`Unknown Pipeline field: ${key}`);
+  }
+  literalName(name, "Pipeline name");
+  const definition = Object.fromEntries(pipelineFields.filter(key => has(root, key)).map(key => [key, root[key]]));
+  return {
+    expression_engine: root.expression_engine,
+    routines: root.routines,
+    workloads: root.workloads,
+    pipelines: {[name]: definition},
+  };
+}
+
 export function parseSpec(source: string, options: { allowExternal?: boolean; modulePreparation?: boolean } = {}): Spec {
-  const root = parseYamlMapping(source);
+  return validateSpec(parseYamlMapping(source), options);
+}
+
+function validateSpec(root: Record<string, unknown>, options: { allowExternal?: boolean; modulePreparation?: boolean }): Spec {
   if (root.expression_engine !== undefined && root.expression_engine !== "cel-v1") throw new Error("expression_engine: only cel-v1 is supported");
   if (has(root, "pipeline")) throw new Error("pipeline: removed; rename the root collection to pipelines");
   if (has(root, "prepare") || has(root, "master-flow")) throw new Error("Root prepare/master-flow removed; use entries.master_flow and pipeline prepare");
