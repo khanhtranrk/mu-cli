@@ -66,13 +66,11 @@ export interface Node extends Common {
 export interface Pipeline { outputs?: Fields; inputs?: Fields; context?: Context | string; prepare?: Action[]; nodes?: Node[]; events?: EventHook[] }
 export interface Workload { outputs?: Fields; inputs?: Fields; target: string; argv?: unknown[] | string; env?: Record<string, unknown> | string; device_args?: unknown[] | string; units?: number }
 export interface Routine { inputs?: Fields; actions: Action[]; outputs?: Fields }
-export interface Lifecycle { initialization?: Action[]; finalization?: Action[] }
 export interface Spec {
   expression_engine?: "cel-v1";
   pipelines: Record<string, Pipeline>;
   workloads?: Record<string, Workload>;
   routines?: Record<string, Routine>;
-  entries?: Partial<Record<"direct_flow" | "master_flow", Lifecycle>>;
   events?: EventHook[];
 }
 

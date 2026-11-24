@@ -16,7 +16,7 @@ import type { ExecutionSnapshot } from "../src/engine/checkpoint";
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
-const request: ClaimedRequest = { requestId: "request", specSlug: "test", pipelineName: "p", assignmentVersion: 7, assignmentKey: "a".repeat(64), payload: {}, artifacts: [] };
+const request: ClaimedRequest = { requestId: "request", pipelineSlug: "test", pipelineName: "p", assignmentVersion: 7, assignmentKey: "a".repeat(64), payload: {}, artifacts: [] };
 const source = JSON.stringify({
   entries: { master_flow: { initialization: [{ type: "execute_command", target: "init" }], finalization: [{ type: "execute_command", target: "finalize" }] } },
   pipelines: { p: { prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
@@ -34,7 +34,7 @@ async function fixture(overrides: Partial<WorkerConfig> = {}) {
   const transport = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname, body = init?.body ? JSON.parse(String(init.body)) : {};
     calls.push({ path, body });
-    if (path.startsWith("/api/specs/")) return new Response(remoteSource);
+    if (path.startsWith("/api/pipelines/")) return new Response(remoteSource);
     if (path.endsWith("claim")) return Response.json([request]);
     if (path.endsWith("report")) {
       expect(new Headers(init?.headers).get("X-Mu-Assignment-Version")).toBe("7");
@@ -134,9 +134,9 @@ test("checkpoint write failure aborts node admission, drains tasks and releases 
   class Effects extends BunEffects {
     override async process() { operations++; return { returncode: 0, stdout: "", stderr: "" }; }
   }
-  const flow = new Flow(parseSpec(JSON.stringify({ pipelines: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "fake" }] }] } } })), { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), "master_flow", scheduler);
+  const flow = new Flow(parseSpec(JSON.stringify({ pipelines: { p: { nodes: [{ name: "n", run: [{ type: "execute_command", target: "fake" }] }] } } })), { sys: { cache_dir: "/tmp", models: {} }, session: { working_dir: "/tmp" } }, new Effects(), scheduler);
   const signal = new AbortController().signal;
-  await flow.initialize(signal);
+
   await expect(flow.execute({ pipelineName: "p", payload: {}, metadata: {} }, signal, { async save(value) { if (value.states.n === "running") throw new Error("disk unavailable"); } })).rejects.toThrow("disk unavailable");
   expect(operations).toBe(0); expect(scheduler.snapshot()).toMatchObject({ active: 0, queued: 0 });
 });
@@ -154,7 +154,7 @@ test("resume rechecks completed-node postconditions before continuing and refuse
     { name: "b", depends_on: ["a"], run: [{ type: "execute_command", target: "fake" }] },
   ] } } }));
   const base = { sys: { cache_dir: setup.config.workspace, models: {} }, session: { working_dir: setup.config.workspace } };
-  const first = new Flow(spec, base, effects); await first.initialize(controller.signal);
+  const first = new Flow(spec, base, effects);
   let snapshot: ExecutionSnapshot | undefined;
   await expect(first.execute({ pipelineName: "p", payload: {}, metadata: {} }, controller.signal, { async save(value) {
     snapshot = value;

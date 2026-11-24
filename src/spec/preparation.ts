@@ -51,7 +51,6 @@ export function validatePreparation(spec: Mapping, module = false, installation?
     }
     for (const hook of pipeline.events ?? []) walk(hook.do, false, false, false, []);
   }
-  for (const entry of Object.values(spec.entries ?? {}) as Mapping[]) for (const phase of ["initialization", "finalization"]) walk(entry[phase], false, false, false, []);
   for (const hook of spec.events ?? []) walk(hook.do, false, false, false, []);
   // Validate otherwise-unused routines too, including indirect cycles and nested scopes.
   for (const name of Object.keys(routines)) walk(routines[name].actions, module, false, false, [name]);

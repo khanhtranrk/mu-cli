@@ -13,7 +13,7 @@ import { main } from "../src/index";
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
 const source = "pipelines:\n  cpu:\n    nodes:\n      - name: fake\n";
-const request: ClaimedRequest = { requestId: "r1", assignmentVersion: 3, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "cpu", payload: {}, artifacts: [] };
+const request: ClaimedRequest = { requestId: "r1", assignmentVersion: 3, assignmentKey: "a".repeat(64), pipelineSlug: "test", pipelineName: "cpu", payload: {}, artifacts: [] };
 
 async function fixture(batch: ClaimedRequest[] = [request]) {
   const workspace = await mkdtemp(join(tmpdir(), "mu-phase1-"));
@@ -28,7 +28,7 @@ async function fixture(batch: ClaimedRequest[] = [request]) {
     calls.push({ path, body, headers });
     expect(headers.get("Authorization")).toBe("Bearer secret");
     expect(init?.redirect).toBe("error");
-    if (path.startsWith("/api/specs/")) {
+    if (path.startsWith("/api/pipelines/")) {
       expect(headers.get("X-Mu-Expression-Engines")).toBe("cel-v1");
       return new Response(source);
     }
@@ -55,7 +55,7 @@ test("once connects, claims once, fetches spec, runs real CPU fake subprocess, r
   expect(setup.calls[0]?.path).toBe("/api/health");
   expect(setup.calls[1]?.body.status).toBe("online");
   expect(setup.calls.at(-1)?.body.status).toBe("offline");
-  expect(setup.calls.some(call => call.path.startsWith("/api/specs/"))).toBe(true);
+  expect(setup.calls.some(call => call.path.startsWith("/api/pipelines/"))).toBe(true);
 });
 
 test("empty batch exits without execution or report", async () => {
@@ -171,7 +171,7 @@ test("CLI subprocess completes worker flow over loopback HTTP and doctor never c
     const path = new URL(incoming.url).pathname;
     paths.push(path);
     expect(incoming.headers.get("authorization")).toBe("Bearer secret");
-    if (path.startsWith("/api/specs/")) return new Response(source);
+    if (path.startsWith("/api/pipelines/")) return new Response(source);
     if (path.endsWith("claim")) return Response.json([request]);
     if (path.endsWith("report")) expect(incoming.headers.get("x-mu-assignment-version")).toBe("3");
     return Response.json({ ok: true });
@@ -195,7 +195,7 @@ test("CLI subprocess completes worker flow over loopback HTTP and doctor never c
 });
 
 test("pinned assignments execute without loading the mutable/default Spec at startup", async () => {
-  const pinned = {...request, specYaml: source};
+  const pinned = {...request, pipelineYaml: source};
   const setup = await fixture([pinned]);
   const executed: string[] = [];
   const executor: RequestExecutor = {
@@ -204,7 +204,7 @@ test("pinned assignments execute without loading the mutable/default Spec at sta
   };
   expect(await new Worker(setup.config, setup.api, executor).run("once", new AbortController().signal)).toBe(0);
   expect(executed).toEqual([source]);
-  expect(setup.calls.some(call => call.path.startsWith("/api/specs/"))).toBe(false);
+  expect(setup.calls.some(call => call.path.startsWith("/api/pipelines/"))).toBe(false);
 });
 
 test("worker claims token scope or an explicit list in one batch and advertises per-device capacity", async () => {
@@ -222,7 +222,7 @@ test("worker claims token scope or an explicit list in one batch and advertises 
   setup.calls.length = 0;
   await new Worker(setup.config, setup.api, new FakeExecutor()).run("once", new AbortController().signal);
   expect(setup.calls.filter(call => call.path.endsWith("claim")).map(call => call.body)).toEqual([
-    {unitId: "cpu", specSlugs: ["first", "second"], maxCount: 2, expressionEngine: "cel-v1"},
+    {unitId: "cpu", pipelineSlugs: ["first", "second"], maxCount: 2, expressionEngine: "cel-v1"},
   ]);
 });
 

@@ -19,6 +19,11 @@ const dirs: string[] = [];
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
 async function directory() { const dir = await mkdtemp(join(tmpdir(), "mu-modules-")); dirs.push(dir); return dir; }
 const bytes = (value: unknown) => Buffer.from(JSON.stringify(value));
+function pipelineSource(bundle: ReturnType<typeof spec>): string {
+  const {pipelines, ...shared} = bundle;
+  return JSON.stringify({kind: "pipeline", schema_version: 1, ...shared, ...pipelines.p});
+}
+
 const module = {
   routines: { install: { actions: [{ type: "execute_command", target: "module-install" }] } },
   prepare: [{ type: "execute_routine", routine: "install" }],
@@ -41,14 +46,14 @@ test("resolve optional hashes, private routines, shared preparation, outputs and
     override async process(argv: string[]) { calls.push(argv); return { returncode: 0, stdout: "result", stderr: "" }; }
   }
   const effects = new Effects(), content = bytes(module);
-  const result = await resolveWorkloadModules(JSON.stringify(spec({ source: "module.yaml", sha256: sha256(content).toUpperCase() })), async () => content, signal());
+  const result = await resolveWorkloadModules(pipelineSource(spec({ source: "module.yaml", sha256: sha256(content).toUpperCase() })), async () => content, signal());
   expect(result.spec.workloads!.external!.units).toBe(1);
   expect(result.spec.routines!.install!.actions[0]!.target).toBe("global-install");
   expect(workloadModules.get(result.spec)!.get("external")!.spec.routines!.install!.actions[0]!.target).toBe("module-install");
-  const flow = new Flow(result.spec, { sys: { cache_dir: cwd }, session: { working_dir: cwd } }, effects, "master_flow", new Scheduler([{ family: "cuda", index: 2, maxUnits: 1 }], 2));
-  await flow.initialize(signal());
+  const flow = new Flow(result.spec, { sys: { cache_dir: cwd }, session: { working_dir: cwd } }, effects, new Scheduler([{ family: "cuda", index: 2, maxUnits: 1 }], 2));
+
   const snapshots: ExecutionSnapshot[] = [];
-  await Promise.all([1, 2].map(id => flow.execute({ pipelineName: "p", payload: {message: "literal ${{ not_rerendered }}"}, metadata: { requestId: String(id) } }, signal(), { save: async value => { snapshots.push(value); } })));
+  await Promise.all([1, 2].map(id => flow.execute({ pipelineName: "pipeline", payload: {message: "literal ${{ not_rerendered }}"}, metadata: { requestId: String(id) } }, signal(), { save: async value => { snapshots.push(value); } })));
   expect(calls.filter(argv => argv[0] === "module-install")).toHaveLength(1);
   expect(calls.filter(argv => argv[0] === "global-install")).toHaveLength(0);
   expect(calls.filter(argv => argv[0] === "module-run")).toEqual([ ["module-run", "literal ${{ not_rerendered }}", "--device", "2"], ["module-run", "literal ${{ not_rerendered }}", "--device", "2"] ]);
@@ -56,13 +61,13 @@ test("resolve optional hashes, private routines, shared preparation, outputs and
 });
 
 test("reject mismatches before parsing and malformed/nested modules", async () => {
-  await expect(resolveWorkloadModules(JSON.stringify(spec({source: "x", sha256: "0".repeat(64)})), async () => Buffer.from("invalid: ["), signal())).rejects.toThrow("SHA-256 mismatch");
+  await expect(resolveWorkloadModules(pipelineSource(spec({source: "x", sha256: "0".repeat(64)})), async () => Buffer.from("invalid: ["), signal())).rejects.toThrow("SHA-256 mismatch");
   for (const value of [{}, {workload: {source: "nested.yaml"}}, {...module, pipelines: {}}, {...module, prepare: [{type: "ensure_workload", workload: "module"}]}, {...module, routines: {install: {actions: [{type: "execute_routine", routine: "missing"}]}}}]) {
-    await expect(resolveWorkloadModules(JSON.stringify(spec()), async () => bytes(value), signal())).rejects.toThrow();
+    await expect(resolveWorkloadModules(pipelineSource(spec()), async () => bytes(value), signal())).rejects.toThrow();
   }
-  await expect(resolveWorkloadModules(JSON.stringify(spec()), async () => new Uint8Array(moduleByteLimit + 1), signal())).rejects.toThrow("size limit");
+  await expect(resolveWorkloadModules(pipelineSource(spec()), async () => new Uint8Array(moduleByteLimit + 1), signal())).rejects.toThrow("size limit");
   let loads = 0;
-  await expect(resolveWorkloadModules(JSON.stringify(spec({source: "x", target: "bad"})), async () => { loads++; return bytes(module); }, signal())).rejects.toThrow();
+  await expect(resolveWorkloadModules(pipelineSource(spec({source: "x", target: "bad"})), async () => { loads++; return bytes(module); }, signal())).rejects.toThrow();
   expect(loads).toBe(0);
 });
 
@@ -120,10 +125,10 @@ test("preparation failure is shared and prevents workload dispatch", async () =>
   class Effects extends BunEffects {
     override async process(argv: string[]) { calls.push(argv[0]!); return {returncode: 1, stdout: "", stderr: "failed"}; }
   }
-  const {spec: resolved} = await resolveWorkloadModules(JSON.stringify(spec()), async () => bytes(module), signal());
+  const {spec: resolved} = await resolveWorkloadModules(pipelineSource(spec()), async () => bytes(module), signal());
   const flow = new Flow(resolved, {sys: {cache_dir: dir}, session: {working_dir: dir}}, new Effects());
-  await flow.initialize(signal());
-  for (let i = 0; i < 2; i++) await expect(flow.execute({pipelineName: "p", payload: {message: "literal ${{ not_rerendered }}"}, metadata: {}}, signal())).rejects.toThrow();
+
+  for (let i = 0; i < 2; i++) await expect(flow.execute({pipelineName: "pipeline", payload: {message: "literal ${{ not_rerendered }}"}, metadata: {}}, signal())).rejects.toThrow();
   expect(calls).toEqual(["module-install"]);
 });
 
@@ -139,9 +144,9 @@ test("executor pins bytes for offline recovery, without replaying installation o
     }
   }
   const effects = new Effects((async () => Response.json({ok: true})) as unknown as typeof fetch, () => {});
-  const source = JSON.stringify(spec()); let loads = 0;
+  const source = pipelineSource(spec()); let loads = 0;
   const executor = new SpecExecutor(config, effects, async () => { loads++; return bytes(module); });
-  const request = {requestId: "r", assignmentVersion: 1, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "p", payload: {message: "literal ${{ not_rerendered }}"}, artifacts: []};
+  const request = {requestId: "r", assignmentVersion: 1, assignmentKey: "a".repeat(64), pipelineSlug: "test", pipelineName: "test", payload: {message: "literal ${{ not_rerendered }}"}, artifacts: []};
   let snapshot: ExecutionSnapshot | undefined;
   await expect(executor.execute(source, request, controller.signal, {save: async value => {snapshot = structuredClone(value);}})).rejects.toThrow();
   expect(snapshot!.stage).toBe("nodes"); expect(snapshot!.workloadModules![0]!.sha256).toBe(sha256(bytes(module)));
