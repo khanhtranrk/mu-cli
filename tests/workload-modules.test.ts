@@ -141,7 +141,7 @@ test("executor pins bytes for offline recovery, without replaying installation o
   const effects = new Effects((async () => Response.json({ok: true})) as unknown as typeof fetch, () => {});
   const source = JSON.stringify(spec()); let loads = 0;
   const executor = new SpecExecutor(config, effects, async () => { loads++; return bytes(module); });
-  const request = {requestId: "r", assignmentVersion: 1, specSlug: "test", pipelineName: "p", payload: {message: "literal ${{ not_rerendered }}"}, artifacts: []};
+  const request = {requestId: "r", assignmentVersion: 1, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "p", payload: {message: "literal ${{ not_rerendered }}"}, artifacts: []};
   let snapshot: ExecutionSnapshot | undefined;
   await expect(executor.execute(source, request, controller.signal, {save: async value => {snapshot = structuredClone(value);}})).rejects.toThrow();
   expect(snapshot!.stage).toBe("nodes"); expect(snapshot!.workloadModules![0]!.sha256).toBe(sha256(bytes(module)));

@@ -1,3 +1,4 @@
+import { AssignmentLostError } from "../api";
 import {reportingAction} from "./reporting-actions";
 import { render } from "../spec/expressions";
 import { applyContext, mapping, nodeContextValues, type Context, type Node, type NodeStatus, type Spec, type States } from "../spec/types";
@@ -63,6 +64,7 @@ export class Flow {
   private async emit(name: string, pipelineName: string, context: Context, states: States, signal: AbortSignal, options: {
     node?: Node; status?: NodeStatus; error?: Context | null; skipped?: boolean; blocked?: boolean; ignoredError?: string | null;
   } = {}): Promise<void> {
+    if (signal.reason instanceof AssignmentLostError) throw signal.reason;
     const pipeline = this.spec.pipelines[pipelineName];
     const status = options.status ?? "running";
     const event: Context = { name, pipeline: { name: pipelineName, ...(options.node ? {} : { status }) }, error: options.error ?? null };
@@ -85,7 +87,10 @@ export class Flow {
         local.event = structuredClone(event); local.actions = {};
         if (options.node) local.node = structuredClone(event.node);
         try { await this.actions.runAll(hook.do, local, { ...states }, signal); }
-        catch { this.effects.warning(`Lifecycle hook ${name} failed`); }
+        catch (error) {
+          if (error instanceof AssignmentLostError) throw error;
+          this.effects.warning(`Lifecycle hook ${name} failed`);
+        }
       }
     }
   }
@@ -105,13 +110,20 @@ export class Flow {
         for (const phase of [node.before_run, node.run, node.after_run]) await this.actions.runAll(phase, local, states, signal);
       }
       if (!await condition(node.postcondition, local, states, this.effects, signal)) throw new Error("Node postcondition failed");
-    } catch (caught) { status = "failed"; error = caught; }
+    } catch (caught) {
+      if (caught instanceof AssignmentLostError) throw caught;
+      if (signal.reason instanceof AssignmentLostError) throw signal.reason;
+      status = "failed"; error = caught;
+    }
     const finalStates = { ...states, [node.name]: status };
     const cleanupSignal = signal.aborted ? AbortSignal.timeout(this.shutdownTimeout) : signal;
     for (const action of node.finally ?? []) {
       mapping(local.node).status = status;
       try { await this.actions.run(action, local, finalStates, cleanupSignal); }
-      catch (caught) { status = "failed"; error = caught; finalStates[node.name] = status; }
+      catch (caught) {
+        if (caught instanceof AssignmentLostError) throw caught;
+        status = "failed"; error = caught; finalStates[node.name] = status;
+      }
     }
     let ignoredError: string | null = null;
     if (status === "failed" && node.ignore_error && !signal.aborted) {
@@ -129,7 +141,7 @@ export class Flow {
     return { status, context: local };
   }
 
-  async execute(request: PipelineRequest, signal: AbortSignal, persistence?: ExecutionPersistence): Promise<States> {
+  async execute(request: PipelineRequest, signal: AbortSignal, persistence?: ExecutionPersistence, workerSignal = signal): Promise<States> {
     if (!this.initialized) throw new Error("Flow must initialize before execution");
     const name = request.pipelineName;
     let context = structuredClone(this.base);
@@ -173,6 +185,7 @@ export class Flow {
       if (!restored) {
         await checkpoint();
         await this.emit("pipeline_started", name, context, states, executionSignal);
+        executionSignal.throwIfAborted();
         validate(this.prepared.get(name) ?? this.base);
         if (this.preparationErrors.has(name)) throw this.preparationErrors.get(name);
         if (!this.prepared.has(name)) {
@@ -180,7 +193,7 @@ export class Flow {
             const preparing = (async () => {
               try {
                 const prepared = structuredClone(this.base);
-                await this.actions.runAll(definition.prepare, prepared, {}, executionSignal);
+                await this.actions.runAll(definition.prepare, prepared, {}, workerSignal);
                 mapping(prepared.sys).models = await this.effects.discoverModels(String(mapping(prepared.sys).cache_dir));
                 this.prepared.set(name, prepared);
                 return prepared;
@@ -190,6 +203,7 @@ export class Flow {
           }
           await this.preparing.get(name);
         }
+        executionSignal.throwIfAborted();
         context = validate(this.prepared.get(name)!);
       } else {
         context = structuredClone(restored.context);
@@ -253,7 +267,8 @@ export class Flow {
       mapping(context.pipeline).outputs = resolveFields(definition.outputs, {}, context, "pipeline outputs");
     } catch (caught) {
       if (running.size) { scope.abort(caught); await Promise.allSettled(running); }
-      if (caught instanceof RecoveryError) throw caught;
+      if (caught instanceof RecoveryError || caught instanceof AssignmentLostError) throw caught;
+      if (signal.reason instanceof AssignmentLostError) throw signal.reason;
       pipelineError = caught; this.failed = true;
     }
     if (pipelineError && mapping(context.session ?? {}).server) {

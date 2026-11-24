@@ -1,3 +1,5 @@
+import { assignmentKey } from "./assignment";
+import { AssignmentLostError } from "../api";
 import { workloadModules } from "../spec/workload-modules";
 import { render } from "../spec/expressions";
 import { applyContext, mapping, type Action, type Context, type Spec, type States, type Workload } from "../spec/types";
@@ -165,12 +167,16 @@ export class Actions {
           const timeout = values.timeout ?? 30;
           if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) throw new Error("HTTP timeout must be a positive number");
           const session = mapping(context.session), request = mapping(context.request ?? {});
-          if (typeof session.server === "string" && new URL(session.server).origin === url.origin && request.assignmentVersion !== undefined) {
-            for (const key of Object.keys(headers)) if (key.toLowerCase() === "x-mu-assignment-version") delete headers[key];
+          const masterflow = typeof session.server === "string" && new URL(session.server).origin === url.origin;
+          const requestReport = masterflow && url.pathname === "/api/requests/report";
+          if (masterflow && request.assignmentVersion !== undefined) {
+            for (const key of Object.keys(headers)) if (["x-mu-assignment-version", "x-mu-assignment-key"].includes(key.toLowerCase())) delete headers[key];
             headers["X-Mu-Assignment-Version"] = String(request.assignmentVersion);
+            const key = assignmentKey(request.requestId);
+            if (key && requestReport) headers["X-Mu-Assignment-Key"] = key;
           }
           const body = Object.hasOwn(action, "body") ? render(action.body, context, true) : undefined;
-          if (typeof session.server === "string" && new URL(session.server).origin === url.origin && url.pathname === "/api/requests/report" && body && typeof body === "object") {
+          if (requestReport && body && typeof body === "object") {
             const report = mapping(body);
             if (report.status !== undefined || report.pipelineState !== undefined || Object.values(mapping(report.node_states ?? {})).some(value => mapping(value).status !== undefined || mapping(value).outputs !== undefined)) throw new Error("Lifecycle status and Outputs are owned by the worker");
           }
@@ -182,6 +188,7 @@ export class Actions {
             ...(values.response_file === undefined ? {} : { responseFile: this.effects.path(String(values.response_file), cwd) }),
           };
           Object.assign(result, await this.effects.http(options, signal));
+          if (requestReport && Number(result.status_code) === 409 && (result.body as Context | undefined)?.error === "ASSIGNMENT_LOST") throw new AssignmentLostError();
           if (Number(result.status_code) >= 300) throw new Error(`HTTP ${result.status_code}`);
           break;
         }
@@ -191,7 +198,7 @@ export class Actions {
     } catch (error) {
       delete result.outputs;
       result.success = false; result.error = errorValue(error); save();
-      if (action.ignore_error === true && !signal.aborted) { this.effects.warning("Ignored action failure"); return; }
+      if (action.ignore_error === true && !signal.aborted && !(error instanceof AssignmentLostError)) { this.effects.warning("Ignored action failure"); return; }
       throw error;
     }
   }

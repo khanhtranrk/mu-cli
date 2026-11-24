@@ -9,7 +9,7 @@ import type { RunDirectory } from "./run-directory";
 export interface Checkpoint {
   runDirectory?: RunDirectory;
   request: ClaimedRequest;
-  phase: "claimed" | "executing" | "terminal" | "reported";
+  phase: "claimed" | "executing" | "terminal" | "reported" | "revoked";
   report?: Report;
   reporting?: "spec";
   source?: string;

@@ -6,6 +6,6 @@ export interface RequestExecutor {
   validate?(source: string, slug: string, signal: AbortSignal): Promise<void>;
   prepare?(source: string, slug: string, signal: AbortSignal): Promise<void>;
   readonly concurrent?: boolean;
-  execute(spec: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence): Promise<void>;
+  execute(spec: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence, workerSignal?: AbortSignal): Promise<void>;
   finalize?(failed: boolean): Promise<void>;
 }

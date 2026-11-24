@@ -14,7 +14,7 @@ async function config(): Promise<WorkerConfig> {
   const workspace = await mkdtemp(join(tmpdir(), "mu-spec-worker-")); directories.push(workspace);
   return { server: "http://localhost:3211", token: "secret", unitId: "cpu", specs: ["cpu"], workspace, maxClaim: 1, pollInterval: .01, heartbeatInterval: .01, fake: false };
 }
-const request: ClaimedRequest = { requestId: "r1", specSlug: "cpu", pipelineName: "p", assignmentVersion: 12, payload: {}, artifacts: [] };
+const request: ClaimedRequest = { requestId: "r1", specSlug: "cpu", pipelineName: "p", assignmentVersion: 12, assignmentKey: "a".repeat(64), payload: {}, artifacts: [] };
 
 test("real CLI loads Spec, initializes after claiming, executes CPU workload and reports without Spec hooks", async () => {
   const configuration = await config();
@@ -40,7 +40,7 @@ test("real CLI loads Spec, initializes after claiming, executes CPU workload and
     const child = Bun.spawn(["bun", "src/index.ts", "worker", "once", "--config", configPath, "--server", server.url.origin, "--unit-id", "cpu", "--spec", "cpu", "--workspace", configuration.workspace], { cwd: import.meta.dir + "/..", env: { ...process.env, MU_WORKER_TOKEN: "secret" }, stdout: "pipe", stderr: "pipe" });
     expect(await child.exited).toBe(0);
     expect(paths.indexOf("/api/notifications/send")).toBeGreaterThan(paths.indexOf("/api/requests/claim"));
-    expect(reports.map((raw: any) => {const {events, node_states, ...report} = raw; return {...report, ...(node_states ? {node_states: Object.fromEntries(Object.entries(node_states).map(([key, value]: [string, any]) => {const {events, ...node} = value; return [key, node];}))} : {})};})).toEqual([
+    expect(reports.filter(raw => Object.keys(raw as object).length > 1).map((raw: any) => {const {events, node_states, ...report} = raw; return {...report, ...(node_states ? {node_states: Object.fromEntries(Object.entries(node_states).map(([key, value]: [string, any]) => {const {events, ...node} = value; return [key, node];}))} : {})};})).toEqual([
       { id: "r1", status: "processing" },
       { id: "r1", node_states: { work: { status: "queue" } } },
       { id: "r1", node_states: { work: { status: "running" } } },

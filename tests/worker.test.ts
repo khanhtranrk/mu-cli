@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
-import { DataCenterClient, ApiError, type ClaimedRequest } from "../src/api";
+import { AssignmentLostError, DataCenterClient, ApiError, type ClaimedRequest } from "../src/api";
 import { loadConfig, type WorkerConfig } from "../src/config";
 import { FakeExecutor, validateEnvelope, type RequestExecutor } from "../src/runtime/fake";
 import { Worker } from "../src/worker";
@@ -13,7 +13,7 @@ import { main } from "../src/index";
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
 const source = "pipelines:\n  cpu:\n    nodes:\n      - name: fake\n";
-const request: ClaimedRequest = { requestId: "r1", assignmentVersion: 3, specSlug: "test", pipelineName: "cpu", payload: {}, artifacts: [] };
+const request: ClaimedRequest = { requestId: "r1", assignmentVersion: 3, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "cpu", payload: {}, artifacts: [] };
 
 async function fixture(batch: ClaimedRequest[] = [request]) {
   const workspace = await mkdtemp(join(tmpdir(), "mu-phase1-"));
@@ -225,3 +225,28 @@ test("worker claims token scope or an explicit list in one batch and advertises 
     {unitId: "cpu", specSlugs: ["first", "second"], maxCount: 2, expressionEngine: "cel-v1"},
   ]);
 });
+
+test("assignment loss aborts active work without reporting a terminal outcome", async () => {
+  const setup = await fixture();
+  let started = false;
+  let stopped = false;
+  const report = setup.api.report.bind(setup.api);
+  setup.api.report = async (body, assignment, signal) => {
+    if (started && !body.status) throw new AssignmentLostError();
+    await report(body, assignment, signal);
+  };
+  const executor: RequestExecutor = {
+    async execute(_source, _request, signal) {
+      started = true;
+      try {
+        await new Promise<void>((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      } finally { stopped = signal.aborted; }
+    },
+  };
+  expect(await new Worker(setup.config, setup.api, executor).run("once", AbortSignal.timeout(9_000))).toBe(6);
+  expect(stopped).toBe(true);
+  const reports = setup.calls.filter(call => call.path.endsWith("report"));
+  expect(reports.map(call => call.body.status)).toEqual(["processing"]);
+}, 12_000);

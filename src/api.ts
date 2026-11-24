@@ -5,6 +5,7 @@ export interface ClaimedRequest {
   workloadLock?: import("./spec/registry-reference").RegistryLock;
   requestId: string;
   assignmentVersion: number;
+  assignmentKey: string;
   specSlug: string;
   pipelineName: string;
   payload: unknown;
@@ -53,10 +54,14 @@ export class DataCenterConnectionError extends Error {
   }
 }
 
+export class AssignmentLostError extends Error {
+  constructor() { super("Request assignment is no longer valid"); }
+}
+
 export class DataCenterClient {
   constructor(private config: WorkerConfig, private transport: typeof fetch = fetch) {}
 
-  private async call(path: string, body?: unknown, assignment?: number, signal?: AbortSignal): Promise<Response> {
+  private async call(path: string, body?: unknown, assignment?: Pick<ClaimedRequest, "assignmentVersion" | "assignmentKey">, signal?: AbortSignal): Promise<Response> {
     let response: Response;
     const method = body === undefined ? "GET" : "POST", started = Date.now();
     try {
@@ -67,7 +72,7 @@ export class DataCenterClient {
           "Content-Type": "application/json",
           "X-Mu-Expression-Engines": "cel-v1",
           "X-Mu-Workload-Registry": "1",
-          ...(assignment === undefined ? {} : { "X-Mu-Assignment-Version": String(assignment) }),
+          ...(assignment === undefined ? {} : { "X-Mu-Assignment-Version": String(assignment.assignmentVersion), "X-Mu-Assignment-Key": assignment.assignmentKey }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
@@ -78,6 +83,10 @@ export class DataCenterClient {
       throw new DataCenterConnectionError(method, path, Date.now() - started, error);
     }
     if (!response.ok) {
+      if (assignment && response.status === 409) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        if (body?.error === "ASSIGNMENT_LOST") throw new AssignmentLostError();
+      }
       let detail: string | undefined;
       if (response.status === 400 && ["/api/requests/claim", "/api/worker/scope"].includes(path)) {
         // Display only known server messages. Other response text may contain secrets.
@@ -126,15 +135,16 @@ export class DataCenterClient {
       const item = object(value);
       if (typeof item.requestId !== "string" || !item.requestId || typeof item.specSlug !== "string" || !item.specSlug || (typeof scope === "string" && item.specSlug !== scope) || (Array.isArray(scope) && !scope.includes(item.specSlug)) ||
           typeof item.pipelineName !== "string" || !item.pipelineName ||
+          typeof item.assignmentKey !== "string" || !/^[a-f0-9]{64}$/.test(item.assignmentKey) ||
           !Number.isSafeInteger(item.assignmentVersion) || Number(item.assignmentVersion) < 1 || !Object.hasOwn(item, "payload")) throw new Error("Invalid claimed assignment");
       return { ...item, artifacts: parseArtifacts(item.artifacts) } as unknown as ClaimedRequest;
     });
   }
-  async report(report: Report, assignment: number): Promise<void> {
-    const result = object(await (await this.call("/api/requests/report", report, assignment)).json());
+  async report(report: Report, assignment: Pick<ClaimedRequest, "assignmentVersion" | "assignmentKey">, signal?: AbortSignal): Promise<void> {
+    const result = object(await (await this.call("/api/requests/report", report, assignment, signal)).json());
     if (result.ok !== true) throw new Error("Invalid report response");
   }
-  async verifyAssignment(request: ClaimedRequest): Promise<void> {
-    await this.report({ id: request.requestId }, request.assignmentVersion);
+  async verifyAssignment(request: ClaimedRequest, signal?: AbortSignal): Promise<void> {
+    await this.report({ id: request.requestId }, request, signal);
   }
 }

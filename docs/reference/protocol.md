@@ -13,7 +13,13 @@ for payloads, limits and authorization. CLI adapters live in `src/api.ts`,
 - Claim using the supported CEL engine and explicit Spec slug after token-bound
   heartbeat. Execute the assigned published Spec YAML; startup does not preflight
   the mutable/current Spec. Explicit inspection/doctor can fetch the default.
-- Carry the returned assignment generation on Request-context reports/artifact calls.
+- Send the returned assignment version and key on Request-context reports,
+  artifact calls and locked workload reads. The key is stored in the private
+  local checkpoint and omitted from Spec expressions and storage requests.
+- The worker checks active assignments periodically and verifies unfinished
+  checkpoints before recovery. On `ASSIGNMENT_LOST`, it cancels the affected
+  execution where possible and marks its checkpoint revoked so later starts
+  skip it.
 - Real execution reports lifecycle status and typed Outputs automatically. `/api/requests/update` does
   not exist; use the documented report route. Custom report actions append events independently.
 - Upload raw bytes to signed storage, complete the server receipt and retrieve signed
