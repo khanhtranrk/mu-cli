@@ -76,11 +76,11 @@ test("worker execution refuses a registry Request missing its captured lock befo
   const client = new RegistryClient(result.registry, "worker-token", (async () => {reads++; throw new Error("must not read module");}) as unknown as typeof fetch);
   class Effects extends BunEffects {override async http() {return {status_code: 200, body: {ok: true}};}}
   const executor = new SpecExecutor({workspace: cwd, server: result.registry, token: "worker-token", unitId: "unit", specs: ["demo"], maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false}, new Effects(), undefined, client);
-  await expect(executor.execute(JSON.stringify({workloads: {w: "example"}, pipelines: {p: {nodes: []}}}), {requestId: "r", pipelineSlug: "demo", pipelineName: "p", assignmentVersion: 1, assignmentKey: "a".repeat(64), payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
+  await expect(executor.execute(JSON.stringify({kind: "pipeline", schema_version: 1, workloads: {w: "example"}, nodes: []}), {requestId: "r", pipelineSlug: "demo", pipelineName: "p", assignmentVersion: 1, assignmentKey: "a".repeat(64), payload: {}, artifacts: []}, signal())).rejects.toThrow("matching dependency lock");
   expect(reads).toBe(0);
 });
 
 test("published module on-key routines use the same YAML 1.1 compatibility as the worker", async () => {
   const yaml = 'routines:\n  on:\n    actions: []\nprepare:\n  - type: execute_routine\n    routine: "on"\nworkload: {target: bun, units: 0}\n';
-  await expect(resolveWorkloadModules(JSON.stringify({workloads: {w: {source: "./module"}}}), async () => Buffer.from(yaml), signal())).resolves.toHaveProperty("spec.workloads.w.target", "bun");
+  await expect(resolveWorkloadModules(JSON.stringify({kind: "pipeline", schema_version: 1, workloads: {w: {source: "./module"}}}), async () => Buffer.from(yaml), signal())).resolves.toHaveProperty("spec.workloads.w.target", "bun");
 });

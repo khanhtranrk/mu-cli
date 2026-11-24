@@ -3,7 +3,7 @@
 ## Checked-in implementation
 
 This repository is independently versioned inside the MU workspace. The current
-implementation uses internal modules, not published `@mu/spec`/`@mu/engine` packages.
+implementation uses `@mu/spec` for the published Pipeline document and internal modules for runtime validation and execution.
 
 | Module | Responsibility |
 | --- | --- |
@@ -17,8 +17,7 @@ implementation uses internal modules, not published `@mu/spec`/`@mu/engine` pack
 
 The engine receives injected effects. Spec parsing has no process execution or
 network authority. The worker connects engine semantics to Bun infrastructure.
-MasterFlow currently retains its own Spec validation; it does not import a shared
-package from this checkout. See [Phase 2 boundaries](../tasks/completed/phase-2.md#implementation-and-boundaries).
+MasterFlow and Convex use the same Pipeline document reader through their domain package. See [Phase 2 boundaries](../tasks/completed/phase-2.md#implementation-and-boundaries).
 
 ## Repository boundaries
 
@@ -34,8 +33,7 @@ package from this checkout. See [Phase 2 boundaries](../tasks/completed/phase-2.
 
 The original architecture proposed `@mu/spec` for canonical schema/parser/types,
 `@mu/engine` for capability-injected execution semantics, and optionally
-`@mu/runtime` for scheduling adapters. Publishing, versioning and consumer migration
-are still open. No `packages/` tree in the umbrella repository is required by this
+`@mu/runtime` for scheduling adapters. The Pipeline reader is now shipped as `@mu/spec`. Broader schema sharing and separate engine and runtime packages remain proposals. No `packages/` tree in the umbrella repository is required by this
 proposal, and no source copying between repositories is intended. Versioned internal
 packages or separate Spec/engine repositories remain alternatives; Bun workspaces
 across nested Git submodules require deliberate linking.

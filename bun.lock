@@ -6,6 +6,7 @@
       "name": "mu-cli",
       "dependencies": {
         "@marcbachmann/cel-js": "8.0.0",
+        "@mu/spec": "file:vendor/mu-spec-0.2.0.tgz",
         "commander": "^15.0.0",
         "yaml": "2.9.1",
       },
@@ -71,6 +72,8 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.0", "", { "os": "win32", "cpu": "x64" }, "sha512-aIitBcjQeyOhMTImhLZmtxfdOcuNRpwlPNmlFKPcHQYPhEssw75Cl1TSXJXpMkzaua9FUetx/4OQKq7eJul5Cg=="],
 
     "@marcbachmann/cel-js": ["@marcbachmann/cel-js@8.0.0", "", { "bin": { "cel-evaluate": "bin/cel-evaluate.js" } }, "sha512-oaTrAziGr3zDLFiMt/yLU3nZuRMawyWQB5X1a0I7s9eGy3JYzX9l8ZXXHyMd64nzbeVFZTewuUShwsZQdK6UCA=="],
+
+    "@mu/spec": ["@mu/spec@vendor/mu-spec-0.2.0.tgz", { "dependencies": { "yaml": "2.9.1" } }, "sha512-0ASRvehrMKYPfDQhnwTS+Qwfp+Mf+Y6pTTRq/epWEDIz2vN4Xn2azfZBUBBJqgo/s2A1KBQHcs3K9iGvMsnmNA=="],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

@@ -307,3 +307,10 @@ feature. See [MasterFlow companion](https://github.com/khanhtranrk/mu-masterflow
 ## Workload preparation locks and parallel groups
 
 See [workload preparation](workload-preparation.md) for `parallel`, `installation_group`, module resource keys, cancellable waiting and platform/upgrade requirements. These actions currently apply only to workload-module preparation.
+
+### Published Pipeline YAML dialect
+
+Published Pipeline documents use YAML 1.2 by default through `@mu/spec`, the
+same reader used by MasterFlow and Convex. Bare `on` and `off` in a Pipeline
+are strings. Use `true` and `false` for booleans. Standalone Workload Modules
+keep their existing YAML 1.1 reader.
