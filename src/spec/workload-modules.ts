@@ -1,7 +1,7 @@
 import { validatePreparation } from "./preparation";
 import { registryReference, referenceKey, workloadVersion, type RegistryLock, type RegistryModule, type RegistryReference, type RegistryPin } from "./registry-reference";
 import { createHash } from "node:crypto";
-import { parseSpec, parseYamlMapping } from "./parse";
+import { parsePipeline, parseSpec, parseYamlMapping } from "./parse";
 import { mapping, type Spec, type Action } from "./types";
 import { validateWorkloadSource } from "./workload-source";
 
@@ -19,10 +19,13 @@ export interface RegistryResolution {
   read(ref: RegistryReference, signal: AbortSignal, pin?: RegistryPin): Promise<RegistryModule>;
 }
 export function hasRegistryReferences(source: string): boolean {return Object.values(mapping(parseYamlMapping(source).workloads ?? {})).some(value => registryReference(value) !== null);}
-export async function resolveWorkloadModules(source: string, load: ModuleLoader, signal: AbortSignal, pinned?: ModuleSnapshot[], registry?: RegistryResolution): Promise<{ spec: Spec; modules: ModuleSnapshot[] }> {
+export async function resolveWorkloadModules(source: string, load: ModuleLoader, signal: AbortSignal, pinned?: ModuleSnapshot[], registry?: RegistryResolution, pipelineName?: string): Promise<{ spec: Spec; modules: ModuleSnapshot[] }> {
   const root = parseYamlMapping(source);
+  const validate = (yaml: string, allowExternal = false) => root.kind === "pipeline"
+    ? parsePipeline(yaml, pipelineName ?? "pipeline", {allowExternal})
+    : parseSpec(yaml, {allowExternal});
   // Structural checks happen before any source is fetched. No process effects here.
-  const structural = parseSpec(source, { allowExternal: true });
+  const structural = validate(source, true);
   const declarations = mapping(root.workloads ?? {}, "workloads");
   const modules: ModuleSnapshot[] = [], scopes = new Map<string, ResolvedModule>();
   const externals = Object.entries(declarations).filter(([, raw]) => registryReference(raw) !== null || Object.hasOwn(mapping(raw), "source"));
@@ -71,7 +74,7 @@ export async function resolveWorkloadModules(source: string, load: ModuleLoader,
     Object.defineProperty(declarations, name, { value: scoped.workloads!.module, enumerable: true, configurable: true, writable: true });
     modules.push({ name, source: location, sha256: hash, bytes: Buffer.from(bytes).toString("base64"), ...(provenance ? {registry: provenance} : {}) });
   }
-  const spec = parseSpec(JSON.stringify(root));
+  const spec = validate(JSON.stringify(root));
   workloadModules.set(spec, scopes);
   return { spec, modules };
 }

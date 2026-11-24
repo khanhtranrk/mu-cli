@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { SpecExecutor } from "../src/runtime/spec-executor";
 import { BunEffects } from "../src/runtime/effects";
@@ -128,4 +129,36 @@ test("malformed assigned external modules fail without running installation", as
   const executor = new SpecExecutor(configuration, new Effects(transport), async () => Buffer.from("workload: {units: 1}"));
   expect(await new Worker(configuration, new DataCenterClient(configuration, transport), executor).run("once", new AbortController().signal)).toBe(6);
   expect(claims).toBe(1); expect(processes).toBe(0);
+});
+
+test("worker executes the claimed single-pipeline YAML without fetching the current draft", async () => {
+  const configuration = await config();
+  const source = [
+    "kind: pipeline",
+    "schema_version: 1",
+    "nodes:",
+    "  - name: execute",
+    "    run:",
+    "      - type: execute_command",
+    "        target: bun",
+    "        args: ['-e', \"await Bun.write('pinned-result', 'published')\"]",
+  ].join("\n");
+  const paths: string[] = [];
+  const transport = (async (url: string | URL | Request) => {
+    const path = new URL(String(url)).pathname;
+    paths.push(path);
+    if (path.endsWith("claim")) {
+      return Response.json([{...request, pipelineName: request.specSlug, specYaml: source,
+        yamlSha256: createHash("sha256").update(source).digest("hex"),
+        executionSha256: createHash("sha256").update(JSON.stringify([1, source, null, []])).digest("hex")}]);
+    }
+    return Response.json({ok: true});
+  }) as typeof fetch;
+
+  const executor = new SpecExecutor(configuration, new BunEffects(transport));
+  const worker = new Worker(configuration, new DataCenterClient(configuration, transport), executor);
+  expect(await worker.run("once", new AbortController().signal)).toBe(0);
+  expect(paths.some(path => path.startsWith("/api/specs/"))).toBe(false);
+  const runs = await readdir(join(configuration.workspace, "runs"));
+  expect(await Bun.file(join(configuration.workspace, "runs", runs[0]!, "pinned-result")).text()).toBe("published");
 });

@@ -1,7 +1,7 @@
 import { AssignmentLostError } from "./api";
 import { HeartbeatMonitor } from "./heartbeat";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
-import {parseSpec} from "./spec/parse";
+import {parsePipeline, parseSpec, parseYamlMapping} from "./spec/parse";
 import type { WorkerConfig } from "./config";
 import type { DataCenterClient, ClaimedRequest, Report } from "./api";
 import type { RequestExecutor } from "./runtime/types";
@@ -133,12 +133,31 @@ export class Worker {
     try {
       signal.throwIfAborted();
       const source = request.specYaml ?? this.sources.get(request.specSlug) ?? await this.api.spec(request.specSlug);
+      if (request.yamlSha256 !== undefined && request.yamlSha256 !== createHash("sha256").update(source).digest("hex")) {
+        throw new Error("Claimed YAML SHA-256 mismatch");
+      }
+      if (request.executionSha256 !== undefined) {
+        const lock = request.workloadLock;
+        const pins = lock?.pins.slice().sort((left, right) => left.alias < right.alias ? -1 : left.alias > right.alias ? 1 : 0)
+          .map(pin => [pin.alias, pin.reference, pin.slug, pin.version, pin.versionId, pin.sha256, pin.formatVersion]) ?? [];
+        const identity = JSON.stringify([1, source, lock?.yamlSha256 ?? null, pins]);
+        if (request.executionSha256 !== createHash("sha256").update(identity).digest("hex")) {
+          throw new Error("Claimed execution SHA-256 mismatch");
+        }
+      }
       if (this.executor.reporting === "spec") {
         state.source = source;
         state.runDirectory = resolveRunDirectory(this.config, request.specSlug, source);
         await this.store.save(state);
       }
-      if (this.executor.reporting !== "spec" && request.specYaml && Object.keys(parseSpec(request.specYaml).pipelines[request.pipelineName]?.outputs ?? {}).length) throw new Error("Fake execution cannot publish declared Outputs");
+      if (this.executor.reporting !== "spec" && request.specYaml) {
+        const definition = parseYamlMapping(source).kind === "pipeline"
+          ? parsePipeline(source, request.specSlug)
+          : parseSpec(source);
+        if (Object.keys(definition.pipelines[request.pipelineName]?.outputs ?? {}).length) {
+          throw new Error("Fake execution cannot publish declared Outputs");
+        }
+      }
       await this.executor.execute(source, request, signal, this.executor.reporting === "spec" ? {
         snapshot: recovered?.execution, retryIncomplete: this.config.retryIncomplete,
         save: snapshot => {

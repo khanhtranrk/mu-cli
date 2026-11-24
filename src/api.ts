@@ -11,6 +11,8 @@ export interface ClaimedRequest {
   payload: unknown;
   inputs?: unknown;
   specYaml?: string;
+  yamlSha256?: string;
+  executionSha256?: string;
   artifacts: ArtifactMetadata[];
   registryContext?: unknown;
 }
