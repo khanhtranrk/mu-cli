@@ -21,7 +21,7 @@ test("artifact metadata preserves output keys and rejects removed legacy shapes 
 
 test("claim validates and preserves copied/shared artifact inputs without fetching or executing them", async () => {
   const config: WorkerConfig = { server: "http://localhost", unitId: "unit", token: "token", specs: ["demo"], workspace: "/tmp", maxClaim: 1, pollInterval: 1, heartbeatInterval: 1, fake: false };
-  const transport = (async () => Response.json([{ requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, payload: {}, artifacts: [artifact] }])) as unknown as typeof fetch;
+  const transport = (async () => Response.json([{ requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, assignmentKey: "a".repeat(64), payload: {}, artifacts: [artifact] }])) as unknown as typeof fetch;
   expect((await new DataCenterClient(config, transport).claim("demo", 1))[0]?.artifacts).toEqual([artifact]);
   const malformed = (async () => Response.json([{ requestId: "r", specSlug: "demo", pipelineName: "p", assignmentVersion: 1, artifacts: [] }])) as unknown as typeof fetch;
   await expect(new DataCenterClient(config, malformed).claim("demo", 1)).rejects.toThrow("assignment");

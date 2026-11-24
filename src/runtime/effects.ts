@@ -137,7 +137,7 @@ export class BunEffects implements Effects {
       const next = new URL(response.headers.get("location")!, url);
       await response.body?.cancel(); response = undefined;
       if (!["http:", "https:"].includes(next.protocol) || next.username || next.password) throw new Error("Invalid HTTP redirect");
-      if (next.origin !== url.origin) for (const name of ["Authorization", "Cookie", "X-Mu-Assignment-Version"]) headers.delete(name);
+      if (next.origin !== url.origin) for (const name of ["Authorization", "Cookie", "X-Mu-Assignment-Version", "X-Mu-Assignment-Key"]) headers.delete(name);
       if (([301, 302].includes(status) && method === "POST") || (status === 303 && method !== "HEAD")) {
         method = "GET"; body = undefined; headers.delete("Content-Length"); headers.delete("Content-Type");
       }

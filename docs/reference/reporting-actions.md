@@ -8,8 +8,10 @@ failure must fail execution.
 
 These actions require active `session.server`, `session.token`,
 `request.requestId` and `request.assignmentVersion`; `report_node` additionally
-require `node.name` when sending node fields. The worker supplies these contexts.
-Storage requests never receive worker credentials. All paths below resolve
+requires `node.name` when sending node fields. The worker supplies these contexts
+and attaches the assignment key outside the Spec context. Assignment loss stops
+the request even when an action has `ignore_error`. Storage requests use the
+headers issued by MasterFlow. All paths below resolve
 relative to `session.working_dir`.
 
 | Action | Parameters | Saved result beyond success/error |

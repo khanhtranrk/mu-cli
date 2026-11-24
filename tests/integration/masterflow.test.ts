@@ -1,3 +1,4 @@
+import { assignmentContext } from "../../src/engine/assignment";
 import { RegistryClient } from "../../src/runtime/registry-client";
 import { executeStandaloneWorkload } from "../../src/runtime/workload-executor";
 import type { ExecutionSnapshot } from "../../src/engine/checkpoint";
@@ -23,8 +24,9 @@ const integration = test.skipIf(!source);
 
 async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; loseCompletionResponse?: boolean } = {}) {
   const root = resolve(source!);
-  const previous = Object.fromEntries(["CLERK_JWT_ISSUER_DOMAIN", "AUTH_ALLOWED_USER_IDS", "AUTH_ALLOWED_EMAILS", "STORAGE_ENCRYPTION_KEY"].map(key => [key, process.env[key]]));
+  const previous = Object.fromEntries(["CLERK_JWT_ISSUER_DOMAIN", "AUTH_ALLOWED_USER_IDS", "AUTH_OWNER_USER_ID", "AUTH_ALLOWED_EMAILS", "STORAGE_ENCRYPTION_KEY"].map(key => [key, process.env[key]]));
   process.env.CLERK_JWT_ISSUER_DOMAIN = "https://test.clerk.accounts.dev";
+  process.env.AUTH_OWNER_USER_ID = "user_owner";
   process.env.AUTH_ALLOWED_USER_IDS = '["user_owner"]';
   process.env.AUTH_ALLOWED_EMAILS = "[]";
   process.env.STORAGE_ENCRYPTION_KEY = Buffer.alloc(32, 17).toString("base64");
@@ -43,6 +45,7 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
     if (signed) {
       expect(incoming.headers.has("authorization")).toBe(false);
       expect(incoming.headers.has("x-mu-assignment-version")).toBe(false);
+      expect(incoming.headers.has("x-mu-assignment-key")).toBe(false);
       expect(incoming.headers.has("cookie")).toBe(false);
     }
     if (incoming.method === "PUT" && copy) {
@@ -69,19 +72,21 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
   } });
   const spec = await Bun.file(join(import.meta.dir, "../../examples/cpu-artifacts/spec.yaml")).text();
   const ids = await backend.run(async ctx => {
-    await ctx.db.insert("storageSettings", { ownerId: "user_owner", defaultConnectionId: "local" });
+    await ctx.db.insert("appSettings", { key: "app", defaultStorageConnectionId: "local" });
     await ctx.db.insert("storageConnections", { connectionId: "local", name: "Test storage", provider: "r2", endpoint: storage.url.origin, region: "auto", bucket: "private", prefix: "mu", encryptedCredentials: s3Module.encrypt({ accessKeyId: "test-key", secretAccessKey: "test-secret" }, "local"), enabled: true, createdAt: 1 });
-    const tokenId = await ctx.db.insert("unitTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", specSlugs: ["demo"], createdAt: 1 });
+    const tokenId = await ctx.db.insert("workerTokens", { name: "worker", tokenHash: createHash("sha256").update("worker-token").digest("hex"), unitId: "unit", specSlugs: ["demo"], createdAt: 1 });
     const specId = await ctx.db.insert("specs", { draftRevision: 0, slug: "demo", name: "CPU test", description: "", yaml: spec, enabled: true });
     const specVersionId = await ctx.db.insert("specVersions", {specId, version: "1.0.0", yaml: spec, yamlSha256: createHash("sha256").update(spec).digest("hex"), executionSha256: "fixture", changelog: "fixture", publishedBy: "test", publishedAt: 1});
     await ctx.db.patch(specId, {defaultVersionId: specVersionId});
-    const requestId = await ctx.db.insert("requests", { specVersionId, specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, status: "waiting" });
+    const requestId = await ctx.db.insert("requests", { specVersionId, specSlug: "demo", pipelineName: "demo", inputs: {message: {type: "string", value: "CPU integration"}}, resolvedInputs: {message: "CPU integration"}, requiredUnits: 0, outputs: {published: {type: "artifact", value: "${{ pipeline.outputs.published }}"}, size: {type: "number", value: "${{ pipeline.outputs.size }}"}, sha256: {type: "string", value: "${{ pipeline.outputs.sha256 }}"}}, status: "waiting" });
     return { tokenId, requestId, specId, specVersionId };
   });
   const apiCalls: { path: string; method: string; body?: Record<string, unknown> }[] = [];
   let lostResponse = false;
+  let workerAssignmentKey: string | undefined;
   const site = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(incoming) {
     const url = new URL(incoming.url), body = incoming.method === "GET" ? undefined : await incoming.text();
+    workerAssignmentKey = incoming.headers.get("x-mu-assignment-key") ?? workerAssignmentKey;
     apiCalls.push({ path: url.pathname, method: incoming.method, ...(body ? { body: JSON.parse(body) as Record<string, unknown> } : {}) });
     const response = await backend.fetch(url.pathname + url.search, { method: incoming.method, headers: incoming.headers, body });
     if (options.loseCompletionResponse && !lostResponse && url.pathname.endsWith("/complete") && response.ok) {
@@ -101,7 +106,7 @@ async function fixture(options: { failPut?: boolean; corruptDownload?: boolean; 
   const config: WorkerConfig = { server: site.url.origin, token: "worker-token", unitId: "unit", specs: ["demo"], workspace, maxClaim: 1, pollInterval: 1, heartbeatInterval: 30, fake: false, devices: [], concurrency: 2 };
   const api = new DataCenterClient(config);
   const headers = { Authorization: "Bearer worker-token", "Content-Type": "application/json", "X-Mu-Assignment-Version": "1" };
-  const call = (path: string, body?: unknown, override: Record<string, string> = {}) => fetch(site.url.origin + path, { method: body === undefined ? "GET" : "POST", headers: { ...headers, ...override }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const call = (path: string, body?: unknown, override: Record<string, string> = {}) => fetch(site.url.origin + path, { method: body === undefined ? "GET" : "POST", headers: { ...headers, ...(workerAssignmentKey ? { "X-Mu-Assignment-Key": workerAssignmentKey } : {}), ...override }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { backend, ids, objects, storageCalls, apiCalls, config, api, call,
     run: () => new Worker(config, api, new SpecExecutor(config, new BunEffects(fetch, () => {}))).run("once", new AbortController().signal),
     close: async () => {
@@ -181,14 +186,20 @@ integration("real worker authorization rejects foreign/stale/revoked assignments
     await setup.api.heartbeat("online");
     const [request] = await setup.api.claim("demo", 1);
     const report = { id: request!.requestId, status: "processing" };
+    const assignmentHeaders = { "X-Mu-Assignment-Key": request!.assignmentKey };
     expect((await setup.call("/api/requests/create", {})).status).toBe(403);
     expect((await setup.call("/api/requests?specSlug=demo")).status).toBe(403);
-    expect((await setup.call("/api/requests/report", report, { "X-Mu-Assignment-Version": "0" })).status).toBe(400);
-    expect((await setup.call("/api/requests/artifacts/upload-url", { requestId: request!.requestId, artifactId: "result", size: 1, sha256: "a".repeat(64) }, { "X-Mu-Assignment-Version": "0" })).status).toBe(400);
+    expect((await setup.call("/api/requests/report", report, { ...assignmentHeaders, "X-Mu-Assignment-Version": "0" })).status).toBe(409);
+    expect((await setup.call("/api/requests/artifacts/upload-url", { requestId: request!.requestId, artifactId: "result", size: 1, sha256: "a".repeat(64) }, { ...assignmentHeaders, "X-Mu-Assignment-Version": "0" })).status).toBe(409);
     const foreign = await setup.backend.run(ctx => ctx.db.insert("requests", { specVersionId: setup.ids.specVersionId, specSlug: "demo", pipelineName: "demo", payload: {}, status: "waiting" }));
-    expect((await setup.call("/api/requests/report", { id: foreign, status: "succeeded" })).status).toBe(400);
+    expect((await setup.call("/api/requests/report", { id: foreign, status: "succeeded" }, assignmentHeaders)).status).toBe(409);
+    await setup.backend.withIdentity({ issuer: "https://test.clerk.accounts.dev", subject: "user_owner" }).mutation(
+      makeFunctionReference<"mutation">("requests:revokeAssignment"),
+      { id: request!.requestId, expectedAssignmentVersion: request!.assignmentVersion, reason: "Stop this assignment" },
+    );
+    await expect(setup.api.verifyAssignment(request!)).rejects.toThrow("Request assignment is no longer valid");
     await setup.backend.run(ctx => ctx.db.patch(setup.ids.tokenId, { deletedAt: Date.now() }));
-    expect((await setup.call("/api/requests/report", report)).status).toBe(401);
+    expect((await setup.call("/api/requests/report", report, assignmentHeaders)).status).toBe(401);
   } finally { await setup.close(); }
 });
 
@@ -200,21 +211,23 @@ integration("report_request appends through MasterFlow without coupling events/s
     const context = {session: {working_dir: setup.config.workspace, server: setup.config.server, token: setup.config.token}, request};
     const actions = new Actions({pipelines: {}}, new BunEffects());
     const signal = new AbortController().signal;
-    const first = {level: "info" as const, message: "accepted", createdAt: 100};
-    const second = {level: "warning" as const, message: "retry", details: {attempt: 2}, createdAt: 200};
-    await actions.run({type: "report_request", events: [first]}, context, {}, signal);
-    let row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
-    expect(row?.status).toBe("possessed"); expect(row?.events).toEqual([first]);
-    await reportingAction("report_request", {status: "processing"}, context, new BunEffects(), signal, true);
-    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
-    expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first]);
-    await actions.run({type: "report_request", events: [second]}, context, {}, signal);
-    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
-    expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first, second]);
-    await reportingAction("report_request", {status: "process_failed"}, context, new BunEffects(), signal, true);
-    row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
-    expect(row?.status).toBe("process_failed"); expect(row?.events).toEqual([first, second]);
-    expect(row?.nodeStates).toBeUndefined();
+    await assignmentContext.run(request!, async () => {
+      const first = {level: "info" as const, message: "accepted", createdAt: 100};
+      const second = {level: "warning" as const, message: "retry", details: {attempt: 2}, createdAt: 200};
+      await actions.run({type: "report_request", events: [first]}, context, {}, signal);
+      let row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+      expect(row?.status).toBe("possessed"); expect(row?.events).toEqual([first]);
+      await reportingAction("report_request", {status: "processing"}, context, new BunEffects(), signal, true);
+      row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+      expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first]);
+      await actions.run({type: "report_request", events: [second]}, context, {}, signal);
+      row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+      expect(row?.status).toBe("processing"); expect(row?.events).toEqual([first, second]);
+      await reportingAction("report_request", {status: "process_failed"}, context, new BunEffects(), signal, true);
+      row = await setup.backend.run(ctx => ctx.db.get(setup.ids.requestId));
+      expect(row?.status).toBe("process_failed"); expect(row?.events).toEqual([first, second]);
+      expect(row?.nodeStates).toBeUndefined();
+    });
   } finally { await setup.close(); }
 });
 

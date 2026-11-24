@@ -1,3 +1,4 @@
+import { AssignmentLostError } from "./api";
 import { HeartbeatMonitor } from "./heartbeat";
 import { resolveRunDirectory, runDirectoryOptions, verifyRunDirectory } from "./run-directory";
 import {parseSpec} from "./spec/parse";
@@ -20,13 +21,22 @@ export class Worker {
 
   private async deliver(state: Checkpoint): Promise<void> {
     if (!state.report) throw new Error("Checkpoint has no report");
-    try { await this.api.report(state.report, state.request.assignmentVersion); }
+    try { await this.api.report(state.report, state.request); }
     catch (error) {
+      if (error instanceof AssignmentLostError) {
+        await this.store.save({ ...state, phase: "revoked" });
+        return;
+      }
       const status = (error as {status?: number}).status;
       if (state.report.status !== "succeeded" || !state.report.pipelineState || status === undefined || status < 400 || status >= 500) throw error;
       state = {...state, report: {id: state.request.requestId, status: "process_failed", events: [{level: "error", message: "Request output report was rejected", createdAt: Date.now()}]}};
       await this.store.save(state);
-      await this.api.report(state.report!, state.request.assignmentVersion);
+      try { await this.api.report(state.report!, state.request); }
+      catch (retryError) {
+        if (!(retryError instanceof AssignmentLostError)) throw retryError;
+        await this.store.save({ ...state, phase: "revoked" });
+        return;
+      }
     }
     await this.store.save({ ...state, phase: "reported" });
   }
@@ -35,8 +45,14 @@ export class Worker {
     const resumable: Checkpoint[] = [];
     for (const state of await this.store.load()) {
       this.seen.add(state.request.requestId + ":" + state.request.assignmentVersion);
-      if (state.phase === "reported") continue;
+      if (state.phase === "reported" || state.phase === "revoked") continue;
       if (state.phase === "terminal") { await this.deliver(state); continue; }
+      try { await this.api.verifyAssignment(state.request, signal); }
+      catch (error) {
+        if (!(error instanceof AssignmentLostError)) throw error;
+        await this.store.save({ ...state, phase: "revoked" });
+        continue;
+      }
       if (state.reporting === "spec" && state.execution && state.execution.version !== 2) throw new RecoveryError("Execution contract changed; reset old checkpoints in MasterFlow");
       if (state.reporting === "spec" && state.execution?.stage === "finishing") {
         const pipeline = state.execution.context.pipeline as {status: string; outputs?: Record<string, unknown>; events?: Report["events"]};
@@ -57,7 +73,6 @@ export class Worker {
           const savedDirectory = state.runDirectory ?? resolveRunDirectory({...this.config, runDirectoryScope: "spec-version", runDirectoryName: undefined}, state.request.specSlug, state.source);
           verifyRunDirectory(currentDirectory, savedDirectory);
           this.sources.set(state.request.specSlug, source);
-          await this.api.verifyAssignment(state.request);
           resumable.push(state);
           continue;
         }
@@ -77,10 +92,41 @@ export class Worker {
   }
 
   private async execute(request: ClaimedRequest, signal: AbortSignal, recovered?: Checkpoint): Promise<boolean> {
+    const stop = new AbortController();
+    const execution = AbortSignal.any([signal, stop.signal]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let checking: Promise<void> | undefined;
+    const scheduleCheck = () => {
+      if (execution.aborted) return;
+      timer = setTimeout(() => {
+        checking = this.api.verifyAssignment(request, execution).catch(error => {
+          if (error instanceof AssignmentLostError) stop.abort(error);
+        }).finally(scheduleCheck);
+      }, 5_000);
+    };
+    try {
+      if (this.executor.reporting === "spec" && !recovered) await this.api.verifyAssignment(request, execution);
+      scheduleCheck();
+      const result = await this.executeAssignment(request, execution, signal, recovered);
+      if (execution.reason instanceof AssignmentLostError) throw execution.reason;
+      return result;
+    } catch (error) {
+      if (!(error instanceof AssignmentLostError) && !(execution.reason instanceof AssignmentLostError)) throw error;
+      const state = (await this.store.load()).find(row => row.request.requestId === request.requestId);
+      await this.store.save({ ...state, request, phase: "revoked" });
+      return false;
+    } finally {
+      stop.abort();
+      clearTimeout(timer);
+      await checking;
+    }
+  }
+
+  private async executeAssignment(request: ClaimedRequest, signal: AbortSignal, workerSignal: AbortSignal, recovered?: Checkpoint): Promise<boolean> {
     const state: Checkpoint = { ...recovered, request, phase: "executing", ...(this.executor.reporting ? { reporting: this.executor.reporting } : {}) };
     state.source ??= this.sources.get(request.specSlug);
     await this.store.save(state);
-    if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request.assignmentVersion);
+    if (this.executor.reporting !== "spec") await this.api.report({ id: request.requestId, status: "processing" }, request);
     let failed = false;
     let reportFailure: unknown;
     let writes = Promise.resolve();
@@ -100,9 +146,11 @@ export class Worker {
           writes = writes.then(async () => { await this.store.save(saved); Object.assign(state, saved); });
           return writes;
         },
-      } : undefined);
+      } : undefined, workerSignal);
     } catch (error) { failed = true; reportFailure = error; }
     await writes;
+    if (reportFailure instanceof AssignmentLostError) throw reportFailure;
+    if (signal.reason instanceof AssignmentLostError) throw signal.reason;
     if (this.executor.reporting === "spec" && signal.aborted && state.execution?.stage === "nodes") return false;
     if (this.executor.reporting === "spec" && state.execution?.stage !== "finished") {
       const pipeline = state.execution?.context.pipeline as {status?: string; outputs?: Record<string, unknown>; events?: Report["events"]} | undefined;

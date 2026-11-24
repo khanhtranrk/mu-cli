@@ -94,7 +94,7 @@ test("stable scope reuses old files but initializes/prepares/executes each revis
     override async discoverModels() { return {}; }
   }
   const effects = new Effects((async () => Response.json({ok: true})) as unknown as typeof fetch), executor = new SpecExecutor(config, effects);
-  const request: ClaimedRequest = {requestId: "r", assignmentVersion: 1, specSlug: "s", pipelineName: "p", payload: {}, artifacts: []};
+  const request: ClaimedRequest = {requestId: "r", assignmentVersion: 1, assignmentKey: "a".repeat(64), specSlug: "s", pipelineName: "p", payload: {}, artifacts: []};
   try {
     for (const version of ["v1", "v2"]) await executor.execute(sources(version), {...request, assignmentVersion: version === "v1" ? 1 : 3}, new AbortController().signal);
     const path = resolveRunDirectory(config, "s", sources("v2")).path;
@@ -118,7 +118,7 @@ test("reclaimed Request uses a fresh assignment in the shared directory, not old
   const transport = (async (url: unknown) => {
     const path = new URL(String(url)).pathname;
     if (path.startsWith("/api/specs/")) return new Response(source);
-    if (path.endsWith("claim")) return Response.json([{requestId: "same", assignmentVersion, specSlug: "s", pipelineName: "p", payload: {}, artifacts: [], specYaml: source}]);
+    if (path.endsWith("claim")) return Response.json([{requestId: "same", assignmentVersion, assignmentKey: "a".repeat(64), specSlug: "s", pipelineName: "p", payload: {}, artifacts: [], specYaml: source}]);
     return Response.json({ok: true});
   }) as typeof fetch;
   class Effects extends BunEffects {

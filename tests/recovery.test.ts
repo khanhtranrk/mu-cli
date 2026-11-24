@@ -16,7 +16,7 @@ import type { ExecutionSnapshot } from "../src/engine/checkpoint";
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
-const request: ClaimedRequest = { requestId: "request", specSlug: "test", pipelineName: "p", assignmentVersion: 7, payload: {}, artifacts: [] };
+const request: ClaimedRequest = { requestId: "request", specSlug: "test", pipelineName: "p", assignmentVersion: 7, assignmentKey: "a".repeat(64), payload: {}, artifacts: [] };
 const source = JSON.stringify({
   entries: { master_flow: { initialization: [{ type: "execute_command", target: "init" }], finalization: [{ type: "execute_command", target: "finalize" }] } },
   pipelines: { p: { prepare: [{ type: "execute_command", target: "prepare" }], nodes: [
@@ -181,7 +181,7 @@ test("stable named scope persists its binding and resumes without replaying comp
   for (const label of ["init", "prepare", "first", "third"]) expect(setup.seen.filter(value => value === label)).toHaveLength(1);
 });
 
-test("resume refuses changed scope/name or stored directory before verification reports and actions", async () => {
+test("resume refuses changed scope/name or stored directory before state-changing reports and actions", async () => {
   for (const change of ["scope", "name", "path", "auto"] as const) {
     const setup = await interrupted({runDirectoryScope: "spec", runDirectoryName: "music"});
     setup.continue(); setup.config.retryIncomplete = true;
@@ -191,10 +191,10 @@ test("resume refuses changed scope/name or stored directory before verification 
     if (change === "path") {
       const [saved] = await setup.store.load(); saved!.runDirectory!.path += "-moved"; await setup.store.save(saved!);
     }
-    const count = setup.seen.length, reports = setup.calls.filter(call => call.path.endsWith("report")).length;
+    const count = setup.seen.length, reports = setup.calls.filter(call => call.path.endsWith("report") && Object.keys(call.body).length > 1).length;
     await expect(new Worker(setup.config, setup.api, new SpecExecutor(setup.config, setup.effects)).run("once", new AbortController().signal)).rejects.toThrow("Run directory");
     expect(setup.seen).toHaveLength(count);
-    expect(setup.calls.filter(call => call.path.endsWith("report"))).toHaveLength(reports);
+    expect(setup.calls.filter(call => call.path.endsWith("report") && Object.keys(call.body).length > 1)).toHaveLength(reports);
     expect(setup.calls.filter(call => call.path.endsWith("claim"))).toHaveLength(1);
   }
 });
@@ -209,4 +209,23 @@ test("legacy checkpoints without directory metadata resume only with the origina
     if (change) await expect(worker.run("once", new AbortController().signal)).rejects.toThrow("Run directory");
     else expect(await worker.run("once", new AbortController().signal)).toBe(0);
   }
+});
+
+test("revoked checkpoints are retained without replay and do not block the next claim", async () => {
+  const setup = await interrupted();
+  const seen = setup.seen.slice();
+  const transport = (async (url: string | URL | Request, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname;
+    if (path.endsWith("report")) {
+      expect(new Headers(init?.headers).get("X-Mu-Assignment-Key")).toBe(request.assignmentKey);
+      expect(JSON.parse(String(init?.body))).toEqual({ id: request.requestId });
+      return Response.json({ error: "ASSIGNMENT_LOST" }, { status: 409 });
+    }
+    if (path.endsWith("claim")) return Response.json([]);
+    return setup.transport(url, init);
+  }) as typeof fetch;
+  const api = new DataCenterClient(setup.config, transport);
+  expect(await new Worker(setup.config, api, new SpecExecutor(setup.config, setup.effects)).run("once", new AbortController().signal)).toBe(0);
+  expect(setup.seen).toEqual(seen);
+  expect((await setup.store.load())[0]?.phase).toBe("revoked");
 });

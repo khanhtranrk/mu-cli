@@ -1,10 +1,11 @@
+import { assignmentContext } from "../engine/assignment";
+import { AssignmentLostError, type ClaimedRequest } from "../api";
 import { RegistryClient } from "./registry-client";
 import type { RegistryLock } from "../spec/registry-reference";
 import { resolveRunDirectory, verifyRunDirectoryContainment } from "../run-directory";
 import {reportingAction} from "../engine/reporting-actions";
 import { muCacheDirectory } from "./cache-directory";
 import { join } from "node:path";
-import type { ClaimedRequest } from "../api";
 import type { WorkerConfig } from "../config";
 import { Flow } from "../engine/flow";
 import type { Effects } from "../engine/ports";
@@ -29,11 +30,21 @@ export class SpecExecutor implements RequestExecutor {
   }
   private resolve(source: string, slug: string, signal: AbortSignal, restored?: ExecutionSnapshot, lock?: RegistryLock, request?: ClaimedRequest) {
     const key = this.key(source, slug, restored, lock);
-    if (!this.resolutions.has(key)) this.resolutions.set(key, resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined, hasRegistryReferences(source) ? {
+    const cached = this.resolutions.get(key);
+    if (cached) return cached;
+    const resolution = resolveWorkloadModules(source, this.loadModule, signal, restored ? restored.workloadModules ?? [] : undefined, hasRegistryReferences(source) ? {
       origin: this.registry.origin, lock: lock ?? (() => {throw new Error("Registry Spec requires its matching dependency lock");})(),
-      read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion} : {specSlug: slug, yamlSha256: sha256(source)}),
-    } : undefined));
-    return this.resolutions.get(key)!;
+      read: (ref, readSignal, pin) => this.registry.read(ref, readSignal, pin, request ? {requestId: request.requestId, assignmentVersion: request.assignmentVersion, assignmentKey: request.assignmentKey} : {specSlug: slug, yamlSha256: sha256(source)}),
+    } : undefined);
+    if (!request) {
+      this.resolutions.set(key, resolution);
+      return resolution;
+    }
+    // A rejected request-scoped read must not poison shared preparation.
+    return resolution.then(result => {
+      if (!this.resolutions.has(key)) this.resolutions.set(key, Promise.resolve(result));
+      return result;
+    });
   }
   async validate(source: string, slug: string, signal: AbortSignal): Promise<void> { const lock = hasRegistryReferences(source) ? await this.registry.specLock(source, slug, signal) : undefined; await this.resolve(source, slug, signal, undefined, lock); }
   constructor(private config: WorkerConfig, private effects: Effects, loadModule?: ModuleLoader, registry?: RegistryClient) {
@@ -69,7 +80,12 @@ export class SpecExecutor implements RequestExecutor {
     else await flow.initialize(signal);
   }
 
-  async execute(source: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence): Promise<void> {
+  async execute(source: string, request: ClaimedRequest, signal: AbortSignal, persistence?: ExecutionPersistence, workerSignal = signal): Promise<void> {
+    return assignmentContext.run({ requestId: request.requestId, assignmentKey: request.assignmentKey },
+      () => this.executeAssignment(source, request, signal, workerSignal, persistence));
+  }
+
+  private async executeAssignment(source: string, request: ClaimedRequest, signal: AbortSignal, workerSignal: AbortSignal, persistence?: ExecutionPersistence): Promise<void> {
     const snapshot = persistence?.snapshot ? this.hydrate(persistence.snapshot) : undefined;
     if (snapshot && (snapshot.version !== 2 || snapshot.stage !== "nodes" || snapshot.pipelineName !== request.pipelineName)) throw new RecoveryError("Cannot resume unknown lifecycle/prepare outcome; reset the request in MasterFlow");
     if (snapshot) {
@@ -78,8 +94,14 @@ export class SpecExecutor implements RequestExecutor {
       if (metadata.requestId !== request.requestId || metadata.specSlug !== request.specSlug || metadata.assignmentVersion !== request.assignmentVersion) throw new RecoveryError("Checkpoint assignment does not match request");
     }
     const reportContext = {session: {server: this.config.server, token: this.config.token, working_dir: this.config.workspace}, request: {...request}};
-    try { await this.prepare(source, request.specSlug, signal, snapshot, request.workloadLock, request); }
+    try {
+      if (hasRegistryReferences(source)) await this.resolve(source, request.specSlug, signal, snapshot, request.workloadLock, request);
+      signal.throwIfAborted();
+      await this.prepare(source, request.specSlug, workerSignal, snapshot, request.workloadLock);
+      signal.throwIfAborted();
+    }
     catch (error) {
+      if (error instanceof AssignmentLostError || signal.aborted) throw error;
       await reportingAction("report_request", {status: "process_failed", events: [{level: "error", message: "Request initialization failed", details: {message: error instanceof Error ? error.message : "Initialization failed"}, createdAt: Date.now()}]}, reportContext, this.effects, AbortSignal.timeout(10000), true);
       throw error;
     }
@@ -93,7 +115,7 @@ export class SpecExecutor implements RequestExecutor {
     }, signal, persistence ? {
       snapshot, retryIncomplete: persistence.retryIncomplete,
       save: value => persistence.save(this.sanitize({ ...value, workloadModules: prepared.modules })),
-    } : undefined);
+    } : undefined, workerSignal);
   }
 
   private sanitize(snapshot: ExecutionSnapshot): ExecutionSnapshot {

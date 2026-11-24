@@ -117,7 +117,7 @@ test("fake once claims and reports without executing Spec actions, retaining bat
     if (path.startsWith("/api/specs/")) return new Response(valid
       ? JSON.stringify({ pipelines: { p: { nodes: [{ name: "action", run: [{ type: "execute_command", target: "bun", args: ["-e", "await Bun.write('should-not-exist','executed')"] }] }] } } })
       : "pipelines: {}");
-    if (path.endsWith("claim")) return Response.json([{ requestId: valid ? "success" : "failure", assignmentVersion: 1, specSlug: "test", pipelineName: "p", payload: {}, artifacts: [] }]);
+    if (path.endsWith("claim")) return Response.json([{ requestId: valid ? "success" : "failure", assignmentVersion: 1, assignmentKey: "a".repeat(64), specSlug: "test", pipelineName: "p", payload: {}, artifacts: [] }]);
     if (path.endsWith("report")) reports.push((await request.json() as { status: string }).status);
     return Response.json({ ok: true });
   } });

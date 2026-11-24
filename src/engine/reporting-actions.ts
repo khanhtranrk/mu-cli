@@ -1,3 +1,5 @@
+import { assignmentKey } from "./assignment";
+import { AssignmentLostError } from "../api";
 import { mapping, type Context } from "../spec/types";
 import type { Effects, HttpOptions } from "./ports";
 
@@ -25,7 +27,8 @@ export async function reportingAction(type: string, values: Context, context: Co
   if (!Number.isSafeInteger(request.assignmentVersion) || Number(request.assignmentVersion) < 1) throw new Error("Missing assignment version");
   const server = new URL(text(session.server, "session.server"));
   if (!["http:", "https:"].includes(server.protocol) || server.username || server.password) throw new Error("Invalid server URL");
-  const headers = { Authorization: `Bearer ${text(session.token, "session.token")}`, "Content-Type": "application/json", "X-Mu-Assignment-Version": String(request.assignmentVersion) };
+  const key = assignmentKey(requestId);
+  const headers = { ...(key ? {"X-Mu-Assignment-Key": key} : {}), Authorization: `Bearer ${text(session.token, "session.token")}`, "Content-Type": "application/json", "X-Mu-Assignment-Version": String(request.assignmentVersion) };
   const timeout = values.timeout ?? 120;
   if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) throw new Error("Invalid timeout");
   const artifactAction = type === "upload_artifact" || type === "download_artifact";
@@ -44,7 +47,7 @@ export async function reportingAction(type: string, values: Context, context: Co
     try { response = await effects.http(options, signal); }
     catch (error) {
       if (signal.aborted) throw error;
-      const reason = error instanceof Error && ["Incomplete HTTP download", "Artifact size mismatch", "Artifact SHA-256 mismatch"].includes(error.message)
+      const reason = error instanceof Error && ["Incomplete HTTP download", "Artifact size mismatch", "Artifact SHA-256 mismatch", "Upload source changed during transfer"].includes(error.message)
         ? error.message : "Storage transfer failed before completion";
       throw transferFailure(stage, reason);
     }
@@ -61,6 +64,7 @@ export async function reportingAction(type: string, values: Context, context: Co
         throw error;
       }
       const status = Number(response.status_code);
+      if (status === 409 && (response.body as Context | undefined)?.error === "ASSIGNMENT_LOST") throw new AssignmentLostError();
       if (status >= 200 && status < 300) return mapping(response.body);
       if (retry && attempt === 0 && [500, 502, 503, 504].includes(status)) continue;
       if (artifactAction) throw transferFailure(path, `Data Center HTTP ${status}`, status, response);
@@ -106,7 +110,7 @@ export async function reportingAction(type: string, values: Context, context: Co
     if (upload.method !== "PUT") throw new Error("Invalid upload method");
     const url = storageUrl(upload.uploadUrl);
     const uploadHeaders = mapping(upload.headers);
-    if (Object.entries(uploadHeaders).some(([key, value]) => typeof value !== "string" || ["authorization", "cookie", "x-mu-assignment-version"].includes(key.toLowerCase()))) throw new Error("Invalid storage headers");
+    if (Object.entries(uploadHeaders).some(([key, value]) => typeof value !== "string" || ["authorization", "cookie", "x-mu-assignment-version", "x-mu-assignment-key"].includes(key.toLowerCase()))) throw new Error("Invalid storage headers");
     await transfer("storage PUT", { url, method: "PUT", headers: uploadHeaders as Record<string, string>, bodyFile: target, timeout });
     const after = await effects.inspect(target);
     if (after.size !== source.size || after.sha256 !== source.sha256) throw new Error("Upload source changed during transfer");
